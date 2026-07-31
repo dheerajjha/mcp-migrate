@@ -296,3 +296,57 @@ def test_r021_does_not_fire_on_an_unrelated_mention_of_draft_or_schema(tmp_path)
     )
     project = load_project(tmp_path)
     assert OldJSONSchemaDialect().check(project) == []
+
+
+# --- 6. R010 detection blind spots (false *negatives*, found on real code) ---
+#
+# These three servers scored A with zero findings, not because they were
+# migrated but because R010 could not see their handlers at all. A grade a
+# project did not earn is as damaging to this tool's credibility as a
+# finding it does not deserve.
+
+FASTMCP_FUNCTIONAL = FIXTURES / "fastmcp_functional_registration"
+DISCOVER_HELPERS = FIXTURES / "discover_named_helpers"
+
+
+def test_r010_sees_fastmcp_subclass_with_functional_registration():
+    # mcp-server-qdrant subclasses FastMCP (so the name is never followed by
+    # `(`) and registers with `self.tool(fn, name=...)` rather than a
+    # decorator. cloudwatch-mcp-server uses `mcp.tool(name=...)(fn)`. Both
+    # escaped R010 completely and were graded A on zero findings.
+    project = load_project(FASTMCP_FUNCTIONAL)
+    findings = ServerDiscoverMissing().check(project)
+    assert findings, (
+        "a FastMCP subclass registering tools functionally still registers MCP "
+        "request handlers and still lacks server/discover -- R010 must fire"
+    )
+
+
+def test_r010_is_not_suppressed_by_a_helper_whose_name_contains_discover():
+    # mcp-atlassian's Jira helpers `_try_discover_fields_from_existing_epic`
+    # and `_discover_application_types` matched the old substring pattern and
+    # convinced R010 the project implemented server/discover, silencing the
+    # rule for the entire project.
+    project = load_project(DISCOVER_HELPERS)
+    findings = ServerDiscoverMissing().check(project)
+    assert findings, (
+        "a domain helper that merely contains the word 'discover' is not an "
+        "implementation of server/discover and must not suppress R010"
+    )
+
+
+def test_r010_still_respects_a_real_server_discover_implementation(tmp_path):
+    # The other direction: tightening the name match must not start firing on
+    # projects that genuinely do implement the method.
+    (tmp_path / "server.py").write_text(
+        "from mcp.server import Server\n"
+        "from mcp.types import Tool\n\n"
+        "app = Server('demo')\n\n"
+        "@app.list_tools()\n"
+        "async def list_tools() -> list[Tool]:\n"
+        "    return []\n\n"
+        "async def discover() -> dict:\n"
+        "    return {'protocolVersions': ['2026-07-28']}\n"
+    )
+    project = load_project(tmp_path)
+    assert ServerDiscoverMissing().check(project) == []

@@ -9,26 +9,60 @@ LOWLEVEL_HANDLER_RX = re.compile(
     r"@[\w.]*\.(?:list_tools|call_tool|list_resources|read_resource|"
     r"list_prompts|get_prompt)\s*\("
 )
-# FastMCP's own decorators (`.tool(`, `.resource(`, `.prompt(`) are far more
-# generic-looking, so they only count as "has handlers" together with an
-# actual `FastMCP(` instantiation in the same project -- a project that
-# imports some unrelated, coincidentally-named `mcp` package and happens to
-# have a `.tool(`-decorated function elsewhere would not trip this alone.
-FASTMCP_INSTANTIATION_RX = re.compile(r"\bFastMCP\s*\(")
+# Evidence that FastMCP is in play at all. A bare `FastMCP(` misses the two
+# shapes real servers actually use, both verified against source:
+#   * subclassing -- `class QdrantMCPServer(FastMCP)` in mcp-server-qdrant,
+#     `class S3TablesMCPServer(FastMCP)` in awslabs/mcp. The name is never
+#     followed by `(` in that position, so the old pattern never matched.
+#   * instantiating a subclass whose name merely *ends* in FastMCP --
+#     `ErrorPreservingFastMCP(...)` in mcp-atlassian. `\bFastMCP` cannot match
+#     mid-identifier, so that missed too.
+FASTMCP_EVIDENCE_RX = re.compile(
+    r"\b\w*FastMCP\s*\(|"                    # FastMCP(...) / ErrorPreservingFastMCP(...)
+    r"\bclass\s+\w+\s*\([^)]*\bFastMCP\b"    # class X(FastMCP) / class X(FastMCP[T])
+)
+
+# FastMCP's own registration names (`.tool(`, `.resource(`, `.prompt(`) are far
+# more generic-looking than the low-level ones, so they only count as "has
+# handlers" together with FASTMCP_EVIDENCE_RX in the same project -- a project
+# that imports some unrelated, coincidentally-named `mcp` package and happens
+# to have a `.tool(`-decorated function elsewhere would not trip this alone.
+#
+# Registration is not always a decorator. Both idioms are real:
+#   @mcp.tool()                                    -- decorator
+#   mcp.tool(name='get_active_alarms')(self.get_active_alarms)  -- cloudwatch
+#   self.tool(find_foo, name="qdrant-find")        -- mcp-server-qdrant
+# Matching only the decorator form handed an unearned A to every server that
+# registers functionally, which is a grading fairness bug, not a detection
+# nicety: those servers were never checked at all.
 FASTMCP_DECORATOR_RX = re.compile(r"@[\w.]*\.(?:tool|resource|prompt)\s*\(")
+FASTMCP_FUNCTIONAL_RX = re.compile(
+    r"\b[\w.]+\.(?:tool|resource|prompt|add_tool|add_resource|add_prompt)\s*\("
+)
 
 # Evidence the project implements server/discover. The method name is a
 # JSON-RPC string (can't be a bare identifier -- see the notifications/
 # initialized note in r009), so it needs a raw scan; a `discover`-named
 # handler function/decorator is code, so search_code covers that half.
-DISCOVER_CODE_RX = re.compile(r"@[\w.]*\.discover\s*\(|\bdef\s+\w*discover\w*\b")
+#
+# The function-name half must be anchored to the *whole* name. The previous
+# `\bdef\s+\w*discover\w*\b` matched any identifier merely containing the
+# substring, so Jira's `_try_discover_fields_from_existing_epic` and
+# `_discover_application_types` (both in mcp-atlassian) read as "implements
+# server/discover" and silently suppressed this rule for the entire project.
+# That is the worst failure mode available here: not a false finding a
+# maintainer can argue with, but a missing one nobody ever sees.
+DISCOVER_CODE_RX = re.compile(
+    r"@[\w.]*\.discover\s*\(|\bdef\s+(?:handle_|server_|on_)*discover\b"
+)
 
 
 def _has_request_handlers(project: Project) -> bool:
     if any(project.search_code(LOWLEVEL_HANDLER_RX.pattern)):
         return True
-    if any(project.search_code(FASTMCP_INSTANTIATION_RX.pattern)) and any(
-        project.search_code(FASTMCP_DECORATOR_RX.pattern)
+    if any(project.search_code(FASTMCP_EVIDENCE_RX.pattern)) and (
+        any(project.search_code(FASTMCP_DECORATOR_RX.pattern))
+        or any(project.search_code(FASTMCP_FUNCTIONAL_RX.pattern))
     ):
         return True
     return False
