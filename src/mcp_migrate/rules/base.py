@@ -124,7 +124,7 @@ def _content_spans(text: str) -> list[tuple[tuple[int, int], tuple[int, int]]] |
         for tok in tokenize.generate_tokens(io.StringIO(text).readline):
             if tok.type in _CONTENT_TOKEN_TYPES:
                 spans.append((tok.start, tok.end))
-    except (tokenize.TokenizeError, SyntaxError, IndentationError, ValueError):
+    except (tokenize.TokenError, SyntaxError, IndentationError, ValueError):
         return None
     return spans
 
