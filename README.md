@@ -19,25 +19,25 @@ uvx mcp-migrate fix . --write
 ## `mcp-migrate check`
 
 ```
-$ uvx mcp-migrate check .
+$ uvx mcp-migrate check tests/fixtures/fixer_roundtrip
 
-mcp-migrate v0.1.0  ->  weather-mcp
-1 Python files, 21 rules, spec 2026-07-28
+mcp-migrate v0.1.0  ->  fixer_roundtrip
+2 Python files, 21 rules, spec 2026-07-28
 
             rule    where         what
-breaking    R001    server.py:11  Mcp-Session-Id was removed from the Streamable HTTP transport.
-breaking    R001    server.py:12  Mcp-Session-Id was removed from the Streamable HTTP transport.
-breaking    R001    server.py:14  Mcp-Session-Id was removed from the Streamable HTTP transport.
-breaking    R010    (project)     This project registers MCP request handlers
-                                  (tools/resources/prompts) but has no server/discover
-                                  implementation anywhere in the project.
-breaking    R015    server.py:17  This file implements a result-returning MCP handler but
-                                  `resultType` never appears in it.
-breaking    R016    server.py:17  This file implements a list/read handler but neither `ttlMs`
-                                  nor `cacheScope` appears in it.
-deprecated  R006    server.py:3   HTTP+SSE transport is deprecated.
-deprecated  R006    server.py:7   HTTP+SSE transport is deprecated.
-advisory    R004    server.py:17  Tools are returned without an explicit sort.
+breaking    R001    server.py:28  Mcp-Session-Id was removed from the Streamable HTTP transport.
+breaking    R001    server.py:29  Mcp-Session-Id was removed from the Streamable HTTP transport.
+breaking    R017    errors.py:8   -32002 for resource-not-found is the old code; 2026-07-28 uses -32602.
+deprecated  R006    server.py:15  HTTP+SSE transport is deprecated.
+deprecated  R006    server.py:24  HTTP+SSE transport is deprecated.
+advisory    R004    server.py:32  Tools are returned without an explicit sort.
+advisory    R005    server.py:16  Capabilities are declared but `extensions` is absent.
+advisory    R010    (project)     This project registers MCP request handlers (tools/resources/prompts)
+                                  but has no server/discover implementation anywhere in the project.
+advisory    R015    server.py:32  This file implements a result-returning MCP handler but `resultType`
+                                  never appears in it.
+advisory    R016    server.py:32  This file implements a list/read handler but neither `ttlMs` nor
+                                  `cacheScope` appears in it.
 
   R001  Uses Mcp-Session-Id, which no longer exists
   SEP-2567 https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567
@@ -46,7 +46,7 @@ advisory    R004    server.py:17  Tools are returned without an explicit sort.
 
   [... one block like this per rule that fired ...]
 
-Grade F (0/100)  6 breaking, 2 deprecated, 1 advisory
+Grade F (23/100)  3 breaking, 2 deprecated, 5 advisory
 
 Add your server to the board:  mcp-migrate entry --repo owner/name
 ```
@@ -68,48 +68,68 @@ is well tested -- not evidence the server itself is broken. Pass
 ## `mcp-migrate fix`
 
 ```
-$ uvx mcp-migrate fix .
+$ uvx mcp-migrate fix tests/fixtures/fixer_roundtrip
+
+errors.py
+--- a/errors.py
++++ b/errors.py
+@@ -5,7 +5,7 @@
+ 
+ def read_resource(handle: str) -> dict:
+     if not _exists(handle):
+-        return {"code": -32002, "message": "resource not found"}
++        return {"code": -32602, "message": "resource not found"}
+     return {"contents": _load(handle)}
+ 
+ 
+  [R017/safe] line 8: resource-not-found error code -32002 -> -32602
 
 server.py
 --- a/server.py
 +++ b/server.py
-@@ -1,14 +1,16 @@
- """weather-mcp: a small MCP server, pre-2026-07-28."""
+@@ -12,26 +12,29 @@
+ from __future__ import annotations
+ 
  from mcp.server import Server
 -from mcp.server.sse import SseServerTransport
 +from mcp.server.streamable_http import StreamableHTTPServerTransport
- from mcp.types import Tool
-
- server = Server("weather-mcp")
+ from mcp.types import ServerCapabilities, Tool, ToolsCapability
+ 
+ server = Server("fixture-server")
+ 
+ capabilities = ServerCapabilities(
+     tools=ToolsCapability(list_changed=True),
++    extensions={},
+ )
+ 
 -transport = SseServerTransport("/messages")
 +# TODO(mcp-migrate): verify no constructor args were lost moving off SSE, see https://modelcontextprotocol.io/specification/draft/changelog
 +transport = StreamableHTTPServerTransport()
-
-
+ 
+ 
  def _session_for(request):
 -    mcp_session_id = request.headers.get("Mcp-Session-Id")
 +    # TODO(mcp-migrate): replaced by an explicit handle argument, see https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567
 +    # mcp_session_id = request.headers.get("Mcp-Session-Id")
-     if mcp_session_id is None:
-         raise ValueError("missing Mcp-Session-Id header")
      return mcp_session_id
-@@ -16,7 +18,7 @@
-
+ 
+ 
  @server.list_tools()
  async def list_tools() -> list[Tool]:
 -    return [
 +    return sorted([
-         Tool(name="get_forecast", description="Get the forecast for a city."),
-         Tool(name="get_alerts", description="Get active weather alerts for a state."),
+         Tool(name="zeta", description="Last alphabetically."),
+         Tool(name="alpha", description="First alphabetically."),
 -    ]
 +    ], key=lambda t: t.name)
-  [R001/review] line 11: commented out Mcp-Session-Id header access, added TODO
-  [R004/safe] line 20: wrapped returned tool list in sorted(key=lambda t: t.name)
-  [R006/review] line 3: import Streamable HTTP transport instead of SSE
-  [R006/review] line 7: SseServerTransport(...) -> StreamableHTTPServerTransport(), flagged for review
+  [R001/review] line 28: commented out Mcp-Session-Id header access, added TODO
+  [R004/safe] line 35: wrapped returned tool list in sorted(key=lambda t: t.name)
+  [R005/safe] line 20: added extensions={} to ServerCapabilities(...)
+  [R006/review] line 15: import Streamable HTTP transport instead of SSE
+  [R006/review] line 25: SseServerTransport(...) -> StreamableHTTPServerTransport(), flagged for review
 
-1 file(s), 4 change(s): 1 safe, 3 flagged for human review
-5 finding(s) still need a human after this fix -- run `mcp-migrate check .` for details.
+2 file(s), 6 change(s): 3 safe, 3 flagged for human review
+4 finding(s) still need a human after this fix -- run `mcp-migrate check tests/fixtures/fixer_roundtrip` for details.
 Dry run -- nothing was written. Re-run with --write to apply.
 ```
 
@@ -161,13 +181,13 @@ mcp-migrate entry --repo owner/name   # print a registry/servers/*.yaml entry fo
 | [R007](src/mcp_migrate/rules/r007_deprecated_features.py) | deprecated | [Roots, Sampling and Logging](https://modelcontextprotocol.io/specification/draft/changelog) are deprecated as core capabilities. | no |
 | [R008](src/mcp_migrate/rules/r008_trace_context.py) | advisory | Trace context (`traceparent`, `tracestate`, `baggage`) now travels in `_meta` ([SEP-414](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/414)); OpenTelemetry breaks at your server if it's never read. | no |
 | [R009](src/mcp_migrate/rules/r009_initialize_handshake_removed.py) | breaking | The `initialize`/`notifications/initialized` handshake ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) is gone; a server still implementing it never becomes usable to a 2026-07-28 client. | no |
-| [R010](src/mcp_migrate/rules/r010_server_discover_missing.py) | breaking | Servers must implement [`server/discover`](https://modelcontextprotocol.io/specification/2026-07-28/changelog) ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)); registering handlers without it leaves clients with no way to learn what you support. | no |
+| [R010](src/mcp_migrate/rules/r010_server_discover_missing.py) | advisory | Servers must implement [`server/discover`](https://modelcontextprotocol.io/specification/2026-07-28/changelog) ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)); registering handlers without it leaves clients with no way to learn what you support. Downgraded from `breaking`: this checks for something the new spec introduced, so it fires on ~100% of pre-migration servers and has no discriminating power. | no |
 | [R011](src/mcp_migrate/rules/r011_ping_removed.py) | breaking | `ping` ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) is removed from the protocol; liveness rides on the transport now. | no |
 | [R012](src/mcp_migrate/rules/r012_logging_set_level_removed.py) | breaking | `logging/setLevel` ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) is removed; log level is per-request via `_meta` now. | no |
 | [R013](src/mcp_migrate/rules/r013_subscriptions_replaced.py) | breaking | `resources/subscribe`/`resources/unsubscribe` ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) are replaced by `subscriptions/listen`. | no |
 | [R014](src/mcp_migrate/rules/r014_sse_resumability_removed.py) | breaking | SSE resumability via `Last-Event-ID` ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) is removed; a dropped connection is just dropped now. | no |
-| [R015](src/mcp_migrate/rules/r015_result_type_required.py) | breaking | Every result now requires `resultType` ([SEP-2322](https://modelcontextprotocol.io/specification/2026-07-28/changelog)); results returned without it are malformed. | no |
-| [R016](src/mcp_migrate/rules/r016_cacheable_result_required.py) | breaking | List/read results require `ttlMs`/`cacheScope` ([SEP-2549](https://modelcontextprotocol.io/specification/2026-07-28/changelog)). | no |
+| [R015](src/mcp_migrate/rules/r015_result_type_required.py) | advisory | Every result now requires `resultType` ([SEP-2322](https://modelcontextprotocol.io/specification/2026-07-28/changelog)); results returned without it are malformed. Downgraded from `breaking` for the same reason as R010 -- it fires on ~100% of servers today. | no |
+| [R016](src/mcp_migrate/rules/r016_cacheable_result_required.py) | advisory | List/read results require `ttlMs`/`cacheScope` ([SEP-2549](https://modelcontextprotocol.io/specification/2026-07-28/changelog)). Downgraded from `breaking` for the same reason as R010 -- it fires on ~100% of servers today. | no |
 | [R017](src/mcp_migrate/rules/r017_resource_not_found_code_changed.py) | breaking | The resource-not-found [error code](https://modelcontextprotocol.io/specification/2026-07-28/changelog) changed from `-32002` to `-32602`. | yes (`safe`) |
 | [R018](src/mcp_migrate/rules/r018_multi_round_trip_replaces_server_initiated.py) | breaking | Server-initiated Roots/Sampling/Elicitation ([SEP-2322](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) are replaced by Multi Round-Trip Requests (`InputRequiredResult` + `inputResponses`). | no |
 | [R019](src/mcp_migrate/rules/r019_tasks_polling_replaces_blocking_result.py) | breaking | `tasks/list` is removed and blocking `tasks/result` ([SEP-2663](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) is replaced by polling; Tasks moves to an extension. | no |
@@ -294,6 +314,12 @@ to merge.
 Listing your own server on the board is separate from all three and takes
 about 60 seconds -- see
 [CONTRIBUTING.md](CONTRIBUTING.md#add-your-server-to-the-board-60-seconds).
+
+## Working principles
+
+For the project's non-negotiable principles, current state, and priorities,
+see [`HANDOFF.md`](HANDOFF.md) -- it's the brief a new maintainer gets, and
+it's kept accurate on purpose.
 
 ## License
 
