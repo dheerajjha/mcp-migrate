@@ -344,7 +344,7 @@ the recipe should explain that relationship plainly.
 `cookbook/18-roots-sampling-logging-deprecated.md` per
 `cookbook/_TEMPLATE.md`, with a worked Roots-to-resource-URIs example and a
 short, explicit answer to "R007 and R018 both fired on my file, which do I
-fix first?" (the breaking one, R018/R010/etc., but say so with an example).
+fix first?" (the breaking one, R018/R009/etc., but say so with an example).
 
 See CONTRIBUTING.md#add-a-cookbook-recipe-5-minutes.
 BODY_END

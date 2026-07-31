@@ -1,14 +1,17 @@
 # Required `resultType`, and `ttlMs`/`cacheScope` on list/read results
 
 - **Rule:** [R015](../src/mcp_migrate/rules/r015_result_type_required.py)
-  (breaking, any result missing `resultType`), [R016](../src/mcp_migrate/rules/r016_cacheable_result_required.py)
-  (breaking, list/read results missing `ttlMs`/`cacheScope`)
+  (advisory, any result missing `resultType`), [R016](../src/mcp_migrate/rules/r016_cacheable_result_required.py)
+  (advisory, list/read results missing `ttlMs`/`cacheScope`)
 - **Fixer:** none. Both fields depend on information only the handler
   author has (is this call actually done, or does it need another round
   trip? how long can *this* particular list response be cached?) --
   inventing a default risks being silently wrong in a way that's worse than
   the missing field, so neither ships a fixer.
-- **Severity:** breaking
+- **Severity:** advisory for both. Originally shipped `breaking`, then
+  downgraded after a real audit found they fire on ~100% of servers today --
+  they check for fields the new spec introduced, so nothing has adopted them
+  yet and the finding has no discriminating power.
 - **Spec:** R015 is SEP-2322, R016 is SEP-2549 --
   https://modelcontextprotocol.io/specification/2026-07-28/changelog
 
@@ -29,10 +32,13 @@ global). Before this, clients had no protocol-level signal for how long a
 list response stays valid, so they either re-fetched constantly or cached
 with a guessed TTL that was wrong for someone.
 
-Both are breaking for the same reason: they're required fields on response
+Both are required for the same reason: they're required fields on response
 shapes your handlers already return, so the fix is additive (nothing to
-delete), but a response missing either is now an invalid response, not just
-an incomplete one.
+delete), but a response missing either is now an invalid response under the
+spec, not just an incomplete one. The rules that detect this ship `advisory`
+rather than `breaking`, though (see Severity above) -- the spec requirement
+is real, but as absence checks against a brand-new field, they can't yet
+distinguish "hasn't migrated" from "has a real problem."
 
 ## Before
 
@@ -83,8 +89,8 @@ async def list_tools() -> list[Tool]:
   `cacheScope`) appears anywhere in the file that implements the handler --
   not that it's set on every return statement, or spelled correctly, or
   attached to the right object. That's a deliberate false-positive/false-negative
-  trade documented in the rule source: a wrong "still missing" claim on a
-  `breaking` rule costs a project its badge, so the rule errs toward
+  trade documented in the rule source: a wrong "still missing" claim costs a
+  project visibility even at `advisory` severity, so the rule errs toward
   believing you if it sees the field mentioned at all. Don't take a clean
   `mcp-migrate check` here as proof every return path is actually correct --
   grep your own handlers for every `return`/`yield` that produces a result.

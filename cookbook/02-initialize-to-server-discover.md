@@ -2,12 +2,14 @@
 
 - **Rule:** [R009](../src/mcp_migrate/rules/r009_initialize_handshake_removed.py)
   (breaking, still implements the old handshake), [R010](../src/mcp_migrate/rules/r010_server_discover_missing.py)
-  (breaking, registers handlers but never implements `server/discover`)
+  (advisory, registers handlers but never implements `server/discover`)
 - **Fixer:** none. Deleting the old handshake is mechanical enough, but
   writing `server/discover`'s response body (your protocol versions,
   capabilities, server identity) requires information only you have --
   there's nothing here for a fixer to safely invent.
-- **Severity:** breaking
+- **Severity:** R009 is breaking; R010 is advisory (downgraded from
+  `breaking` after a real audit found it fires on ~100% of servers, since
+  it checks for something the new spec introduced).
 - **Spec:** SEP-2575 -- https://modelcontextprotocol.io/specification/2026-07-28/changelog
 
 ## What broke
