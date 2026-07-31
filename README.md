@@ -1,5 +1,7 @@
 # mcp-migrate
 
+![Scattered, unsorted source blocks on the left resolving through a scan into an ordered, graded grid on the right](docs/banner.jpg)
+
 `mcp-migrate` finds and fixes what the MCP 2026-07-28 spec revision breaks in
 your server: protocol sessions and `Mcp-Session-Id` removed, `initialize` /
 `notifications/initialized` replaced by `server/discover`, `ping` and
