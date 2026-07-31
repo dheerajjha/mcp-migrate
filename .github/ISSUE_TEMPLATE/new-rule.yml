@@ -1,0 +1,50 @@
+name: Propose a spec rule
+description: Suggest a new mcp-migrate rule for the 2026-07-28 spec revision.
+title: "[rule] "
+labels: ["rule-proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        See CONTRIBUTING.md#add-a-rule-15-minutes for the Rule API. If you'd
+        rather just write the code, a PR is faster than an issue.
+  - type: input
+    id: spec-section
+    attributes:
+      label: Spec section or SEP
+      description: Which part of the 2026-07-28 spec (or SEP number) does this cover?
+      placeholder: "e.g. SEP-2567, or 'Streamable HTTP transport'"
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: >
+        breaking = the server stops working under 2026-07-28. deprecated =
+        still works today, on a 12+ month clock. advisory = best practice,
+        not a compatibility risk.
+      options:
+        - breaking
+        - deprecated
+        - advisory
+    validations:
+      required: true
+  - type: textarea
+    id: detection
+    attributes:
+      label: Detection idea
+      description: >
+        How would mcp-migrate find this in a project? A regex over source
+        lines (project.search), an import check (project.imports), or an
+        AST pattern?
+      placeholder: "e.g. flag any module that still imports mcp.server.sse"
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example code that should trigger this rule
+      render: python
+    validations:
+      required: true

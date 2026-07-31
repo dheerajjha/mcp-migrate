@@ -1,0 +1,10 @@
+name: mcp-neo4j-cypher
+repo: neo4j-contrib/mcp-neo4j
+language: python
+grade: B
+score: 89
+checked_with: mcp-migrate 0.1.0
+spec: "2026-07-28"
+status: ready
+notes: >-
+  MCP server for Neo4j that runs Cypher graph queries and supports Text2Cypher workflows over graph data.

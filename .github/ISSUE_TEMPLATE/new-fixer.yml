@@ -1,0 +1,53 @@
+name: Propose a fixer for an existing rule
+description: Suggest a new mcp-migrate fixer for a rule that doesn't have one yet.
+title: "[fixer] "
+labels: ["fixer-proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        See CONTRIBUTING.md#add-a-fixer-45-minutes for the Fixer API. Check
+        `mcp-migrate fixers` (or the README's rule table) first -- this is
+        for rules that don't have one yet. If you'd rather just write the
+        code, a PR is faster than an issue.
+  - type: input
+    id: rule-id
+    attributes:
+      label: Which rule (id)
+      description: The existing rule this fixer repairs, e.g. R011
+      placeholder: "R0NN"
+    validations:
+      required: true
+  - type: dropdown
+    id: confidence
+    attributes:
+      label: Expected confidence
+      description: >
+        safe = the transformation cannot change behavior beyond what the
+        rule flags. review = mechanical part done, a human still has to
+        finish the job (a TODO is left for them). When in doubt, propose
+        review -- a wrong "safe" fix that silently corrupts someone's
+        server is worse than flagging it for a human.
+      options:
+        - safe
+        - review
+    validations:
+      required: true
+  - type: textarea
+    id: shape
+    attributes:
+      label: What shape of code would this fixer handle?
+      description: >
+        Be specific about what it transforms and, just as important, what
+        it deliberately leaves alone. A fixer that guesses on an ambiguous
+        shape is worse than one with a narrower, honest scope.
+      placeholder: "e.g. rewrite an explicit \"$schema\": \"...draft-07...\" key's value to 2020-12, only when the match is inside a \"$schema\" key literal"
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Before/after example
+      render: python
+    validations:
+      required: true

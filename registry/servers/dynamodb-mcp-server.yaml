@@ -1,0 +1,10 @@
+name: dynamodb-mcp-server
+repo: awslabs/mcp
+language: python
+grade: A
+score: 97
+checked_with: mcp-migrate 0.1.0
+spec: "2026-07-28"
+status: ready
+notes: >-
+  Official AWS DynamoDB MCP server providing expert data modeling guidance, validation, and cost analysis tools.

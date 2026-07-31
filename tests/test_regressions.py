@@ -1,0 +1,298 @@
+"""Regression tests for false positives found scanning 14 real MCP servers.
+
+Each test below is anchored to real evidence from that scan:
+
+- mcp-neo4j-cypher: 10 of 15 findings came from `"method": "tools/list"`
+  string payloads in integration tests.
+- motherduck: 15 of 20 findings came from a deliberate legacy-transport
+  backward-compat test; the R001 hit that remained was inside a
+  `click.option(help=...)` string explaining a CLI flag.
+- mcp-atlassian: its only R001 hit was inside a `logger.debug(...)` message;
+  its 19 R003 hits (475 penalty points) were all plain Confluence/Jira REST
+  calls with no MCP transport surface anywhere in the file.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from mcp_migrate.cli import run_check
+from mcp_migrate.grade import RULE_CAP, WEIGHT, score
+from mcp_migrate.rules.base import Finding, Rule
+from mcp_migrate.rules.r010_server_discover_missing import ServerDiscoverMissing
+from mcp_migrate.rules.r011_ping_removed import PingRemoved
+from mcp_migrate.rules.r017_resource_not_found_code_changed import (
+    ResourceNotFoundCodeChanged,
+)
+from mcp_migrate.rules.r020_dynamic_client_registration_deprecated import (
+    DynamicClientRegistrationDeprecated,
+)
+from mcp_migrate.rules.r021_json_schema_2020_12_required import OldJSONSchemaDialect
+from mcp_migrate.scan import load_project
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _findings_by_rule(root: Path, **kwargs) -> dict[str, list]:
+    _, _, findings, _, _ = run_check(root, **kwargs)
+    by_rule: dict[str, list] = {}
+    for f in findings:
+        by_rule.setdefault(f.rule_id, []).append(f)
+    return by_rule
+
+
+# --- 1. test code is skipped by default -----------------------------------
+
+TEST_SKIP_PROJECT = FIXTURES / "test_skip_project"
+
+
+def test_findings_in_tests_dir_are_skipped_by_default():
+    by_rule = _findings_by_rule(TEST_SKIP_PROJECT)
+    assert "R006" not in by_rule, (
+        "R006 should not fire on tests/test_legacy_transport_compat.py "
+        "when --include-tests is not passed"
+    )
+
+
+def test_include_tests_flag_finds_them():
+    by_rule = _findings_by_rule(TEST_SKIP_PROJECT, include_tests=True)
+    assert "R006" in by_rule, "--include-tests should surface findings inside tests/"
+
+
+@pytest.mark.parametrize("dirname", ["tests", "test", "testing", "fixtures", "examples", "docs"])
+def test_each_test_dir_segment_is_skipped_by_default(tmp_path, dirname):
+    (tmp_path / dirname).mkdir()
+    (tmp_path / dirname / "offender.py").write_text(
+        'from mcp.server.sse import SseServerTransport\n'
+        'transport = SseServerTransport("/messages")\n'
+    )
+    project = load_project(tmp_path)
+    assert project.files == [], f"{dirname}/ should be skipped by default"
+
+    project_included = load_project(tmp_path, include_tests=True)
+    assert len(project_included.files) == 1, f"{dirname}/ should be scanned with include_tests=True"
+
+
+@pytest.mark.parametrize("filename", ["test_thing.py", "thing_test.py", "conftest.py"])
+def test_each_test_filename_pattern_is_skipped_by_default(tmp_path, filename):
+    (tmp_path / filename).write_text(
+        'from mcp.server.sse import SseServerTransport\n'
+        'transport = SseServerTransport("/messages")\n'
+    )
+    project = load_project(tmp_path)
+    assert project.files == [], f"{filename} should be skipped by default"
+
+    project_included = load_project(tmp_path, include_tests=True)
+    assert len(project_included.files) == 1, f"{filename} should be scanned with include_tests=True"
+
+
+def test_skipping_is_relative_to_scan_root_not_absolute_path():
+    """legacy_server/clean_server live under tests/fixtures/ -- scanning them
+    directly (root = .../tests/fixtures/legacy_server) must not vanish just
+    because "tests" and "fixtures" appear in the *absolute* path above root.
+    """
+    project = load_project(FIXTURES / "legacy_server")
+    assert len(project.files) == 6
+
+
+# --- 2. comments/docstrings/log strings don't count as usage --------------
+
+COMMENT_ONLY = FIXTURES / "comment_only_mentions"
+
+
+def test_mention_in_docstring_comment_and_log_string_does_not_fire_r001():
+    by_rule = _findings_by_rule(COMMENT_ONLY)
+    assert "R001" not in by_rule, (
+        f"R001 should not fire on text-only mentions of Mcp-Session-Id: {by_rule.get('R001')}"
+    )
+
+
+def test_search_code_excludes_docstrings_comments_and_strings(tmp_path):
+    (tmp_path / "mod.py").write_text(
+        '"""A module about WIDGET things."""\n'
+        "# WIDGET is mentioned here too\n"
+        'log = "WIDGET seen in a log message"\n'
+        "WIDGET = 1\n"
+    )
+    project = load_project(tmp_path)
+    code_hits = list(project.search_code(r"WIDGET"))
+    assert len(code_hits) == 1
+    assert code_hits[0][1] == 4  # only the real assignment, line 4
+
+    text_hits = list(project.search(r"WIDGET"))
+    assert len(text_hits) == 4  # plain search still finds all four
+
+
+def test_search_code_falls_back_to_plain_search_on_tokenize_failure(tmp_path):
+    # Deliberately invalid Python (unterminated string) -- must not crash,
+    # and must still find the match via the plain-search fallback.
+    bad = tmp_path / "bad.py"
+    bad.write_text('WIDGET = "unterminated\n')
+    project = load_project(tmp_path)
+    assert project.files, "file with a syntax error should still be loaded (tree=None is fine)"
+    hits = list(project.search_code(r"WIDGET"))
+    assert len(hits) == 1
+
+
+# --- 3. R003 requires MCP protocol surface in the same file ----------------
+
+REST_WRAPPER = FIXTURES / "rest_wrapper_no_mcp_surface"
+
+
+def test_plain_rest_post_with_no_mcp_surface_does_not_fire_r003():
+    by_rule = _findings_by_rule(REST_WRAPPER)
+    assert "R003" not in by_rule, (
+        f"R003 should not fire on a REST client with no MCP transport surface: {by_rule.get('R003')}"
+    )
+
+
+def test_r003_still_fires_when_file_hand_rolls_jsonrpc_payload():
+    by_rule = _findings_by_rule(FIXTURES / "legacy_server")
+    assert "R003" in by_rule, "R003 should still fire when a file posts a hand-rolled jsonrpc payload"
+
+
+def test_fastmcp_import_alone_does_not_satisfy_the_mcp_surface_gate():
+    """`mcp.server.fastmcp` owns the transport entirely -- a file that only
+    imports FastMCP and separately posts to its own backend API is not
+    hand-rolling MCP transport, confirmed against real false positives on
+    aws-documentation-mcp-server and duckduckgo-mcp-server."""
+    by_rule = _findings_by_rule(FIXTURES / "fastmcp_wrapper_no_mcp_surface")
+    assert "R003" not in by_rule, (
+        f"R003 should not fire on a FastMCP tool that calls an unrelated REST API: {by_rule.get('R003')}"
+    )
+
+
+# --- 4. a single rule cannot dominate the score ----------------------------
+
+class _FakeBreakingRule(Rule):
+    id = "R900"
+    severity = "breaking"
+
+
+def test_twenty_hits_of_one_breaking_rule_cost_25_points_not_500():
+    rules = {"R900": _FakeBreakingRule()}
+    findings = [Finding(rule_id="R900", message="x") for _ in range(20)]
+    # Uncapped this would be 20 * WEIGHT["breaking"] = 500 points of penalty
+    # (score floored at 0). Capped, a single rule can cost at most
+    # RULE_CAP["breaking"] points.
+    assert 20 * WEIGHT["breaking"] > 100
+    value = score(findings, rules)
+    assert value == 100 - RULE_CAP["breaking"]
+    assert value == 75
+
+
+def test_rule_cap_applies_independently_per_rule():
+    class _FakeAdvisoryRule(Rule):
+        id = "R901"
+        severity = "advisory"
+
+    rules = {"R900": _FakeBreakingRule(), "R901": _FakeAdvisoryRule()}
+    findings = (
+        [Finding(rule_id="R900", message="x") for _ in range(10)]
+        + [Finding(rule_id="R901", message="y") for _ in range(10)]
+    )
+    value = score(findings, rules)
+    expected_penalty = RULE_CAP["breaking"] + RULE_CAP["advisory"]
+    assert value == 100 - expected_penalty
+
+
+def test_single_hit_is_unaffected_by_the_cap():
+    rules = {"R900": _FakeBreakingRule()}
+    findings = [Finding(rule_id="R900", message="x")]
+    assert score(findings, rules) == 100 - WEIGHT["breaking"]
+
+
+# --- CLI display cap (findings table capped at 5/rule, JSON stays full) ---
+
+def test_cli_json_output_is_never_truncated_per_rule(capsys):
+    import json
+
+    from mcp_migrate.cli import main
+
+    exit_code = main(["check", str(FIXTURES / "legacy_server"), "--json"])
+    data = json.loads(capsys.readouterr().out)
+    assert exit_code in (0, 1)
+    assert isinstance(data["findings"], list)
+
+
+def test_cli_human_output_caps_findings_per_rule_and_says_how_many_more(tmp_path, capsys):
+    # A file with many hand-rolled-looking assignments named to trip R002
+    # (module-level dict literally named `sessions`) many times over by
+    # spreading the same pattern across many module-level names.
+    lines = [f"sessions_{i}: dict = {{}}" for i in range(8)]
+    (tmp_path / "server.py").write_text("\n".join(lines) + "\n")
+
+    from mcp_migrate.cli import main
+
+    exit_code = main(["check", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert exit_code in (0, 1)
+    assert "more R002 finding" in out
+
+
+# --- 5. false-positive guards for the new breaking-surface rules (R009-R021) --
+
+def test_r010_does_not_fire_without_any_mcp_request_handlers(tmp_path):
+    # Ordinary code that imports something coincidentally called `mcp` but
+    # never registers a tool/resource/prompt handler is not an MCP server
+    # at all -- R010 must not invent a "missing server/discover" finding
+    # for it.
+    (tmp_path / "app.py").write_text(
+        "import mcp\n\n"
+        "def compute(x):\n"
+        "    return mcp.helper(x) * 2\n"
+    )
+    project = load_project(tmp_path)
+    assert ServerDiscoverMissing().check(project) == []
+
+
+def test_r011_ping_does_not_fire_on_an_ordinary_health_check_route(tmp_path):
+    # A bare "/ping" health-check endpoint is extremely common in ordinary,
+    # non-MCP web servers and has nothing to do with the MCP `ping`
+    # request -- must not fire.
+    (tmp_path / "app.py").write_text(
+        "from flask import Flask\n\n"
+        "app = Flask(__name__)\n\n"
+        "@app.route(\"/ping\")\n"
+        "def ping():\n"
+        "    return \"pong\"\n"
+    )
+    project = load_project(tmp_path)
+    assert PingRemoved().check(project) == []
+
+
+def test_r017_does_not_fire_on_an_unrelated_negative_number(tmp_path):
+    # -32002 on its own is just a number (a port, an offset, a sentinel);
+    # only paired with resource-not-found language on the same line is it
+    # evidence of the old error-code convention.
+    (tmp_path / "server.py").write_text(
+        "TIMEOUT_SENTINEL = -32002  # arbitrary value used to mean \"no timeout\"\n"
+    )
+    project = load_project(tmp_path)
+    assert ResourceNotFoundCodeChanged().check(project) == []
+
+
+def test_r020_does_not_fire_on_an_unrelated_register_method(tmp_path):
+    # A generic "register a client" method in, say, a CRM or billing
+    # system has nothing to do with OAuth Dynamic Client Registration --
+    # only the exact SDK-shaped names count.
+    (tmp_path / "billing.py").write_text(
+        "class CRM:\n"
+        "    def register_new_customer(self, info):\n"
+        "        return {\"customer_id\": 1, **info}\n"
+    )
+    project = load_project(tmp_path)
+    assert DynamicClientRegistrationDeprecated().check(project) == []
+
+
+def test_r021_does_not_fire_on_an_unrelated_mention_of_draft_or_schema(tmp_path):
+    # Almost no real MCP server declares a JSON Schema dialect at all --
+    # absence of "2020-12" must not be the trigger (it would fire on
+    # nearly everything). Only an explicit *old* draft reference should.
+    (tmp_path / "server.py").write_text(
+        '"""This module is still a draft; see the design doc for the schema."""\n'
+        "inputSchema = {\"type\": \"object\"}\n"
+    )
+    project = load_project(tmp_path)
+    assert OldJSONSchemaDialect().check(project) == []

@@ -1,0 +1,10 @@
+name: mcp-atlassian
+repo: sooperset/mcp-atlassian
+language: python
+grade: C
+score: 63
+checked_with: mcp-migrate 0.1.0
+spec: "2026-07-28"
+status: migrating
+notes: >-
+  MCP server for Atlassian products (Confluence and Jira), supporting both Cloud and Server/Data Center deployments.

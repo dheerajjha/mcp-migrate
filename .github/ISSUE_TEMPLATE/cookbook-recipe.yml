@@ -1,0 +1,38 @@
+name: Propose or request a cookbook recipe
+description: Suggest a new cookbook/ recipe, or ask for one of the open stubs to be filled in.
+title: "[cookbook] "
+labels: ["cookbook"]
+body:
+  - type: markdown
+    attributes:
+      value: >
+        See cookbook/README.md and cookbook/_TEMPLATE.md. Most of what's
+        missing already exists as a stub with the rule/spec filled in --
+        check cookbook/README.md#stubs----open-slots and
+        .github/GOOD_FIRST_ISSUES.md before filing a new one; commenting on
+        an existing stub issue is faster than opening a duplicate.
+  - type: input
+    id: change
+    attributes:
+      label: Which breaking/deprecated change is this about?
+      description: One line. If there's a corresponding rule, name its id.
+      placeholder: "e.g. R013 -- resources/subscribe replaced by subscriptions/listen"
+    validations:
+      required: true
+  - type: input
+    id: spec-link
+    attributes:
+      label: Spec section or SEP
+      placeholder: "https://modelcontextprotocol.io/specification/2026-07-28/changelog"
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why does this need its own recipe?
+      description: >
+        What's the actual failure mode a reader needs to see (a rejected
+        request, a client that never completes a handshake, silently
+        wrong cached data, ...)?
+    validations:
+      required: false

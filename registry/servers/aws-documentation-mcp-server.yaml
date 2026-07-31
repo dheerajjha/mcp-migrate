@@ -1,0 +1,10 @@
+name: aws-documentation-mcp-server
+repo: awslabs/mcp
+language: python
+grade: A
+score: 97
+checked_with: mcp-migrate 0.1.0
+spec: "2026-07-28"
+status: ready
+notes: >-
+  AWS Labs MCP server that fetches, searches, and recommends AWS documentation pages, converted to markdown.

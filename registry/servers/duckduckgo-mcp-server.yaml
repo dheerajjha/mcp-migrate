@@ -1,0 +1,10 @@
+name: duckduckgo-mcp-server
+repo: nickclyde/duckduckgo-mcp-server
+language: python
+grade: A
+score: 97
+checked_with: mcp-migrate 0.1.0
+spec: "2026-07-28"
+status: ready
+notes: >-
+  MCP server that provides web search through DuckDuckGo, with additional content fetching and parsing features.

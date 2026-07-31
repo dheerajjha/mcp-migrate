@@ -1,0 +1,10 @@
+name: mcp-server-motherduck
+repo: motherduckdb/mcp-server-motherduck
+language: python
+grade: A
+score: 97
+checked_with: mcp-migrate 0.1.0
+spec: "2026-07-28"
+status: ready
+notes: >-
+  Local MCP server connecting AI assistants to DuckDB and MotherDuck for SQL analytics and data engineering.

@@ -1,0 +1,10 @@
+name: mcp-server-qdrant
+repo: qdrant/mcp-server-qdrant
+language: python
+grade: A
+score: 100
+checked_with: mcp-migrate 0.1.0
+spec: "2026-07-28"
+status: ready
+notes: >-
+  Official MCP server for Qdrant that acts as a semantic memory layer for keeping and retrieving memories in the vector search engine.

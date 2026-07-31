@@ -1,0 +1,10 @@
+name: mcp-server-sentry
+repo: modelcontextprotocol/servers-archived
+language: python
+grade: B
+score: 85
+checked_with: mcp-migrate 0.1.0
+spec: "2026-07-28"
+status: ready
+notes: >-
+  Archived reference MCP server for retrieving and analyzing issues, stacktraces, and debugging info from Sentry.io.

@@ -1,0 +1,45 @@
+name: Request a server be added to the board
+description: >
+  Ask maintainers to add a server to the board on your behalf, or flag a
+  problem with an existing entry. If you have push access to the server's
+  repo, opening a PR yourself with `mcp-migrate entry` is faster.
+title: "[board] "
+labels: ["board"]
+body:
+  - type: input
+    id: repo
+    attributes:
+      label: Repository
+      description: owner/name on GitHub
+      placeholder: "owner/name"
+    validations:
+      required: true
+  - type: dropdown
+    id: language
+    attributes:
+      label: Language
+      options:
+        - python
+        - typescript
+        - go
+        - rust
+        - java
+        - csharp
+        - ruby
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: One sentence describing the server
+      description: Shows up as-is in the board table. Keep it under 200 characters.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why can't you open the PR yourself?
+      description: No push access, unmaintained repo, CI-only, etc.
+    validations:
+      required: false

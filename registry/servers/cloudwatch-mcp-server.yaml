@@ -1,0 +1,10 @@
+name: cloudwatch-mcp-server
+repo: awslabs/mcp
+language: python
+grade: A
+score: 100
+checked_with: mcp-migrate 0.1.0
+spec: "2026-07-28"
+status: ready
+notes: >-
+  AWS Labs MCP server for CloudWatch that gives troubleshooting agents alarm, metric, and log data for root cause analysis.
