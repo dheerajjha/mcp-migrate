@@ -47,3 +47,6 @@ dmypy.json
 # Env files
 .env
 .env.*
+
+# Internal engineering handoff -- not for publication
+HANDOFF.md
