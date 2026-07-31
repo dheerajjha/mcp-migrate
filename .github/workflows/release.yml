@@ -1,0 +1,94 @@
+name: Release
+
+# Publishes to PyPI via Trusted Publishing (OIDC). There is no API token
+# stored anywhere in this repository -- PyPI verifies the workflow identity
+# below and mints a short-lived credential for that one upload.
+#
+# The matching "pending publisher" on PyPI must be configured with exactly:
+#   owner: dheerajjha   repo: mcp-migrate
+#   workflow: release.yml   environment: pypi
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  # Never publish an artifact the test suite has not seen. A tag is cheap to
+  # re-cut; a bad release on PyPI cannot be replaced, only yanked.
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Sync project
+        run: uv sync --extra dev
+
+      - name: Run tests
+        run: uv run pytest
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist and wheel
+        run: uv build
+
+      # Auto-discovery via pkgutil fails *silently* if the rules/ and fixers/
+      # subpackages are not shipped in the wheel: every scan would report zero
+      # findings rather than an error. Assert against the built artifact, in a
+      # clean environment, before it can reach PyPI.
+      - name: Verify the built wheel ships every rule and fixer
+        run: |
+          python -m venv /tmp/verify
+          /tmp/verify/bin/python -m pip install --quiet dist/*.whl
+          /tmp/verify/bin/python - <<'PY'
+          from mcp_migrate.rules import all_rules
+          from mcp_migrate.fixers import all_fixers
+          rules, fixers = all_rules(), all_fixers()
+          print(f"discovered {len(rules)} rules, {len(fixers)} fixers")
+          assert len(rules) >= 21, f"wheel is missing rules: found {len(rules)}"
+          assert len(fixers) >= 5, f"wheel is missing fixers: found {len(fixers)}"
+          PY
+          /tmp/verify/bin/mcp-migrate check tests/fixtures/fixer_roundtrip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mcp-migrate
+    permissions:
+      id-token: write  # required for Trusted Publishing; nothing else needs it
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
