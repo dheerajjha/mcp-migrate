@@ -38,6 +38,33 @@ fi
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
 
+# GOOD_FIRST_ISSUES.md links to files with repo-relative paths (../cookbook/x,
+# ../../src/y) so the document reads correctly in the repository. GitHub does
+# not resolve relative links inside an *issue body*, though -- it resolves them
+# against the issue URL, so every one would 404 on precisely the file the
+# contributor needs to open. Rewrite them to absolute blob URLs at filing time,
+# which keeps the in-repo document and the filed issue both correct.
+link_repo="$REPO"
+if [[ -z "$link_repo" ]] && command -v gh >/dev/null 2>&1; then
+  link_repo="$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null || true)"
+fi
+link_branch="main"
+if [[ -n "$link_repo" ]] && command -v gh >/dev/null 2>&1; then
+  link_branch="$(gh repo view "$link_repo" --json defaultBranchRef \
+    --jq .defaultBranchRef.name 2>/dev/null || echo main)"
+  [[ -n "$link_branch" ]] || link_branch="main"
+fi
+
+absolutize_links() {
+  if [[ -z "$link_repo" ]]; then
+    cat  # no repo to resolve against; leave the body untouched
+    return
+  fi
+  # ](../x) and ](../../x) both mean repo-root/x here, so strip every leading
+  # ../ segment and anchor the remainder at the blob URL.
+  sed -E "s#\]\((\.\./)+#](https://github.com/${link_repo}/blob/${link_branch}/#g"
+}
+
 # Split into one file per issue block. Lines between ISSUE_START/ISSUE_END
 # (exclusive of the markers themselves) go into workdir/issue_N.txt.
 awk -v dir="$workdir" '
@@ -53,15 +80,20 @@ if [[ ${#files[@]} -eq 0 ]]; then
   exit 1
 fi
 
-# Sort numerically (issue_2 before issue_10), not lexically.
-mapfile -t sorted < <(printf '%s\n' "${files[@]}" | sort -t_ -k2 -n)
+# Sort numerically (issue_2 before issue_10), not lexically. Built with a
+# read loop rather than `mapfile`, which is bash 4+ only -- macOS still ships
+# bash 3.2, so mapfile would fail for a large share of contributors.
+sorted=()
+while IFS= read -r line; do
+  sorted+=("$line")
+done < <(printf '%s\n' "${files[@]}" | sort -t_ -k2 -n)
 
 filed=0
 failed=0
 for f in "${sorted[@]}"; do
   title="$(sed -n 's/^TITLE: //p' "$f" | head -n1)"
   labels_line="$(sed -n 's/^LABELS: //p' "$f" | head -n1)"
-  body="$(sed -n '/^BODY_START$/,/^BODY_END$/p' "$f" | sed '1d;$d')"
+  body="$(sed -n '/^BODY_START$/,/^BODY_END$/p' "$f" | sed '1d;$d' | absolutize_links)"
 
   if [[ -z "$title" ]]; then
     echo "skipping $f: no TITLE: line found" >&2
