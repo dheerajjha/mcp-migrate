@@ -69,7 +69,18 @@ jobs:
           assert len(rules) >= 21, f"wheel is missing rules: found {len(rules)}"
           assert len(fixers) >= 5, f"wheel is missing fixers: found {len(fixers)}"
           PY
+          # Smoke-test the console script end to end. `check` exits 1 when it
+          # finds something, and fixer_roundtrip is a deliberately broken
+          # server that grades F, so 1 is the expected success here -- only a
+          # crash (2+, or a signal) means the entry point is actually broken.
+          set +e
           /tmp/verify/bin/mcp-migrate check tests/fixtures/fixer_roundtrip
+          status=$?
+          set -e
+          if [ "$status" -gt 1 ]; then
+            echo "::error::mcp-migrate console script exited $status, expected 0 or 1"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
