@@ -19,6 +19,13 @@ in bulk with `gh issue create`. To file them all yourself:
 To file one by hand instead, copy the `TITLE`/`LABELS`/body between one
 issue's markers into `gh issue create --title "..." --label "..." --body "..."`.
 
+**Keep the label spelled `good first issue`, with spaces.** GitHub's
+`/contribute` page -- the thing that surfaces a repo to people explicitly
+looking for a first contribution -- only recognises that exact spelling. An
+earlier batch used `good-first-issue`, and all 29 issues were invisible on
+that page until the label was corrected. The hyphenated label still exists
+and still means the same thing to a human; it just does nothing.
+
 Don't edit the markers or the `TITLE:`/`LABELS:`/`DIFFICULTY:`/`BODY_START`/
 `BODY_END` lines -- the script depends on them being exact.
 
@@ -26,7 +33,7 @@ Don't edit the markers or the `TITLE:`/`LABELS:`/`DIFFICULTY:`/`BODY_START`/
 
 ### ISSUE_START
 TITLE: Cookbook recipe: ping removed (R011)
-LABELS: good-first-issue,cookbook
+LABELS: good first issue,cookbook
 DIFFICULTY: easy (~15-30 min)
 BODY_START
 `cookbook/06-ping-removed.md` exists as a stub: the rule, severity and spec
@@ -53,7 +60,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Cookbook recipe: logging/setLevel removed (R012)
-LABELS: good-first-issue,cookbook
+LABELS: good first issue,cookbook
 DIFFICULTY: easy (~15-30 min)
 BODY_START
 `cookbook/07-logging-set-level-removed.md` exists as a stub.
@@ -78,7 +85,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Cookbook recipe: SSE resumability removed (R014)
-LABELS: good-first-issue,cookbook
+LABELS: good first issue,cookbook
 DIFFICULTY: easy (~15-30 min)
 BODY_START
 `cookbook/08-sse-resumability-removed.md` exists as a stub.
@@ -101,7 +108,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Cookbook recipe: resource-not-found error code -32002 -> -32602 (R017)
-LABELS: good-first-issue,cookbook
+LABELS: good first issue,cookbook
 DIFFICULTY: easy (~15-30 min)
 BODY_START
 `cookbook/09-resource-not-found-error-code.md` exists as a stub. Note this
@@ -127,7 +134,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Cookbook recipe: Multi Round-Trip Requests replace server-initiated calls (R018)
-LABELS: good-first-issue,cookbook
+LABELS: good first issue,cookbook
 DIFFICULTY: medium (~30-45 min)
 BODY_START
 `cookbook/10-multi-round-trip-requests.md` exists as a stub. This is the
@@ -154,7 +161,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Cookbook recipe: Tasks moved to an extension, polling replaces blocking result (R019)
-LABELS: good-first-issue,cookbook
+LABELS: good first issue,cookbook
 DIFFICULTY: medium (~30-45 min)
 BODY_START
 `cookbook/11-tasks-polling.md` exists as a stub.
@@ -178,7 +185,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Cookbook recipe: Dynamic Client Registration deprecated (R020)
-LABELS: good-first-issue,cookbook
+LABELS: good first issue,cookbook
 DIFFICULTY: medium (~30-45 min, needs external CIMD research)
 BODY_START
 `cookbook/12-dynamic-client-registration-deprecated.md` exists as a stub.
@@ -203,7 +210,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Cookbook recipe: JSON Schema 2020-12 required (R021)
-LABELS: good-first-issue,cookbook
+LABELS: good first issue,cookbook
 DIFFICULTY: easy (~15-30 min)
 BODY_START
 `cookbook/13-json-schema-2020-12.md` exists as a stub.
@@ -226,7 +233,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Cookbook recipe: required Mcp-Method / Mcp-Name routing headers (R003)
-LABELS: good-first-issue,cookbook
+LABELS: good first issue,cookbook
 DIFFICULTY: easy (~15-30 min)
 BODY_START
 `cookbook/14-routing-headers.md` exists as a stub.
@@ -254,7 +261,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Cookbook recipe: deterministic tools/list ordering (R004)
-LABELS: good-first-issue,cookbook
+LABELS: good first issue,cookbook
 DIFFICULTY: easy (~15-30 min)
 BODY_START
 `cookbook/15-deterministic-tool-ordering.md` exists as a stub. Note this
@@ -280,7 +287,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Cookbook recipe: extensions map on ServerCapabilities (R005)
-LABELS: good-first-issue,cookbook
+LABELS: good first issue,cookbook
 DIFFICULTY: easy (~15-30 min)
 BODY_START
 `cookbook/16-extensions-map.md` exists as a stub. Note this rule already
@@ -305,7 +312,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Cookbook recipe: trace context propagation from _meta (R008)
-LABELS: good-first-issue,cookbook
+LABELS: good first issue,cookbook
 DIFFICULTY: easy (~15-30 min)
 BODY_START
 `cookbook/17-trace-context-propagation.md` exists as a stub.
@@ -327,7 +334,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Cookbook recipe: Roots / Sampling / Logging deprecated as core capabilities (R007)
-LABELS: good-first-issue,cookbook
+LABELS: good first issue,cookbook
 DIFFICULTY: easy (~15-30 min)
 BODY_START
 `cookbook/18-roots-sampling-logging-deprecated.md` exists as a stub.
@@ -352,7 +359,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: per-connection state in a module-level dict (R002)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: hard (~90+ min, may not be safely automatable)
 BODY_START
 No fixer exists yet for R002 ([`src/mcp_migrate/rules/r002_connection_state.py`](../../src/mcp_migrate/rules/r002_connection_state.py)),
@@ -385,7 +392,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: SSE resumability (Last-Event-ID) removed (R014)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: medium (~30-45 min)
 BODY_START
 No fixer exists yet for R014 ([`src/mcp_migrate/rules/r014_sse_resumability_removed.py`](../../src/mcp_migrate/rules/r014_sse_resumability_removed.py)),
@@ -410,7 +417,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: missing Mcp-Method/Mcp-Name routing headers (R003)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: hard (~60-90 min, advisory severity -- lower priority)
 BODY_START
 No fixer exists yet for R003 ([`src/mcp_migrate/rules/r003_routing_headers.py`](../../src/mcp_migrate/rules/r003_routing_headers.py)),
@@ -439,7 +446,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: Roots/Sampling/Logging deprecated core features (R007)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: medium (~45-60 min)
 BODY_START
 No fixer exists yet for R007 ([`src/mcp_migrate/rules/r007_deprecated_features.py`](../../src/mcp_migrate/rules/r007_deprecated_features.py)),
@@ -466,7 +473,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: trace context not propagated from _meta (R008)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: medium (~45 min)
 BODY_START
 No fixer exists yet for R008 ([`src/mcp_migrate/rules/r008_trace_context.py`](../../src/mcp_migrate/rules/r008_trace_context.py)),
@@ -494,7 +501,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: initialize/initialized handshake still implemented (R009)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: hard (~60-90 min)
 BODY_START
 No fixer exists yet for R009 ([`src/mcp_migrate/rules/r009_initialize_handshake_removed.py`](../../src/mcp_migrate/rules/r009_initialize_handshake_removed.py)),
@@ -520,7 +527,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: server/discover missing (R010)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: hard (~60+ min, may not be safely automatable)
 BODY_START
 No fixer exists yet for R010 ([`src/mcp_migrate/rules/r010_server_discover_missing.py`](../../src/mcp_migrate/rules/r010_server_discover_missing.py)),
@@ -549,7 +556,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: ping removed (R011)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: medium (~30-45 min)
 BODY_START
 No fixer exists yet for R011 ([`src/mcp_migrate/rules/r011_ping_removed.py`](../../src/mcp_migrate/rules/r011_ping_removed.py)),
@@ -573,7 +580,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: logging/setLevel removed (R012)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: medium (~30-45 min)
 BODY_START
 No fixer exists yet for R012 ([`src/mcp_migrate/rules/r012_logging_set_level_removed.py`](../../src/mcp_migrate/rules/r012_logging_set_level_removed.py)),
@@ -594,7 +601,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: resources/subscribe and resources/unsubscribe replaced (R013)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: hard (~60-90 min)
 BODY_START
 No fixer exists yet for R013 ([`src/mcp_migrate/rules/r013_subscriptions_replaced.py`](../../src/mcp_migrate/rules/r013_subscriptions_replaced.py)),
@@ -621,7 +628,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: required resultType missing (R015)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: hard (~45-60 min, may not be safely automatable)
 BODY_START
 No fixer exists yet for R015 ([`src/mcp_migrate/rules/r015_result_type_required.py`](../../src/mcp_migrate/rules/r015_result_type_required.py)),
@@ -649,7 +656,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: ttlMs/cacheScope missing on list/read results (R016)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: hard (~45-60 min, may not be safely automatable)
 BODY_START
 No fixer exists yet for R016 ([`src/mcp_migrate/rules/r016_cacheable_result_required.py`](../../src/mcp_migrate/rules/r016_cacheable_result_required.py)),
@@ -676,7 +683,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: server-initiated calls replaced by Multi Round-Trip Requests (R018)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: hard (~90+ min, may not be safely automatable)
 BODY_START
 No fixer exists yet for R018 ([`src/mcp_migrate/rules/r018_multi_round_trip_replaces_server_initiated.py`](../../src/mcp_migrate/rules/r018_multi_round_trip_replaces_server_initiated.py)),
@@ -704,7 +711,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: tasks/list and blocking tasks/result removed (R019)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: hard (~60-90 min)
 BODY_START
 No fixer exists yet for R019 ([`src/mcp_migrate/rules/r019_tasks_polling_replaces_blocking_result.py`](../../src/mcp_migrate/rules/r019_tasks_polling_replaces_blocking_result.py)),
@@ -728,7 +735,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: Dynamic Client Registration deprecated (R020)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: medium (~45 min)
 BODY_START
 No fixer exists yet for R020 ([`src/mcp_migrate/rules/r020_dynamic_client_registration_deprecated.py`](../../src/mcp_migrate/rules/r020_dynamic_client_registration_deprecated.py)),
@@ -754,7 +761,7 @@ BODY_END
 
 ### ISSUE_START
 TITLE: Fixer: older JSON Schema dialect pinned (R021)
-LABELS: good-first-issue,fixer
+LABELS: good first issue,fixer
 DIFFICULTY: easy (~30-45 min)
 BODY_START
 No fixer exists yet for R021 ([`src/mcp_migrate/rules/r021_json_schema_2020_12_required.py`](../../src/mcp_migrate/rules/r021_json_schema_2020_12_required.py)),
