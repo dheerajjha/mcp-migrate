@@ -2,7 +2,7 @@ name: mcp-server-time
 repo: modelcontextprotocol/servers
 language: python
 grade: B
-score: 88
+score: 91
 checked_with: mcp-migrate 0.1.0
 spec: "2026-07-28"
 status: ready

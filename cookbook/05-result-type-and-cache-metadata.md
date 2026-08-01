@@ -1,17 +1,24 @@
 # Required `resultType`, and `ttlMs`/`cacheScope` on list/read results
 
 - **Rule:** [R015](../src/mcp_migrate/rules/r015_result_type_required.py)
-  (advisory, any result missing `resultType`), [R016](../src/mcp_migrate/rules/r016_cacheable_result_required.py)
-  (advisory, list/read results missing `ttlMs`/`cacheScope`)
-- **Fixer:** none. Both fields depend on information only the handler
-  author has (is this call actually done, or does it need another round
-  trip? how long can *this* particular list response be cached?) --
-  inventing a default risks being silently wrong in a way that's worse than
-  the missing field, so neither ships a fixer.
+  (advisory, a hand-rolled JSON-RPC server whose results omit `resultType`),
+  [R016](../src/mcp_migrate/rules/r016_cacheable_result_required.py)
+  (advisory, list/read results with no cache metadata configured)
+- **Who this applies to:** **if you use the official SDK, R015 does not apply
+  to you and will not fire.** `Runner._serialize` sets
+  `resultType: "complete"` on every result it serializes, for every method,
+  and mcp 2.0.0 ships it. There is nowhere in your handler to put the field
+  and nothing for you to do. R015 is for servers that build their own
+  JSON-RPC envelopes, which do own it.
+  R016 *does* apply to SDK users, because the SDK fills `ttlMs`/`cacheScope`
+  only when you configured the server with cache hints.
+- **Fixer:** none. `ttlMs` depends on how long *your* particular list
+  response stays valid, which only you know; inventing a default risks being
+  silently wrong in a way that's worse than the missing field.
 - **Severity:** advisory for both. Originally shipped `breaking`, then
-  downgraded after a real audit found they fire on ~100% of servers today --
-  they check for fields the new spec introduced, so nothing has adopted them
-  yet and the finding has no discriminating power.
+  downgraded after a real audit: they check for things the new spec
+  introduced, so almost nothing has adopted them yet and the finding has
+  little discriminating power today.
 - **Spec:** R015 is SEP-2322, R016 is SEP-2549 --
   https://modelcontextprotocol.io/specification/2026-07-28/changelog
 
@@ -85,15 +92,21 @@ async def list_tools() -> list[Tool]:
   don't default every result to `"complete"` without checking whether some
   of your handlers actually hit that path.
 - **R015/R016 use a generous presence check, not a strict schema check.**
-  Both rules only check whether the string `resultType` (or `ttlMs`/
-  `cacheScope`) appears anywhere in the file that implements the handler --
-  not that it's set on every return statement, or spelled correctly, or
-  attached to the right object. That's a deliberate false-positive/false-negative
-  trade documented in the rule source: a wrong "still missing" claim costs a
-  project visibility even at `advisory` severity, so the rule errs toward
-  believing you if it sees the field mentioned at all. Don't take a clean
-  `mcp-migrate check` here as proof every return path is actually correct --
-  grep your own handlers for every `return`/`yield` that produces a result.
+  Once the rule decides it applies to you at all, it only checks whether the
+  relevant string appears -- not that it's set on every return statement,
+  spelled correctly, or attached to the right object. That's a deliberate
+  false-positive/false-negative trade documented in the rule source: a wrong
+  "still missing" claim costs a project visibility even at `advisory`
+  severity, so the rule errs toward believing you if it sees the field
+  mentioned at all. Don't take a clean `mcp-migrate check` here as proof
+  every return path is correct -- grep your own handlers for every
+  `return`/`yield` that produces a result.
+- **A silent R015 is not a clean bill of health either.** The rule exits
+  early for any project that imports the SDK, because the SDK owns the field
+  there. If you use the SDK *and* hand-assemble some responses on a side
+  path, R015 will not look at them. That is the price of not firing on every
+  SDK server on earth, and it is the right trade -- but it means the check
+  answers "is this your problem to fix?", not "is every result correct?"
 - **`ttlMs` is milliseconds, not seconds** -- `300_000` above is five
   minutes, not five hundred thousand seconds.
 - **`cacheScope` values are semantic, not just plumbing.** Pick per-client

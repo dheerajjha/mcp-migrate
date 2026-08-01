@@ -36,8 +36,6 @@ advisory    R004    server.py:32  Tools are returned without an explicit sort.
 advisory    R005    server.py:16  Capabilities are declared but `extensions` is absent.
 advisory    R010    (project)     This project registers MCP request handlers (tools/resources/prompts)
                                   but has no server/discover implementation anywhere in the project.
-advisory    R015    server.py:32  This file implements a result-returning MCP handler but `resultType`
-                                  never appears in it.
 advisory    R016    server.py:32  This file implements a list/read handler but neither `ttlMs` nor
                                   `cacheScope` appears in it.
 
@@ -48,7 +46,7 @@ advisory    R016    server.py:32  This file implements a list/read handler but n
 
   [... one block like this per rule that fired ...]
 
-Grade F (23/100)  3 breaking, 2 deprecated, 5 advisory
+Grade F (26/100)  3 breaking, 2 deprecated, 4 advisory
 
 Add your server to the board:  mcp-migrate entry --repo owner/name
 ```
@@ -188,8 +186,8 @@ mcp-migrate entry --repo owner/name   # print a registry/servers/*.yaml entry fo
 | [R012](src/mcp_migrate/rules/r012_logging_set_level_removed.py) | breaking | `logging/setLevel` ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) is removed; log level is per-request via `_meta` now. | no |
 | [R013](src/mcp_migrate/rules/r013_subscriptions_replaced.py) | breaking | `resources/subscribe`/`resources/unsubscribe` ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) are replaced by `subscriptions/listen`. | no |
 | [R014](src/mcp_migrate/rules/r014_sse_resumability_removed.py) | breaking | SSE resumability via `Last-Event-ID` ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) is removed; a dropped connection is just dropped now. | no |
-| [R015](src/mcp_migrate/rules/r015_result_type_required.py) | advisory | Every result now requires `resultType` ([SEP-2322](https://modelcontextprotocol.io/specification/2026-07-28/changelog)); results returned without it are malformed. Downgraded from `breaking` for the same reason as R010 -- it fires on ~100% of servers today. | no |
-| [R016](src/mcp_migrate/rules/r016_cacheable_result_required.py) | advisory | List/read results require `ttlMs`/`cacheScope` ([SEP-2549](https://modelcontextprotocol.io/specification/2026-07-28/changelog)). Downgraded from `breaking` for the same reason as R010 -- it fires on ~100% of servers today. | no |
+| [R015](src/mcp_migrate/rules/r015_result_type_required.py) | advisory | Every result now requires `resultType` ([SEP-2322](https://modelcontextprotocol.io/specification/2026-07-28/changelog)). Fires only on servers that build their own JSON-RPC envelopes: the official SDK stamps the field on every result it serializes, so an SDK-based server has nothing to add. | no |
+| [R016](src/mcp_migrate/rules/r016_cacheable_result_required.py) | advisory | List/read results require `ttlMs`/`cacheScope` ([SEP-2549](https://modelcontextprotocol.io/specification/2026-07-28/changelog)). The SDK fills these only when the server is built with `cache_hints=`, so configuring hints anywhere satisfies it. Advisory: nothing has adopted the new API yet. | no |
 | [R017](src/mcp_migrate/rules/r017_resource_not_found_code_changed.py) | breaking | The resource-not-found [error code](https://modelcontextprotocol.io/specification/2026-07-28/changelog) changed from `-32002` to `-32602`. | yes (`safe`) |
 | [R018](src/mcp_migrate/rules/r018_multi_round_trip_replaces_server_initiated.py) | breaking | Server-initiated Roots/Sampling/Elicitation ([SEP-2322](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) are replaced by Multi Round-Trip Requests (`InputRequiredResult` + `inputResponses`). | no |
 | [R019](src/mcp_migrate/rules/r019_tasks_polling_replaces_blocking_result.py) | breaking | `tasks/list` is removed and blocking `tasks/result` ([SEP-2663](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) is replaced by polling; Tasks moves to an extension. | no |
@@ -284,9 +282,9 @@ color using the table above):
 | [mcp-server-motherduck](https://github.com/motherduckdb/mcp-server-motherduck) | **A** | ready | python | Local MCP server connecting AI assistants to DuckDB and MotherDuck for SQL analytics and data engineering. |
 | [mcp-server-qdrant](https://github.com/qdrant/mcp-server-qdrant) | **A** | ready | python | Official MCP server for Qdrant that acts as a semantic memory layer for keeping and retrieving memories in the vector search engine. |
 | [mcp-server-tree-sitter](https://github.com/wrale/mcp-server-tree-sitter) | **B** | ready | python | MCP server providing tree-sitter code analysis so AI assistants get structure-aware access to codebases in many languages. |
-| [mcp-neo4j-cypher](https://github.com/neo4j-contrib/mcp-neo4j) | **B** | ready | python | MCP server for Neo4j that runs Cypher graph queries and supports Text2Cypher workflows over graph data. |
 | [mcp-server-fetch](https://github.com/modelcontextprotocol/servers) | **B** | ready | python | Reference MCP server that fetches web pages and converts HTML to markdown so LLMs can read them in chunks. |
 | [mcp-server-time](https://github.com/modelcontextprotocol/servers) | **B** | ready | python | Reference MCP server giving LLMs current time and timezone conversion using IANA timezone names. |
+| [mcp-neo4j-cypher](https://github.com/neo4j-contrib/mcp-neo4j) | **B** | ready | python | MCP server for Neo4j that runs Cypher graph queries and supports Text2Cypher workflows over graph data. |
 | [mcp-server-sentry](https://github.com/modelcontextprotocol/servers-archived) | **B** | ready | python | Archived reference MCP server for retrieving and analyzing issues, stacktraces, and debugging info from Sentry.io. |
 | [mcp-server-sqlite](https://github.com/modelcontextprotocol/servers-archived) | **B** | ready | python | Archived reference MCP server for SQLite that runs SQL queries and auto-generates business insight memos. |
 | [mcp-atlassian](https://github.com/sooperset/mcp-atlassian) | **C** | migrating | python | MCP server for Atlassian products (Confluence and Jira), supporting both Cloud and Server/Data Center deployments. |
