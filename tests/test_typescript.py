@@ -22,8 +22,8 @@ from mcp_migrate.rules import all_rules
 from mcp_migrate.rules.base import Project, SourceFile, _ts_spans
 from mcp_migrate.rules.r001_session_id_removed import SessionIdRemoved
 from mcp_migrate.rules.r003_routing_headers import MissingRoutingHeaders
-from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
+from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
 from mcp_migrate.scan import load_project
 
 LEGACY_TS = """\
@@ -148,7 +148,6 @@ def test_r001_ignores_the_header_named_only_in_prose(tmp_path):
     assert SessionIdRemoved().check(project) == []
 
 
-
 # --- R005: extensions map on ServerCapabilities --------------------------
 
 def test_r005_finds_missing_extensions_in_typescript(tmp_path):
@@ -230,6 +229,7 @@ const config = {
 """
     project = load_project(_write(tmp_path, "config.ts", code)).for_language("typescript")
     assert NoExtensionsDeclared().check(project) == []
+
 
 # --- the language split itself --------------------------------------------
 
