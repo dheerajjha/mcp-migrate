@@ -6,6 +6,7 @@ import difflib
 import itertools
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 from rich.console import Console
@@ -14,6 +15,7 @@ from rich.table import Table
 from . import __version__
 from .fixers import all_fixers
 from .grade import badge_url, letter, score
+from .languages import SUPPORTED, describe, primary, survey
 from .rules import all_rules
 from .rules.base import Project, SourceFile
 from .scan import load_project
@@ -23,6 +25,16 @@ SEV_STYLE = {"breaking": "bold red", "deprecated": "yellow", "advisory": "cyan"}
 SEV_ORDER = {"breaking": 0, "deprecated": 1, "advisory": 2}
 CONF_STYLE = {"safe": "bold green", "review": "yellow"}
 MAX_SHOWN_PER_RULE = 5
+
+# 0 = checked it, it's fine. 1 = checked it, it's broken. 2 = could not
+# check it. Keeping "couldn't read this" distinct from "this is clean" is
+# the whole point of the exit codes here: CI that treats a refusal as a
+# pass is exactly how an ungraded repo ends up wearing an A badge.
+EXIT_OK = 0
+EXIT_FINDINGS = 1
+EXIT_UNSCANNABLE = 2
+
+LANG_ISSUE_URL = "https://github.com/dheerajjha/mcp-migrate/issues/30"
 
 
 def run_check(root: Path, *, include_tests: bool = False):
@@ -36,15 +48,81 @@ def run_check(root: Path, *, include_tests: bool = False):
     return project, rules, findings, value, letter(value)
 
 
+def unscannable_reason(root: Path, project, counts, *, include_tests: bool) -> str | None:
+    """Why we must not report a grade for `root`, or None if we may.
+
+    An empty finding set has two very different causes -- "we read this and
+    it's clean" and "we read nothing" -- and the scoring code cannot tell
+    them apart, because both arrive as `[]`. Anything that turns findings
+    into a grade has to ask this first.
+    """
+    if project.files:
+        return None
+    if not counts:
+        return f"no source files found under {root.name}/"
+
+    python_files = counts.get("python", 0)
+    if python_files and not include_tests:
+        return (
+            f"found {python_files} Python file(s), but every one of them looks like "
+            "test code, which is skipped by default -- re-run with --include-tests "
+            "if you want them scanned"
+        )
+    if python_files:
+        return f"found {python_files} Python file(s) but could not read any of them"
+    return (
+        f"found {describe(counts)}, but no Python -- and mcp-migrate only reads "
+        "Python today"
+    )
+
+
+def _print_language_hint(console, counts) -> None:
+    """Point someone at the issue that would fix their case, if one exists."""
+    if counts.get("typescript") or counts.get("javascript"):
+        console.print(
+            f"[dim]TypeScript support is the most-wanted thing in this repo and it is "
+            f"up for grabs: {LANG_ISSUE_URL}[/dim]"
+        )
+    elif counts:
+        console.print(
+            f"[dim]Adding a language backend is a tractable contribution: "
+            f"{LANG_ISSUE_URL}[/dim]"
+        )
+
+
 def cmd_check(args) -> int:
     console = Console()
     root = Path(args.path).resolve()
+
+    if not root.exists():
+        # rglob over a path that isn't there yields nothing, which would
+        # otherwise sail through as a clean A for a typo'd directory name.
+        console.print(f"[bold red]No such path:[/bold red] {root}")
+        return EXIT_UNSCANNABLE
+
     project, rules, findings, value, grade = run_check(root, include_tests=args.include_tests)
+    counts = survey(root)
+    reason = unscannable_reason(root, project, counts, include_tests=args.include_tests)
 
     if args.json:
+        if reason:
+            print(json.dumps({
+                "spec": SPEC,
+                "path": str(root),
+                "scannable": False,
+                "reason": reason,
+                "languages": dict(counts),
+                "grade": None,
+                "score": None,
+                "files_scanned": 0,
+                "findings": [],
+            }, indent=2))
+            return EXIT_UNSCANNABLE
         print(json.dumps({
             "spec": SPEC,
             "path": str(root),
+            "scannable": True,
+            "languages": dict(counts),
             "grade": grade,
             "score": value,
             "files_scanned": len(project.files),
@@ -55,11 +133,38 @@ def cmd_check(args) -> int:
                 "location": f.location(),
             } for f in findings],
         }, indent=2))
-        return 1 if any(rules[f.rule_id].severity == "breaking" for f in findings) else 0
+        return EXIT_FINDINGS if any(
+            rules[f.rule_id].severity == "breaking" for f in findings
+        ) else EXIT_OK
 
     console.print()
     console.print(f"[bold]mcp-migrate[/bold] [dim]v{__version__}[/dim]  ->  {root.name}")
+
+    if reason:
+        console.print()
+        # Not .capitalize() -- that lowercases the rest, turning "24
+        # TypeScript" into "24 typescript".
+        console.print(
+            f"[bold yellow]Nothing scannable here.[/bold yellow] "
+            f"{reason[0].upper()}{reason[1:]}."
+        )
+        _print_language_hint(console, counts)
+        console.print(
+            "[dim]No grade and no badge: this tool has no opinion about code it could "
+            "not read.[/dim]"
+        )
+        console.print()
+        return EXIT_UNSCANNABLE
+
     console.print(f"[dim]{len(project.files)} Python files, {len(rules)} rules, spec {SPEC}[/dim]")
+    unread = Counter({k: v for k, v in counts.items() if k not in SUPPORTED})
+    if unread:
+        # A grade on the Python third of a mostly-TypeScript repo is true
+        # about what it measured and misleading about the repo. Say so.
+        console.print(
+            f"[dim]Also found {describe(unread)} -- not read. This grade covers the "
+            f"Python only.[/dim]"
+        )
     console.print()
 
     if not findings:
@@ -272,15 +377,57 @@ def cmd_fix(args) -> int:
 
 
 def cmd_entry(args) -> int:
-    """Print a ready-to-commit registry entry for this project."""
+    """Print a ready-to-commit registry entry for this project.
+
+    Refuses far more readily than `check` does. `check` reports to the
+    person who ran it, who can see their own repo; `entry` produces a claim
+    about someone's code that goes on a public board and that CI is
+    instructed to merge on sight. The cost of being wrong is asymmetric, so
+    the bar is higher.
+    """
+    # Refusals go to stderr: stdout is YAML that people redirect straight
+    # into registry/servers/<name>.yaml, and a refusal must never end up
+    # inside the file it was refusing to write.
+    err = Console(stderr=True)
     root = Path(args.path).resolve()
-    _, _, findings, value, grade = run_check(root)
+
+    if not root.exists():
+        err.print(f"[bold red]No such path:[/bold red] {root}")
+        return EXIT_UNSCANNABLE
+
+    project, _, findings, value, grade = run_check(root)
+    counts = survey(root)
+
+    reason = unscannable_reason(root, project, counts, include_tests=False)
+    if reason:
+        err.print(f"[bold red]Refusing to generate an entry:[/bold red] {reason}.")
+        _print_language_hint(err, counts)
+        err.print(
+            "[dim]The board only carries grades that were actually derived from "
+            "source. Nothing was written.[/dim]"
+        )
+        return EXIT_UNSCANNABLE
+
+    language = primary(counts)
+    if language not in SUPPORTED:
+        # Scannable, but the Python is a minority of the tree -- a helper
+        # script in a TypeScript server, say. The grade would be true of
+        # what it read and false as a description of the repo, and it's the
+        # repo that the board entry names.
+        err.print(
+            f"[bold red]Refusing to generate an entry:[/bold red] this tree is mostly "
+            f"{describe(counts)}, so filing it as a Python entry graded on "
+            f"{len(project.files)} Python file(s) would misdescribe the repo."
+        )
+        _print_language_hint(err, counts)
+        return EXIT_UNSCANNABLE
+
     repo = args.repo or root.name
     slug = repo.split("/")[-1].lower().replace("_", "-")
     body = f"""# registry/servers/{slug}.yaml
 name: {slug}
 repo: {repo}
-language: python
+language: {language}
 grade: {grade}
 score: {value}
 checked_with: mcp-migrate {__version__}
