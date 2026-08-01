@@ -15,7 +15,7 @@ from rich.table import Table
 from . import __version__
 from .fixers import all_fixers
 from .grade import badge_url, letter, score
-from .languages import SUPPORTED, describe, primary, survey
+from .languages import PARTIAL, SUPPORTED, describe, primary, survey
 from .rules import all_rules
 from .rules.base import Project, SourceFile
 from .scan import load_project
@@ -41,8 +41,18 @@ def run_check(root: Path, *, include_tests: bool = False):
     project = load_project(root, include_tests=include_tests)
     rules = {r.id: r for r in all_rules()}
     findings = []
+    # One pass per (rule, language it declares), against a project view
+    # filtered to that language. Views are cached because building one
+    # discards the span cache, and re-tokenizing every file per rule is the
+    # difference between a fast scan and a slow one.
+    views: dict[str, Project] = {}
     for rule in rules.values():
-        findings.extend(rule.check(project))
+        for language in rule.languages:
+            if language not in views:
+                views[language] = project.for_language(language)
+            view = views[language]
+            if view.files:
+                findings.extend(rule.check(view))
     findings.sort(key=lambda f: (SEV_ORDER.get(rules[f.rule_id].severity, 9), f.rule_id))
     value = score(findings, rules)
     return project, rules, findings, value, letter(value)
@@ -56,10 +66,23 @@ def unscannable_reason(root: Path, project, counts, *, include_tests: bool) -> s
     them apart, because both arrive as `[]`. Anything that turns findings
     into a grade has to ask this first.
     """
-    if project.files:
+    # "Did we read anything gradable", not "did we read anything". A
+    # TypeScript tree is scanned by the rules that have been ported to it,
+    # but a letter grade derived from 2 of 21 rules would be a confident
+    # claim about the 19 that never ran.
+    if any(f.language in SUPPORTED for f in project.files):
         return None
     if not counts:
         return f"no source files found under {root.name}/"
+
+    partial = sum(counts.get(lang, 0) for lang in PARTIAL)
+    if partial:
+        covered = sum(1 for r in all_rules() if set(r.languages) & PARTIAL)
+        return (
+            f"found {describe(counts)}. TypeScript support is partial -- "
+            f"{covered} of {len(list(all_rules()))} rules read it so far, which is "
+            "enough to report findings but not enough to stand behind a grade"
+        )
 
     python_files = counts.get("python", 0)
     if python_files and not include_tests:
@@ -114,8 +137,16 @@ def cmd_check(args) -> int:
                 "languages": dict(counts),
                 "grade": None,
                 "score": None,
-                "files_scanned": 0,
-                "findings": [],
+                "files_scanned": len(project.files),
+                # Findings can be non-empty here: a partially-supported
+                # language gets read by the rules that cover it. What it
+                # doesn't get is a grade.
+                "findings": [{
+                    "rule": f.rule_id,
+                    "severity": rules[f.rule_id].severity,
+                    "message": f.message,
+                    "location": f.location(),
+                } for f in findings],
             }, indent=2))
             return EXIT_UNSCANNABLE
         print(json.dumps({
@@ -144,10 +175,23 @@ def cmd_check(args) -> int:
         console.print()
         # Not .capitalize() -- that lowercases the rest, turning "24
         # TypeScript" into "24 typescript".
+        headline = "No grade for this one." if findings else "Nothing scannable here."
         console.print(
-            f"[bold yellow]Nothing scannable here.[/bold yellow] "
-            f"{reason[0].upper()}{reason[1:]}."
+            f"[bold yellow]{headline}[/bold yellow] {reason[0].upper()}{reason[1:]}."
         )
+        if findings:
+            console.print()
+            for f in findings:
+                sev = rules[f.rule_id].severity
+                console.print(
+                    f"  [{SEV_STYLE[sev]}]{sev}[/]  {f.rule_id}  {f.location()}  {f.message}"
+                )
+            console.print()
+            console.print(
+                f"[dim]{len(findings)} finding(s) from the rules that do cover this "
+                "language. Real, and worth fixing -- but a letter grade would be a "
+                "claim about the rules that didn't run.[/dim]"
+            )
         _print_language_hint(console, counts)
         console.print(
             "[dim]No grade and no badge: this tool has no opinion about code it could "
@@ -156,14 +200,25 @@ def cmd_check(args) -> int:
         console.print()
         return EXIT_UNSCANNABLE
 
-    console.print(f"[dim]{len(project.files)} Python files, {len(rules)} rules, spec {SPEC}[/dim]")
-    unread = Counter({k: v for k, v in counts.items() if k not in SUPPORTED})
+    n_python = sum(1 for f in project.files if f.language == "python")
+    console.print(f"[dim]{n_python} Python files, {len(rules)} rules, spec {SPEC}[/dim]")
+
+    partial = Counter({k: v for k, v in counts.items() if k in PARTIAL})
+    if partial:
+        covered = sum(1 for r in all_rules() if set(r.languages) & PARTIAL)
+        console.print(
+            f"[dim]Also found {describe(partial)}, read by {covered} of {len(rules)} "
+            f"rules -- partial coverage, so those files inform the findings but the "
+            f"grade leans on the Python.[/dim]"
+        )
+    unread = Counter({k: v for k, v in counts.items()
+                      if k not in SUPPORTED and k not in PARTIAL})
     if unread:
-        # A grade on the Python third of a mostly-TypeScript repo is true
+        # A grade on the Python third of a mostly-JavaScript repo is true
         # about what it measured and misleading about the repo. Say so.
         console.print(
-            f"[dim]Also found {describe(unread)} -- not read. This grade covers the "
-            f"Python only.[/dim]"
+            f"[dim]Also found {describe(unread)} -- not read at all. This grade covers "
+            f"the Python only.[/dim]"
         )
     console.print()
 
@@ -245,8 +300,14 @@ def _findings_for(root: Path, files: list[SourceFile]):
     project = Project(root=root, files=files)
     rules = {r.id: r for r in all_rules()}
     findings = []
+    views: dict[str, Project] = {}
     for rule in rules.values():
-        findings.extend(rule.check(project))
+        for language in rule.languages:
+            if language not in views:
+                views[language] = project.for_language(language)
+            view = views[language]
+            if view.files:
+                findings.extend(rule.check(view))
     return findings
 
 

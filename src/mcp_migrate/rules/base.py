@@ -35,6 +35,10 @@ class SourceFile:
     path: Path
     text: str
     tree: ast.AST | None = None
+    # `tree` is Python-only and stays None for every other language. Rules
+    # that walk the AST must therefore declare `languages = ("python",)`,
+    # which is the default -- see Rule below.
+    language: str = "python"
 
     @property
     def lines(self) -> list[str]:
@@ -129,16 +133,46 @@ class Project:
                     continue
                 yield f, i, line.strip()
 
+    @property
+    def language(self) -> str | None:
+        """The language of this view's files, or None if it's empty.
+
+        Rules are always handed a single-language view (see
+        `for_language`), so a multi-language rule can branch on this rather
+        than inspecting individual files.
+        """
+        return self.files[0].language if self.files else None
+
+    def for_language(self, language: str) -> Project:
+        """A view of this project containing only files in `language`.
+
+        The rule engine hands each rule one of these rather than the whole
+        project, so a Python-only rule can never see a `.ts` file. That
+        matters more than it looks: `search_code` skips comments and
+        strings by *tokenizing* the file, and a TypeScript file fails to
+        tokenize as Python, which makes it fall back to unfiltered raw
+        matching -- so every Python rule would quietly start reporting
+        matches from TypeScript comments the moment TS files were loaded.
+        """
+        return Project(root=self.root,
+                       files=[f for f in self.files if f.language == language])
+
     def _spans_for(self, f: SourceFile) -> list[tuple[tuple[int, int], tuple[int, int]]] | None:
         key = id(f)
         if key not in self._span_cache:
-            self._span_cache[key] = _content_spans(f.text)
+            self._span_cache[key] = (
+                _ts_spans(f.text, prose_only=False) if f.language == "typescript"
+                else _content_spans(f.text)
+            )
         return self._span_cache[key]
 
     def _prose_spans_for(self, f: SourceFile) -> list[tuple[tuple[int, int], tuple[int, int]]] | None:
         key = ("prose", id(f))
         if key not in self._span_cache:
-            self._span_cache[key] = _prose_spans(f.text)
+            self._span_cache[key] = (
+                _ts_spans(f.text, prose_only=True) if f.language == "typescript"
+                else _prose_spans(f.text)
+            )
         return self._span_cache[key]
 
     def imports(self) -> set[str]:
@@ -165,6 +199,91 @@ def _content_spans(text: str) -> list[tuple[tuple[int, int], tuple[int, int]]] |
                 spans.append((tok.start, tok.end))
     except (tokenize.TokenError, SyntaxError, IndentationError, ValueError):
         return None
+    return spans
+
+
+def _ts_spans(text: str, *, prose_only: bool) -> list[tuple[tuple[int, int], tuple[int, int]]]:
+    """Comment (and optionally string) spans for TypeScript/JavaScript.
+
+    A hand-rolled scanner rather than a real parser, deliberately: pulling
+    in a JS grammar to answer "is this match inside a comment" would be a
+    heavy dependency for a tool whose rules are all textual anyway. It
+    tracks line comments, block comments, and the three string forms
+    (`'`, `"`, backtick), honouring backslash escapes.
+
+    `prose_only=True` returns comments alone -- the TypeScript analogue of
+    `_prose_spans`. Removed JSON-RPC method names live in ordinary quoted
+    strings in TS exactly as they do in Python, while the prose explaining
+    them lives in `//` and JSDoc `/** */` comments.
+
+    Known gap, and a good first contribution: a regex literal containing a
+    quote (`/["']/`) can start a phantom string. It is rare in MCP server
+    code and it fails toward *fewer* findings, never toward a false one.
+    """
+    spans: list[tuple[tuple[int, int], tuple[int, int]]] = []
+    row, col, i, n = 1, 0, 0, len(text)
+    state: str | None = None
+    start: tuple[int, int] | None = None
+
+    while i < n:
+        ch = text[i]
+        nxt = text[i + 1] if i + 1 < n else ""
+
+        if state is None:
+            if ch == "/" and nxt == "/":
+                state, start = "line", (row, col)
+                i, col = i + 2, col + 2
+                continue
+            if ch == "/" and nxt == "*":
+                state, start = "block", (row, col)
+                i, col = i + 2, col + 2
+                continue
+            if ch in "\"'`" and not prose_only:
+                state, start = ch, (row, col)
+                i, col = i + 1, col + 1
+                continue
+            if ch in "\"'`":
+                # prose_only: still consume the string so a quote inside it
+                # can't be mistaken for the start of one.
+                state, start = ch, None
+                i, col = i + 1, col + 1
+                continue
+        elif state == "line":
+            if ch == "\n":
+                if start:
+                    spans.append((start, (row, col)))
+                state, start = None, None
+        elif state == "block":
+            if ch == "*" and nxt == "/":
+                i, col = i + 2, col + 2
+                if start:
+                    spans.append((start, (row, col)))
+                state, start = None, None
+                continue
+        else:  # inside a string literal
+            if ch == "\\":
+                i, col = i + 2, col + 2
+                continue
+            if ch == state:
+                i, col = i + 1, col + 1
+                if start:
+                    spans.append((start, (row, col)))
+                state, start = None, None
+                continue
+            if ch == "\n" and state != "`":
+                # Unterminated ordinary string -- don't swallow the file.
+                if start:
+                    spans.append((start, (row, col)))
+                state, start = None, None
+
+        if ch == "\n":
+            row, col = row + 1, 0
+        else:
+            col += 1
+        i += 1
+
+    if start is not None:
+        spans.append((start, (row, col)))
     return spans
 
 
@@ -239,6 +358,17 @@ class Rule:
     severity: str = "advisory"  # breaking | deprecated | advisory
     spec_ref: str = ""
     fix: str = ""
+
+    # Which languages this rule knows how to read. The engine calls check()
+    # once per declared language, with a Project filtered to just those
+    # files, so a rule never has to think about the others.
+    #
+    # Default is Python only, which is the safe default: a rule written
+    # against Python idioms will produce nonsense on a .ts file, and the
+    # spec change being detected is language-independent but the *detection*
+    # never is. Add "typescript" only once you have checked the patterns
+    # actually hold there -- see r001 and r006 for worked examples.
+    languages: tuple[str, ...] = ("python",)
 
     def check(self, project: Project) -> list[Finding]:  # pragma: no cover
         raise NotImplementedError

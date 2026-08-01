@@ -31,9 +31,30 @@ def _is_test_path(rel_path: Path) -> bool:
     return any(fnmatch.fnmatch(rel_path.name, pat) for pat in TEST_FILE_PATTERNS)
 
 
+# Extension -> language, for everything the rules can read. `.d.ts` is
+# excluded below: it is generated type declarations, never an
+# implementation, and grading someone on their build output is noise.
+SOURCE_EXTENSIONS = {
+    ".py": "python",
+    ".ts": "typescript", ".mts": "typescript", ".cts": "typescript",
+    ".tsx": "typescript",
+}
+
+
+def _language_of(path: Path) -> str | None:
+    if path.name.endswith(".d.ts"):
+        return None
+    return SOURCE_EXTENSIONS.get(path.suffix.lower())
+
+
 def load_project(root: Path, *, include_tests: bool = False) -> Project:
     files: list[SourceFile] = []
-    for path in sorted(root.rglob("*.py")):
+    for path in sorted(root.rglob("*")):
+        if not path.is_file():
+            continue
+        language = _language_of(path)
+        if language is None:
+            continue
         rel = path.relative_to(root)
         # Skipped relative to `root`, not the absolute filesystem path --
         # the project itself might legitimately live under a directory
@@ -49,9 +70,11 @@ def load_project(root: Path, *, include_tests: bool = False) -> Project:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        try:
-            tree = ast.parse(text, filename=str(path))
-        except SyntaxError:
-            tree = None
-        files.append(SourceFile(path=rel, text=text, tree=tree))
+        tree = None
+        if language == "python":
+            try:
+                tree = ast.parse(text, filename=str(path))
+            except SyntaxError:
+                tree = None
+        files.append(SourceFile(path=rel, text=text, tree=tree, language=language))
     return Project(root=root, files=files)

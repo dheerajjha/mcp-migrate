@@ -95,7 +95,6 @@ def test_check_json_reports_no_grade(fixture, request, capsys):
     assert data["scannable"] is False
     assert data["grade"] is None, "a null grade is the only honest machine answer here"
     assert data["score"] is None
-    assert data["files_scanned"] == 0
     assert data["reason"]
 
 
@@ -121,17 +120,21 @@ def test_check_still_grades_a_real_python_project(python_tree, capsys):
     assert exit_code == 0
     assert data["scannable"] is True
     assert data["grade"] == "A"
-    assert data["files_scanned"] == 6
+    # 6 Python + the one TypeScript file, which the ported rules now read.
+    assert data["files_scanned"] == 7
 
 
-def test_check_on_a_mixed_tree_says_what_it_did_not_read(mixed_tree, capsys):
+def test_check_on_a_mixed_tree_declares_its_coverage(mixed_tree, capsys):
     # We *can* grade the Python here, so this is not a refusal -- but a
-    # grade derived from 1 of 7 files needs to say so out loud.
+    # grade leaning on 1 of 7 files has to say so out loud, and it has to
+    # be honest that the TypeScript is only partially covered rather than
+    # claiming either "read" or "not read".
     exit_code = main(["check", str(mixed_tree)])
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "TypeScript" in out
-    assert "not read" in out
+    assert "partial coverage" in out
+    assert "of 21" in out, "say how many rules actually read it"
 
 
 def test_check_explains_when_the_only_python_is_test_code(tmp_path, capsys):

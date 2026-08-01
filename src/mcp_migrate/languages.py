@@ -20,9 +20,17 @@ from pathlib import Path
 
 from .scan import SKIP_DIRS
 
-# Languages the rules can actually analyse. Everything else we can only
-# count and name -- which is enough to explain why we're refusing.
+# Languages with enough rule coverage to carry a grade. Everything else we
+# can only count and name -- which is enough to explain why we're refusing.
 SUPPORTED = frozenset({"python"})
+
+# Languages some rules can read, but not yet enough of them to put a letter
+# on. TypeScript findings are real and worth printing; a *grade* derived
+# from them would be a claim about the 19 rules that didn't run, which is
+# the same false-A this tool refuses to hand out for an empty directory.
+# Move a language from here to SUPPORTED when coverage is broad enough to
+# mean something.
+PARTIAL = frozenset({"typescript"})
 
 EXTENSIONS = {
     ".py": "python", ".pyi": "python",
