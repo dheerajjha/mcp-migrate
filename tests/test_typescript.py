@@ -24,6 +24,7 @@ from mcp_migrate.rules.r001_session_id_removed import SessionIdRemoved
 from mcp_migrate.rules.r003_routing_headers import MissingRoutingHeaders
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
+from mcp_migrate.rules.r011_ping_removed import PingRemoved
 from mcp_migrate.scan import load_project
 
 LEGACY_TS = """\
@@ -231,6 +232,107 @@ const config = {
     assert NoExtensionsDeclared().check(project) == []
 
 
+
+# --- R011: removed ping request/response ---------------------------------
+
+def test_r011_finds_ping_request_schema_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { PingRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+server.setRequestHandler(PingRequestSchema, async () => {
+  return {};
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = PingRemoved().check(project)
+    assert len(findings) == 2
+    assert all("PingRequest" in f.message for f in findings)
+
+
+def test_r011_finds_method_dispatch_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+
+export async function handle(method: string) {
+  if (method === "ping") {
+    return {};
+  }
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = PingRemoved().check(project)
+    assert len(findings) == 1
+    assert "ping" in findings[0].message
+
+
+def test_r011_finds_case_dispatch_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+
+switch (method) {
+  case "ping": return {};
+  case "tools/call": return callTool();
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = PingRemoved().check(project)
+    assert len(findings) == 1
+    assert "ping" in findings[0].message
+
+
+def test_r011_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+
+const server = new Server({ name: "my-server", version: "1.0.0" });
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert PingRemoved().check(project) == []
+
+
+def test_r011_ignores_ping_named_only_in_comment(tmp_path):
+    code = """\
+// We removed the ping handler in the 2026-07-28 migration.
+// PingRequestSchema is gone, liveness rides on the transport now.
+export const NOTE = 1;
+"""
+    project = load_project(_write(tmp_path, "docs.ts", code)).for_language("typescript")
+    assert PingRemoved().check(project) == []
+
+
+def test_r011_stays_silent_on_health_check_endpoint(tmp_path):
+    # A /ping health-check route in a file that also imports the MCP SDK.
+    # The dispatch patterns don't match "/ping" (it has a leading slash),
+    # and there's no method === "ping" comparison, so this stays quiet
+    # even with MCP context present.
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import express from "express";
+
+const app = express();
+app.get("/ping", (req, res) => res.json({ ok: true }));
+
+const server = new Server({ name: "my-server", version: "1.0.0" });
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert PingRemoved().check(project) == []
+
+
+def test_r011_stays_silent_on_ping_dispatch_without_mcp_context(tmp_path):
+    # method === "ping" but no MCP SDK import and no MCP method names.
+    # This is a game server or a network tool, not an MCP server.
+    code = """\
+export function handle(message: string) {
+  if (message === "ping") {
+    return "pong";
+  }
+  return null;
+}
+"""
+    project = load_project(_write(tmp_path, "game.ts", code)).for_language("typescript")
+    assert PingRemoved().check(project) == []
+
 # --- the language split itself --------------------------------------------
 
 def test_python_rules_never_see_typescript_files(tmp_path):
@@ -279,7 +381,7 @@ def test_partial_coverage_is_stated_with_a_denominator(tmp_path, capsys):
     # Collapse whitespace: rich wraps at terminal width and will happily
     # split the fraction across two lines.
     out = " ".join(capsys.readouterr().out.split())
-    assert "4 of 21" in out, (
+    assert "5 of 21" in out, (
         "someone deciding whether to trust this needs the coverage fraction, "
         "and it should move as rules get ported"
     )
