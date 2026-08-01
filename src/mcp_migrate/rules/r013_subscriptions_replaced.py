@@ -28,7 +28,7 @@ class ResourceSubscriptionsReplaced(Rule):
         # strings, not valid bare identifiers -- they can only appear
         # inside a STRING token, so search_code would never find them (see
         # the notifications/initialized note in r009). Scan raw text.
-        for f, line, text in project.search(r"resources/subscribe|resources/unsubscribe"):
+        for f, line, text in project.search_wire(r"resources/subscribe|resources/unsubscribe"):
             out.append(self.finding(
                 "References the removed resources/subscribe or resources/unsubscribe "
                 "JSON-RPC method.", f, line, text,

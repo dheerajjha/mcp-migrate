@@ -96,10 +96,49 @@ class Project:
                     continue
                 yield f, i, line.strip()
 
+    def search_wire(self, pattern: str, *, flags: int = 0):
+        """Like `search`, but ignores matches inside comments and
+        triple-quoted strings.
+
+        The middle setting between `search` and `search_code`, and the
+        right one for removed JSON-RPC method names.
+
+        Those names (`notifications/initialized`, `resources/subscribe`,
+        `tools/list`, ...) can only ever appear as string *literals* -- they
+        are not valid identifiers -- so `search_code`, which skips every
+        string token, would never find them at all. But plain `search`
+        finds them in prose too, and prose is where people explain the
+        protocol: a module docstring reading "Runs the MCP handshake
+        (initialize -> notifications/initialized)" is documentation, not an
+        implementation of it. That exact line produced a `breaking` finding
+        on a real server, which is the `Mcp-Session-Id`-in-a-help-string
+        mistake wearing a different hat.
+
+        The split that works: real wire names live in short quoted strings
+        (`{"method": "tools/list"}`), explanations live in comments and
+        triple-quoted blocks. So skip those two and keep everything else.
+        """
+        rx = re.compile(pattern, flags)
+        for f in self.files:
+            spans = self._prose_spans_for(f)
+            for i, line in enumerate(f.lines, start=1):
+                m = rx.search(line)
+                if not m:
+                    continue
+                if spans is not None and _in_content_span(i, m.start(), spans):
+                    continue
+                yield f, i, line.strip()
+
     def _spans_for(self, f: SourceFile) -> list[tuple[tuple[int, int], tuple[int, int]]] | None:
         key = id(f)
         if key not in self._span_cache:
             self._span_cache[key] = _content_spans(f.text)
+        return self._span_cache[key]
+
+    def _prose_spans_for(self, f: SourceFile) -> list[tuple[tuple[int, int], tuple[int, int]]] | None:
+        key = ("prose", id(f))
+        if key not in self._span_cache:
+            self._span_cache[key] = _prose_spans(f.text)
         return self._span_cache[key]
 
     def imports(self) -> set[str]:
@@ -123,6 +162,35 @@ def _content_spans(text: str) -> list[tuple[tuple[int, int], tuple[int, int]]] |
     try:
         for tok in tokenize.generate_tokens(io.StringIO(text).readline):
             if tok.type in _CONTENT_TOKEN_TYPES:
+                spans.append((tok.start, tok.end))
+    except (tokenize.TokenError, SyntaxError, IndentationError, ValueError):
+        return None
+    return spans
+
+
+def _is_triple_quoted(tok_string: str) -> bool:
+    """True for a STRING token written with triple quotes.
+
+    Strips any prefix (r, b, f, rb, ...) before looking at the quotes, so
+    an f-string docstring-shaped block is still recognised.
+    """
+    s = tok_string.lstrip("rRbBuUfF")
+    return s.startswith('"""') or s.startswith("'''")
+
+
+def _prose_spans(text: str) -> list[tuple[tuple[int, int], tuple[int, int]]] | None:
+    """Spans of every COMMENT and every triple-quoted STRING token.
+
+    Deliberately *not* every string: single-line quoted strings are where
+    real JSON-RPC method names live, and excluding them would make the
+    wire-name rules find nothing at all.
+    """
+    spans: list[tuple[tuple[int, int], tuple[int, int]]] = []
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type == tokenize.COMMENT or (
+                tok.type == tokenize.STRING and _is_triple_quoted(tok.string)
+            ):
                 spans.append((tok.start, tok.end))
     except (tokenize.TokenError, SyntaxError, IndentationError, ValueError):
         return None

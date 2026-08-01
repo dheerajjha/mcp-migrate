@@ -20,7 +20,12 @@ import pytest
 from mcp_migrate.cli import run_check
 from mcp_migrate.grade import RULE_CAP, WEIGHT, score
 from mcp_migrate.rules.base import Finding, Rule
+from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
+from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r007_deprecated_features import DeprecatedCoreFeatures
+from mcp_migrate.rules.r009_initialize_handshake_removed import (
+    InitializeHandshakeStillImplemented,
+)
 from mcp_migrate.rules.r010_server_discover_missing import ServerDiscoverMissing
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
 from mcp_migrate.rules.r017_resource_not_found_code_changed import (
@@ -496,3 +501,97 @@ def test_r007_still_fires_on_declared_sampling_capability(tmp_path):
         "caps = ServerCapabilities(sampling=SamplingCapability())\n"
     )
     assert DeprecatedCoreFeatures().check(load_project(tmp_path))
+
+
+# --- 9. prose is not an implementation -------------------------------------
+#
+# All three of these came out of hand-auditing 30 findings sampled from a
+# 620-server registry scan, which is the only reason they were found: the
+# suite was green throughout.
+#
+# Removed JSON-RPC method names can only appear as string literals, so the
+# rules that look for them had to use raw text search -- which also reads
+# comments and docstrings, where people *explain* the protocol. A module
+# docstring describing a migration is not an implementation of it.
+
+def test_r009_does_not_fire_on_a_docstring_describing_the_handshake(tmp_path):
+    # sidney/web-to-markdown-mcp: this docstring alone produced a
+    # *breaking* finding, dropping the project to D. It is a smoke script
+    # explaining what it does.
+    (tmp_path / "smoke_fetch.py").write_text(
+        '"""Smoke test for the fetch tool.\n\n'
+        "Runs the MCP handshake (initialize -> notifications/initialized) then calls\n"
+        'tools/call and prints the result.\n"""\n\n'
+        "import json\n\n\n"
+        "def main():\n"
+        "    print(json.dumps({}))\n"
+    )
+    findings = InitializeHandshakeStillImplemented().check(load_project(tmp_path))
+    assert findings == [], (
+        "a docstring explaining the handshake is documentation, not an "
+        f"implementation: {[f.message for f in findings]}"
+    )
+
+
+def test_r009_still_fires_on_a_real_initialized_handler(tmp_path):
+    # The literal in actual dispatch code must still be found -- this is
+    # why the rule cannot simply use search_code.
+    (tmp_path / "server.py").write_text(
+        "def dispatch(method, params):\n"
+        '    if method in ("notifications/initialized", "initialized"):\n'
+        "        return None\n"
+    )
+    assert InitializeHandshakeStillImplemented().check(load_project(tmp_path))
+
+
+def test_r004_does_not_fire_on_a_docstring_listing_http_routes(tmp_path):
+    # chunxiaoxx/nautilus-compass: a module docstring describing the HTTP
+    # surface read as a tool handler with no sort.
+    (tmp_path / "compass_http.py").write_text(
+        '"""Compass HTTP bridge.\n\n'
+        "MCP-over-HTTP (POST /mcp/tools/call - POST /mcp/tools/list - POST /mcp/initialize)\n"
+        '"""\n\n'
+        "import json\n"
+    )
+    findings = NondeterministicToolOrder().check(load_project(tmp_path))
+    assert findings == [], f"docstring is not a handler: {[f.message for f in findings]}"
+
+
+def test_r005_does_not_fire_on_ordinary_variables_named_capabilities(tmp_path):
+    # Three real shapes from the scan. None of them is MCP.
+    (tmp_path / "backend.py").write_text(
+        "from .caps import Capability\n\n\n"
+        "class ClaudeBackend:\n"
+        "    name = 'anthropic'\n"
+        "    capabilities = {Capability.TEXT, Capability.VISION}\n\n\n"
+        "def embed(model):\n"
+        "    return dict(required_capabilities={Capability.EMBEDDINGS})\n\n\n"
+        "Registry.update_capabilities = _update_capabilities\n"
+    )
+    findings = NoExtensionsDeclared().check(load_project(tmp_path))
+    assert findings == [], (
+        "`capabilities` is an ordinary identifier; only the SDK's own names "
+        f"mean MCP capabilities here: {[f.message for f in findings]}"
+    )
+
+
+def test_r005_still_fires_on_a_real_declaration_without_extensions(tmp_path):
+    (tmp_path / "server.py").write_text(
+        "from mcp.types import ServerCapabilities, ToolsCapability\n\n"
+        "caps = ServerCapabilities(tools=ToolsCapability())\n"
+    )
+    assert NoExtensionsDeclared().check(load_project(tmp_path))
+
+
+def test_search_wire_keeps_string_literals_and_drops_prose(tmp_path):
+    # The contract of the three-way split, asserted directly.
+    (tmp_path / "m.py").write_text(
+        '"""Explains resources/subscribe in a docstring."""\n'
+        "# and again in a comment: resources/subscribe\n"
+        'HANDLERS = {"resources/subscribe": None}\n'
+    )
+    project = load_project(tmp_path)
+    hits = [ln for _f, ln, _t in project.search_wire("resources/subscribe")]
+    assert hits == [3], f"expected only the dict literal on line 3, got {hits}"
+    assert len(list(project.search("resources/subscribe"))) == 3
+    assert list(project.search_code("resources/subscribe")) == []

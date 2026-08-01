@@ -57,7 +57,7 @@ class MultiRoundTripReplacesServerInitiated(Rule):
                     f, line, text,
                 ))
         for pattern, name in FEATURES_LITERAL.items():
-            for f, line, text in project.search(pattern):
+            for f, line, text in project.search_wire(pattern):
                 out.append(self.finding(
                     f"{name} was replaced by Multi Round-Trip Requests (InputRequiredResult "
                     "+ inputResponses).",

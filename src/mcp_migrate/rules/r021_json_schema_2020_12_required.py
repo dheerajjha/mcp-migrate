@@ -34,7 +34,7 @@ class OldJSONSchemaDialect(Rule):
         # `"2019-09"`), never a bare code identifier, so it only ever
         # starts inside a STRING token -- search_code would silently never
         # find it (see the notifications/initialized note in r009).
-        for f, line, text in project.search(OLD_DIALECT_RX.pattern):
+        for f, line, text in project.search_wire(OLD_DIALECT_RX.pattern):
             out.append(self.finding(
                 "Pins an older JSON Schema dialect; 2026-07-28 requires 2020-12 support.",
                 f, line, text,

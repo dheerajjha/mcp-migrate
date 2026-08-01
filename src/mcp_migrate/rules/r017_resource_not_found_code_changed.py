@@ -30,7 +30,7 @@ class ResourceNotFoundCodeChanged(Rule):
         # a string/identifier, and being lenient about *where* the context
         # comes from doesn't create a false positive on its own -- the
         # numeric literal still has to be there too.
-        for f, line, text in project.search(RESOURCE_NOT_FOUND_RX.pattern):
+        for f, line, text in project.search_wire(RESOURCE_NOT_FOUND_RX.pattern):
             out.append(self.finding(
                 "-32002 for resource-not-found is the old code; 2026-07-28 uses -32602.",
                 f, line, text,

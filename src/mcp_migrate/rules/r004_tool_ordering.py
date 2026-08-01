@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, _in_content_span
 
 # This intentionally matches raw text, not just code (see base.py's
 # `search`/`search_code` split): `tools/list` here is the literal
@@ -64,8 +64,17 @@ class NondeterministicToolOrder(Rule):
             # function -- track already-covered spans so one handler can't
             # produce two findings.
             covered: list[tuple[int, int]] = []
+            # Prose spans, for the same reason `search_wire` exists: the
+            # `tools/list` half of HANDLER_RX is a raw literal match, so a
+            # module docstring describing the HTTP surface ("POST
+            # /mcp/tools/call - POST /mcp/tools/list") otherwise reads as a
+            # tool handler with no sort. Seen on a real server.
+            prose = project._prose_spans_for(f)
             for line_no, line in enumerate(f.lines, start=1):
-                if not HANDLER_RX.search(line):
+                m = HANDLER_RX.search(line)
+                if not m:
+                    continue
+                if prose is not None and _in_content_span(line_no, m.start(), prose):
                     continue
                 if any(start <= line_no <= end for start, end in covered):
                     continue

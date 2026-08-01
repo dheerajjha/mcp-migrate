@@ -31,7 +31,7 @@ class TasksPollingReplacesBlockingResult(Rule):
         # valid bare identifiers -- they can only appear inside a STRING
         # token, so search_code would never find them (see the
         # notifications/initialized note in r009). Raw scan instead.
-        for f, line, text in project.search(r"tasks/list|tasks/result"):
+        for f, line, text in project.search_wire(r"tasks/list|tasks/result"):
             out.append(self.finding(
                 "References the removed tasks/list or blocking tasks/result JSON-RPC "
                 "method.",

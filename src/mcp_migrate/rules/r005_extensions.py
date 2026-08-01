@@ -2,7 +2,20 @@ import re
 
 from .base import Finding, Project, Rule
 
-CAPS_RX = re.compile(r"ServerCapabilities|server_capabilities|capabilities\s*=")
+# Only the SDK's own names. A bare `capabilities = ...` used to be in
+# here and it is simply too ordinary an identifier to carry any MCP
+# meaning -- the registry scan turned up all three of these, none of which
+# is a capabilities declaration under this spec or any other:
+#
+#   required_capabilities={Capability.EMBEDDINGS}        an OpenAI-compat shim
+#   Registry.update_capabilities = _update_capabilities  a plugin registry
+#   capabilities = {Capability.TEXT, Capability.VISION}  an LLM backend class
+#
+# Dropping it costs a hand-rolled server that assembles its own untyped
+# capabilities dict, which is a false negative we accept: this rule is
+# advisory, and a wrong "you're missing extensions" aimed at code that
+# never spoke MCP is worse than a quiet miss.
+CAPS_RX = re.compile(r"\bServerCapabilities\b|\bserver_capabilities\b")
 EXTENSIONS_RX = re.compile(r"\bextensions\b")
 
 
