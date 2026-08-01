@@ -26,4 +26,10 @@ jobs:
         run: uv run pytest
 
       - name: Validate registry
+        # Authenticated so the language check isn't rate-limited: hosted
+        # runners share outbound IPs, and unauthenticated GitHub API calls
+        # are capped at 60/hour per IP. Without this the check would skip
+        # itself on busy days, which is the one time it matters.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: uv run python scripts/validate_registry.py

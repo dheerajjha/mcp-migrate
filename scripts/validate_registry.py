@@ -1,9 +1,24 @@
 #!/usr/bin/env python3
-"""Validate registry/servers/*.yaml. Runs in CI on every PR."""
+"""Validate registry/servers/*.yaml. Runs in CI on every PR.
+
+Two layers. The schema checks are pure and always run. The language check
+asks GitHub whether the repo actually contains the language the entry
+claims, and exists because the CLI is not the only way an entry can be
+created: anyone can hand-write the YAML, and the board's standing promise
+is that a schema pass equals a merge. A `language: python` entry for a
+repo containing no Python is exactly the false-A this project refuses to
+publish, so it has to be caught at the point of merge and not only at the
+point of generation.
+"""
 from __future__ import annotations
 
+import argparse
+import json
+import os
 import re
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import yaml
@@ -18,6 +33,76 @@ ENUMS = {
     "status": {"ready", "migrating", "unmaintained"},
 }
 REPO_RX = re.compile(r"^[\w.-]+/[\w.-]+$")
+
+# Our language values spelled the way GitHub's linguist spells them.
+# `other` is deliberately absent: it claims nothing, so there is nothing
+# to contradict.
+GH_LANGUAGE = {
+    "python": "Python",
+    "typescript": "TypeScript",
+    "go": "Go",
+    "rust": "Rust",
+    "java": "Java",
+    "csharp": "C#",
+    "ruby": "Ruby",
+}
+API = "https://api.github.com/repos/{repo}/languages"
+
+
+class Unreachable(Exception):
+    """GitHub could not be asked -- as distinct from GitHub saying no."""
+
+
+def repo_languages(repo: str) -> set[str]:
+    """The languages GitHub reports for `repo`.
+
+    Raises Unreachable when the question could not be put to GitHub at all
+    (offline, rate-limited, timing out). That is not the same as an empty
+    answer and must not be treated as one -- a network blip should never
+    silently convict an honest entry.
+    """
+    req = urllib.request.Request(
+        API.format(repo=repo),
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "mcp-migrate-validator"},
+    )
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return set(json.load(resp))
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return set()  # a real answer: no such repo
+        raise Unreachable(f"HTTP {exc.code}") from exc
+    except Exception as exc:  # noqa: BLE001 -- URLError, timeout, bad JSON
+        raise Unreachable(str(exc)) from exc
+
+
+def validate_language(path: Path, data: dict) -> list[str]:
+    """Check the declared language against what the repo actually contains."""
+    repo, declared = data.get("repo"), data.get("language")
+    if not isinstance(repo, str) or not REPO_RX.match(repo or ""):
+        return []  # the schema pass already reported this
+    expected = GH_LANGUAGE.get(declared)
+    if expected is None:
+        return []
+
+    try:
+        present = repo_languages(repo)
+    except Unreachable as exc:
+        print(f"::notice::{path.name}: skipped the language check ({exc})")
+        return []
+
+    if not present:
+        return [f"{path.name}: GitHub reports no such repo, or an empty one: {repo}"]
+    if expected not in present:
+        return [
+            f"{path.name}: declares `language: {declared}` but {repo} contains no "
+            f"{expected} according to GitHub (it has: {', '.join(sorted(present))}). "
+            f"An entry graded in a language the repo does not contain is a false grade."
+        ]
+    return []
 
 
 def validate(path: Path) -> list[str]:
@@ -47,11 +132,31 @@ def validate(path: Path) -> list[str]:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--offline", action="store_true",
+        help="skip the GitHub language check (schema checks still run)",
+    )
+    args = parser.parse_args()
+
     files = sorted(SERVERS.glob("*.yaml"))
     if not files:
         print("no entries found")
         return 0
-    errors = [e for f in files for e in validate(f)]
+
+    errors: list[str] = []
+    for f in files:
+        schema_errors = validate(f)
+        errors.extend(schema_errors)
+        if args.offline or schema_errors:
+            continue
+        try:
+            data = yaml.safe_load(f.read_text())
+        except yaml.YAMLError:
+            continue
+        if isinstance(data, dict):
+            errors.extend(validate_language(f, data))
+
     for e in errors:
         print(f"::error::{e}")
     print(f"checked {len(files)} entries, {len(errors)} problems")

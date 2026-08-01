@@ -25,6 +25,8 @@ jobs:
         run: pip install pyyaml
 
       - name: Validate registry
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/validate_registry.py
 
       - name: Render board into README

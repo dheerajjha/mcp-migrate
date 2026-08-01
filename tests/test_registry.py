@@ -88,6 +88,68 @@ def test_multiple_problems_all_reported(tmp_path):
     assert len(errs) >= 2
 
 
+# --- the declared language must exist in the repo ------------------------
+#
+# The CLI is not the only way an entry gets created: the YAML is nine lines
+# and anyone can hand-write it. Since the board's promise is that a schema
+# pass equals a merge, a `language: python` entry for a repo with no Python
+# has to be caught here too, or the CLI's refusal is just a speed bump.
+
+def _entry(**overrides) -> dict:
+    data = {
+        "name": "acme-notes", "repo": "acme/notes-mcp", "language": "python",
+        "grade": "A", "score": 97, "checked_with": "mcp-migrate 0.1.1",
+        "spec": "2026-07-28", "status": "ready", "notes": "A server.",
+    }
+    data.update(overrides)
+    return data
+
+
+def test_declared_language_present_in_repo_passes(tmp_path, monkeypatch):
+    monkeypatch.setattr(vr, "repo_languages", lambda repo: {"Python", "Shell"})
+    assert vr.validate_language(tmp_path / "acme-notes.yaml", _entry()) == []
+
+
+def test_declared_language_absent_from_repo_is_an_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(vr, "repo_languages", lambda repo: {"TypeScript", "JavaScript"})
+    errs = vr.validate_language(tmp_path / "acme-notes.yaml", _entry())
+    assert len(errs) == 1
+    assert "contains no Python" in errs[0]
+    assert "TypeScript" in errs[0], "say what the repo actually is, not just what it isn't"
+
+
+def test_repo_that_does_not_exist_is_an_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(vr, "repo_languages", lambda repo: set())
+    errs = vr.validate_language(tmp_path / "acme-notes.yaml", _entry())
+    assert any("no such repo" in e for e in errs)
+
+
+def test_unreachable_github_skips_rather_than_convicts(tmp_path, monkeypatch, capsys):
+    def boom(repo):
+        raise vr.Unreachable("timed out")
+
+    monkeypatch.setattr(vr, "repo_languages", boom)
+    errs = vr.validate_language(tmp_path / "acme-notes.yaml", _entry())
+    assert errs == [], "a network blip must never fail an honest entry"
+    assert "skipped the language check" in capsys.readouterr().out
+
+
+def test_language_other_claims_nothing_so_asks_nothing(tmp_path, monkeypatch):
+    def boom(repo):
+        raise AssertionError("should not have called the network")
+
+    monkeypatch.setattr(vr, "repo_languages", boom)
+    assert vr.validate_language(tmp_path / "acme-notes.yaml", _entry(language="other")) == []
+
+
+def test_malformed_repo_is_left_to_the_schema_check(tmp_path, monkeypatch):
+    def boom(repo):
+        raise AssertionError("should not have called the network")
+
+    monkeypatch.setattr(vr, "repo_languages", boom)
+    assert vr.validate_language(tmp_path / "acme-notes.yaml", _entry(repo="nonsense")) == []
+
+
 # --- render_board.py -----------------------------------------------------
 
 def test_render_board_rewrites_only_the_marked_region(tmp_path, monkeypatch):
