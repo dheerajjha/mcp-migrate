@@ -1,0 +1,142 @@
+{
+  "generated_by": "scripts/ecosystem_scan.py, mcp-migrate 0.1.2+7abaeb1",
+  "spec": "2026-07-28",
+  "method": {
+    "registry": "registry.modelcontextprotocol.io/v0/servers?version=latest",
+    "sample_seed": 20260801,
+    "sample_size": 3000,
+    "note": "Random sample of the full deduplicated population, not a prefix -- registry names are not randomly ordered.",
+    "tests_excluded": true
+  },
+  "registry": {
+    "unique_github_repos": 14249,
+    "sampled": 3000,
+    "dead_links": 458,
+    "dead_link_pct": 15.3,
+    "live": 2542
+  },
+  "languages_of_live_sample": {
+    "TypeScript": 1070,
+    "Python": 620,
+    "JavaScript": 383,
+    "null": 233,
+    "Go": 72,
+    "Rust": 52,
+    "HTML": 25,
+    "C#": 21,
+    "Dockerfile": 15,
+    "Shell": 14,
+    "Swift": 6,
+    "Java": 5,
+    "C++": 3,
+    "PHP": 3,
+    "Solidity": 2,
+    "Kotlin": 2,
+    "Astro": 2,
+    "XSLT": 2,
+    "C": 2,
+    "Ruby": 1,
+    "MDX": 1,
+    "Jupyter Notebook": 1,
+    "Elixir": 1,
+    "Batchfile": 1,
+    "PowerShell": 1,
+    "Motoko": 1,
+    "Roff": 1,
+    "GDScript": 1,
+    "Lean": 1
+  },
+  "python_servers_scanned": 620,
+  "grades": {
+    "A": 424,
+    "B": 117,
+    "C": 52,
+    "D": 17,
+    "F": 10
+  },
+  "score_median": 97,
+  "zero_findings": 71,
+  "no_breaking_findings": 550,
+  "rule_prevalence": {
+    "R010": {
+      "servers": 485,
+      "pct": 78.2
+    },
+    "R004": {
+      "servers": 116,
+      "pct": 18.7
+    },
+    "R003": {
+      "servers": 65,
+      "pct": 10.5
+    },
+    "R016": {
+      "servers": 60,
+      "pct": 9.7
+    },
+    "R006": {
+      "servers": 42,
+      "pct": 6.8
+    },
+    "R009": {
+      "servers": 31,
+      "pct": 5.0
+    },
+    "R015": {
+      "servers": 30,
+      "pct": 4.8
+    },
+    "R008": {
+      "servers": 21,
+      "pct": 3.4
+    },
+    "R011": {
+      "servers": 18,
+      "pct": 2.9
+    },
+    "R002": {
+      "servers": 11,
+      "pct": 1.8
+    },
+    "R007": {
+      "servers": 11,
+      "pct": 1.8
+    },
+    "R020": {
+      "servers": 10,
+      "pct": 1.6
+    },
+    "R001": {
+      "servers": 10,
+      "pct": 1.6
+    },
+    "R014": {
+      "servers": 9,
+      "pct": 1.5
+    },
+    "R018": {
+      "servers": 6,
+      "pct": 1.0
+    },
+    "R005": {
+      "servers": 5,
+      "pct": 0.8
+    },
+    "R021": {
+      "servers": 3,
+      "pct": 0.5
+    },
+    "R013": {
+      "servers": 2,
+      "pct": 0.3
+    },
+    "R012": {
+      "servers": 2,
+      "pct": 0.3
+    },
+    "R017": {
+      "servers": 1,
+      "pct": 0.2
+    }
+  }
+}

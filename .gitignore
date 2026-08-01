@@ -50,3 +50,7 @@ dmypy.json
 
 # Internal engineering handoff -- not for publication
 HANDOFF.md
+ACTION-PLAN.md
+
+# ecosystem_scan.py intermediate cache
+.ecosystem-work/
