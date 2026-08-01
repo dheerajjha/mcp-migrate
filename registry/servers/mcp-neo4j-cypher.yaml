@@ -3,7 +3,7 @@ repo: neo4j-contrib/mcp-neo4j
 language: python
 grade: B
 score: 89
-checked_with: mcp-migrate 0.1.0
+checked_with: mcp-migrate 0.1.1
 spec: "2026-07-28"
 status: ready
 notes: >-

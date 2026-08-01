@@ -23,7 +23,7 @@ uvx mcp-migrate fix . --write
 ```
 $ uvx mcp-migrate check tests/fixtures/fixer_roundtrip
 
-mcp-migrate v0.1.0  ->  fixer_roundtrip
+mcp-migrate v0.1.1  ->  fixer_roundtrip
 2 Python files, 21 rules, spec 2026-07-28
 
             rule    where         what

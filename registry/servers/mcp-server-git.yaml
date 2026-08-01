@@ -3,7 +3,7 @@ repo: modelcontextprotocol/servers
 language: python
 grade: D
 score: 54
-checked_with: mcp-migrate 0.1.0
+checked_with: mcp-migrate 0.1.1
 spec: "2026-07-28"
 status: ready
 notes: >-
