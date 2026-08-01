@@ -19,6 +19,41 @@ RESULT_HANDLER_RX = re.compile(
 # generous read of "present".
 RESULT_TYPE_MENTION_RX = re.compile(r"resultType")
 
+# Whether the official Python SDK is serializing this server's responses.
+#
+# This decides whether the rule may fire at all, because the SDK sets the
+# field itself. `Runner._serialize` in mcp/server/runner.py ends with:
+#
+#     if version in MODERN_PROTOCOL_VERSIONS and dumped.get("resultType") is None:
+#         dumped["resultType"] = "complete"
+#
+# unconditionally, for every method including custom and extension ones, and
+# mcp 2.0.0 on PyPI ships it. So a handler in an SDK-based server has nowhere
+# to put `resultType` and nothing to fix: the field is already on the wire.
+# Telling those authors to add it is a false positive on 100% of SDK servers,
+# and "add a field you cannot add" is the kind of finding that costs a tool
+# its credibility. The genuine risk is a server that hand-rolls its own
+# JSON-RPC responses and therefore owns the envelope itself.
+SDK_SERVER_MODULES = ("mcp.server", "mcp.types", "mcp.shared", "fastmcp")
+
+# What a server that owns its own envelope looks like: it writes the JSON-RPC
+# framing and the MCP method names itself, as string literals. Both halves are
+# required -- "jsonrpc" alone is any JSON-RPC service on earth, and a method
+# name alone shows up in tests and docs -- and the project must not import the
+# SDK, which is checked first.
+JSONRPC_ENVELOPE_RX = re.compile(r"[\"']jsonrpc[\"']")
+MCP_METHOD_NAME_RX = re.compile(
+    r"[\"'](?:tools/list|tools/call|resources/list|resources/read|"
+    r"resources/templates/list|prompts/list|prompts/get)[\"']"
+)
+
+
+def _sdk_owns_serialization(project) -> bool:
+    for mod in project.imports():
+        if mod == "mcp" or mod.startswith(SDK_SERVER_MODULES):
+            return True
+    return False
+
 
 # Downgraded from "breaking" after auditing real servers: resultType is a
 # brand-new required field introduced by this same spec revision, so this
@@ -40,22 +75,40 @@ class RequiredResultTypeMissing(Rule):
     spec_ref = "SEP-2322 https://modelcontextprotocol.io/specification/2026-07-28/changelog"
     fix = (
         "Every result now carries resultType: \"complete\" or \"input_required\". "
-        "Add it to whatever you return from tools/call, tools/list, resources/read, "
-        "list handlers, and everywhere else a Result crosses the wire."
+        "If you build JSON-RPC responses yourself, set it on each result you "
+        "return. On the official SDK you do not need to do anything: the runner "
+        "stamps resultType on every result it serializes."
     )
 
     def check(self, project: Project) -> list[Finding]:
+        # The SDK stamps `resultType` on every result it serializes, so an
+        # SDK-based server has nothing to add and this rule has nothing to
+        # say. Only a project that owns its own JSON-RPC envelope can be
+        # missing the field in a way its author can act on.
+        if _sdk_owns_serialization(project):
+            return []
         out: list[Finding] = []
         seen_files = set()
-        for f, line, text in project.search_code(RESULT_HANDLER_RX.pattern):
-            if f.path in seen_files:
-                continue
+        # Deliberately raw `search`, not `search_code`: a hand-rolled server
+        # names the protocol in string literals ("jsonrpc", "tools/list"),
+        # which is exactly what search_code is built to skip. Same reasoning
+        # as r009's note about notifications/initialized.
+        for f in project.files:
             if RESULT_TYPE_MENTION_RX.search(f.text):
                 continue
+            if f.path in seen_files:
+                continue
+            if not JSONRPC_ENVELOPE_RX.search(f.text):
+                continue
+            m = MCP_METHOD_NAME_RX.search(f.text)
+            if not m:
+                continue
+            line = f.text[: m.start()].count("\n") + 1
             seen_files.add(f.path)
             out.append(self.finding(
-                "This file implements a result-returning MCP handler but `resultType` "
+                "This file builds JSON-RPC responses for MCP methods without the "
+                "official SDK, so it owns the result envelope, and `resultType` "
                 "never appears in it.",
-                f, line, text,
+                f, line, f.lines[line - 1].strip() if line <= len(f.lines) else None,
             ))
         return out

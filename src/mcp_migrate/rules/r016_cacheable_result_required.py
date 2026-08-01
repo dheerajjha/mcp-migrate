@@ -18,6 +18,26 @@ CACHEABLE_HANDLER_RX = re.compile(
 # "present" does.
 CACHE_META_MENTION_RX = re.compile(r"ttlMs|cacheScope")
 
+# The other, and more likely, way these fields get onto the wire.
+#
+# Unlike `resultType` (which the SDK always stamps), the SDK fills ttlMs and
+# cacheScope *only when the server was configured with cache hints* --
+# `Runner._serialize` guards on `self.server.cache_hints.get(method)`, and
+# mcp/server/caching.py documents the API as a constructor argument:
+#
+#     Server(cache_hints={method: CacheHint(...)})
+#
+# So the author expresses this once at construction, not by writing the wire
+# field names inside each handler's file. Scanning a handler file for the
+# literal strings looks in the wrong place and reports "still missing"
+# against a server that has already handled it properly.
+#
+# Configuring hints anywhere in the project therefore satisfies this rule,
+# and a project with neither hints nor literal fields still gets the finding
+# -- which stays true and actionable, because without hints the SDK emits no
+# cache metadata at all.
+CACHE_HINT_CONFIG_RX = re.compile(r"\bcache_hints\s*=|\bCacheHint\s*\(")
+
 
 # Downgraded from "breaking" after auditing real servers: ttlMs/cacheScope
 # are brand-new required fields introduced by this same spec revision, so
@@ -37,10 +57,16 @@ class CacheableResultMetadataMissing(Rule):
     fix = (
         "tools/list, prompts/list, resources/list, resources/read and "
         "resources/templates/list results now require CacheableResult's ttlMs and "
-        "cacheScope. Add both so clients know how long they may cache the response."
+        "cacheScope. With the official SDK you configure this once rather than "
+        "per handler: Server(cache_hints={method: CacheHint(...)}). Without hints "
+        "the SDK emits no cache metadata at all."
     )
 
     def check(self, project: Project) -> list[Finding]:
+        # Cache hints are registered once on the server, so this is a
+        # project-wide question, not a per-file one.
+        if any(project.search_code(CACHE_HINT_CONFIG_RX.pattern)):
+            return []
         out: list[Finding] = []
         seen_files = set()
         for f, line, text in project.search_code(CACHEABLE_HANDLER_RX.pattern):

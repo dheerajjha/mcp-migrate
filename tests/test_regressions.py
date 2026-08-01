@@ -350,3 +350,89 @@ def test_r010_still_respects_a_real_server_discover_implementation(tmp_path):
     )
     project = load_project(tmp_path)
     assert ServerDiscoverMissing().check(project) == []
+
+
+# --- 7. R015/R016 must not demand fields the framework owns ----------------
+#
+# The official SDK (mcp 2.0.0) sets `resultType` on every result it
+# serializes, and fills ttlMs/cacheScope from cache hints registered on the
+# Server. Asking an SDK user to write those into a handler is asking for
+# something they cannot do -- a false positive on every SDK-based server.
+
+from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
+from mcp_migrate.rules.r016_cacheable_result_required import (
+    CacheableResultMetadataMissing,
+)
+
+_LOWLEVEL_HANDLER = (
+    "from mcp.server import Server\n"
+    "from mcp.types import Tool\n\n"
+    "app = Server('demo')\n\n"
+    "@app.list_tools()\n"
+    "async def list_tools() -> list[Tool]:\n"
+    "    return []\n"
+)
+
+
+def test_r015_does_not_fire_when_the_sdk_serializes_the_result(tmp_path):
+    # Runner._serialize ends with an unconditional
+    #   dumped["resultType"] = "complete"
+    # for modern protocol versions, so the field is already on the wire and
+    # the handler author has nowhere to put it.
+    (tmp_path / "server.py").write_text(_LOWLEVEL_HANDLER)
+    project = load_project(tmp_path)
+    assert RequiredResultTypeMissing().check(project) == [], (
+        "the SDK stamps resultType itself -- telling an SDK user to add it is "
+        "a finding they cannot act on"
+    )
+
+
+def test_r015_still_fires_on_a_hand_rolled_jsonrpc_envelope(tmp_path):
+    # A server that builds its own JSON-RPC responses owns the envelope, so
+    # a missing resultType there is real and its author can fix it.
+    (tmp_path / "server.py").write_text(
+        "import json\n\n"
+        "def handle(request):\n"
+        "    if request['method'] == 'tools/list':\n"
+        "        return json.dumps({\n"
+        "            'jsonrpc': '2.0',\n"
+        "            'id': request['id'],\n"
+        "            'result': {'tools': []},\n"
+        "        })\n"
+    )
+    project = load_project(tmp_path)
+    # No MCP handler decorator here, so R015's own handler gate applies; the
+    # point of this test is that the SDK exemption did not swallow the
+    # project wholesale -- it must not raise or crash, and must not exempt a
+    # project that never imports the SDK.
+    from mcp_migrate.rules.r015_result_type_required import _sdk_owns_serialization
+    assert not _sdk_owns_serialization(project)
+
+
+def test_r016_is_satisfied_by_cache_hints_configured_on_the_server(tmp_path):
+    # `Server(cache_hints={...})` is how the SDK documents this. It is set
+    # once at construction, not written into each handler's file.
+    (tmp_path / "server.py").write_text(
+        "from mcp.server import Server\n"
+        "from mcp.server.caching import CacheHint\n"
+        "from mcp.types import Tool\n\n"
+        "app = Server('demo', cache_hints={'tools/list': CacheHint(ttl_ms=5000)})\n\n"
+        "@app.list_tools()\n"
+        "async def list_tools() -> list[Tool]:\n"
+        "    return []\n"
+    )
+    project = load_project(tmp_path)
+    assert CacheableResultMetadataMissing().check(project) == [], (
+        "a server that configures cache hints has handled this -- reporting it "
+        "as still missing looks for the field in the wrong place"
+    )
+
+
+def test_r016_still_fires_when_no_cache_metadata_exists_anywhere(tmp_path):
+    # Without hints the SDK emits no cache metadata at all, so the finding
+    # remains true and the fix (configure cache_hints) is actionable.
+    (tmp_path / "server.py").write_text(_LOWLEVEL_HANDLER)
+    project = load_project(tmp_path)
+    assert CacheableResultMetadataMissing().check(project), (
+        "no hints and no literal fields means no cache metadata on the wire"
+    )

@@ -34,10 +34,22 @@ def test_all_rules_are_registered():
     assert ALL_RULE_IDS == [f"R{i:03d}" for i in range(1, 22)]
 
 
+# Most rules are exercised by legacy_server. R015 cannot be: legacy_server
+# imports the official SDK, and the SDK stamps `resultType` on every result it
+# serializes, so the rule deliberately stays silent there. Its finding is only
+# real for a server that owns its own JSON-RPC envelope, which is what
+# handrolled_jsonrpc_server is for. Every rule still has a fixture that fires
+# it -- the fixture just isn't the same one for all of them.
+RULE_FIXTURES = {"R015": FIXTURES / "handrolled_jsonrpc_server"}
+
+
 @pytest.mark.parametrize("rule_id", ALL_RULE_IDS)
-def test_rule_fires_on_legacy_server(rule_id):
-    by_rule = _findings_by_rule(LEGACY)
-    assert rule_id in by_rule, f"{rule_id} should fire on legacy_server but produced no findings"
+def test_rule_fires_on_its_fixture(rule_id):
+    fixture = RULE_FIXTURES.get(rule_id, LEGACY)
+    by_rule = _findings_by_rule(fixture)
+    assert rule_id in by_rule, (
+        f"{rule_id} should fire on {fixture.name} but produced no findings"
+    )
 
 
 @pytest.mark.parametrize("rule_id", ALL_RULE_IDS)
