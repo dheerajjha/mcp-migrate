@@ -319,9 +319,32 @@ about 60 seconds -- see
 
 ## Working principles
 
-For the project's non-negotiable principles, current state, and priorities,
-see [`HANDOFF.md`](HANDOFF.md) -- it's the brief a new maintainer gets, and
-it's kept accurate on purpose.
+**A false positive is worse than a missed finding.** This tool publishes
+public grades about other people's projects. A wrong `breaking` verdict costs
+a maintainer their badge and their trust in the tool; a missed `advisory`
+costs a little visibility and nothing else. When a detection can't be made
+precise it ships `advisory`, or it doesn't ship. Fixers follow the same rule:
+one that can't be certain a transformation is correct leaves the source
+untouched.
+
+**An unearned grade is as damaging as an undeserved finding**, and harder to
+notice. A server that scores A because a rule couldn't see its handlers is a
+bug, not a pass -- see
+[`r010_server_discover_missing.py`](src/mcp_migrate/rules/r010_server_discover_missing.py),
+where three registration idioms used by real servers went undetected.
+
+**No grade is published that hasn't been reproduced.** Every entry in
+`registry/servers/` comes from a scan someone ran and read, at that server's
+own directory. Nothing is estimated, and nothing is carried forward from a
+previous version of the rules.
+
+**Contributing stays cheap.** One small file is the unit of contribution, and
+a submission that passes schema validation and points at a real repository is
+merged -- there's no usage bar, no curation step, and no reviewer taste test.
+Reviews happen within 48 hours and one passing test is enough to merge a rule.
+
+The longer form of all of this, with the API you'd actually use, is in
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
