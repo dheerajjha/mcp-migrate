@@ -23,6 +23,7 @@ from mcp_migrate.rules.base import Project, SourceFile, _ts_spans
 from mcp_migrate.rules.r001_session_id_removed import SessionIdRemoved
 from mcp_migrate.rules.r003_routing_headers import MissingRoutingHeaders
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
+from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.scan import load_project
 
 LEGACY_TS = """\
@@ -147,6 +148,89 @@ def test_r001_ignores_the_header_named_only_in_prose(tmp_path):
     assert SessionIdRemoved().check(project) == []
 
 
+
+# --- R005: extensions map on ServerCapabilities --------------------------
+
+def test_r005_finds_missing_extensions_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ServerCapabilities } from "@modelcontextprotocol/sdk/types.js";
+
+const capabilities: ServerCapabilities = {
+  tools: { listChanged: true },
+  resources: { listChanged: true },
+};
+
+const server = new Server({ name: "my-server", version: "1.0.0" }, { capabilities });
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = NoExtensionsDeclared().check(project)
+    assert len(findings) == 1
+    assert "extensions" in findings[0].message
+
+
+def test_r005_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ServerCapabilities } from "@modelcontextprotocol/sdk/types.js";
+
+const capabilities: ServerCapabilities = {
+  extensions: {},
+  tools: { listChanged: true },
+};
+
+const server = new Server({ name: "my-server", version: "1.0.0" }, { capabilities });
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert NoExtensionsDeclared().check(project) == []
+
+
+def test_r005_ignores_servercapabilities_named_only_in_comment(tmp_path):
+    code = """\
+// ServerCapabilities should include an extensions map in 2026-07-28.
+// The capabilities object passed to new Server needs extensions too.
+export const NOTE = 1;
+"""
+    project = load_project(_write(tmp_path, "docs.ts", code)).for_language("typescript")
+    assert NoExtensionsDeclared().check(project) == []
+
+
+def test_r005_finds_missing_extensions_in_constructor_pattern(tmp_path):
+    # The common TS pattern: capabilities passed to new Server without
+    # an explicit ServerCapabilities type reference. The type is inferred
+    # from the constructor, so signal 2 (SDK import + capabilities prop)
+    # is what catches this.
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+
+const server = new Server(
+  { name: "my-server", version: "1.0.0" },
+  {
+    capabilities: {
+      tools: { listChanged: true },
+    }
+  }
+);
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = NoExtensionsDeclared().check(project)
+    assert len(findings) == 1
+    assert "extensions" in findings[0].message
+
+
+def test_r005_stays_silent_on_non_mcp_typescript(tmp_path):
+    # capabilities: {} is an ordinary property name. Without an SDK import
+    # this is not an MCP server, so the rule stays quiet.
+    code = """\
+const config = {
+  capabilities: {
+    maxRetries: 3,
+  }
+};
+"""
+    project = load_project(_write(tmp_path, "config.ts", code)).for_language("typescript")
+    assert NoExtensionsDeclared().check(project) == []
+
 # --- the language split itself --------------------------------------------
 
 def test_python_rules_never_see_typescript_files(tmp_path):
@@ -195,7 +279,7 @@ def test_partial_coverage_is_stated_with_a_denominator(tmp_path, capsys):
     # Collapse whitespace: rich wraps at terminal width and will happily
     # split the fraction across two lines.
     out = " ".join(capsys.readouterr().out.split())
-    assert "3 of 21" in out, (
+    assert "4 of 21" in out, (
         "someone deciding whether to trust this needs the coverage fraction, "
         "and it should move as rules get ported"
     )
