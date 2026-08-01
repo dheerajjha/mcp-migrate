@@ -382,6 +382,18 @@ CI runs `scripts/validate_registry.py` against your file. If it passes and
 reviews the server itself, and nobody is going to argue about your grade.
 `scripts/render_board.py` regenerates the table in `README.md` on merge.
 
+Two ways this can legitimately refuse you, both deliberate:
+
+- **`entry` won't generate anything** if your server isn't Python, or if its
+  Python is a small minority of a mostly-TypeScript repo. The tool only reads
+  Python today ([#30](https://github.com/dheerajjha/mcp-migrate/issues/30) is
+  where that gets fixed, and it's up for grabs). It writes nothing to stdout
+  when it refuses, so the redirect above won't leave a half-written file.
+- **CI rejects a hand-written entry** whose `language` isn't actually present
+  in the repo, checked against GitHub. Since a schema pass equals a merge
+  here, that check is the only thing standing between the board and a
+  confident grade for code nobody read.
+
 `registry/schema.yaml` lists every field. All of them are required:
 `name` (must match the filename), `repo` (`owner/name`), `language`, `grade`,
 `score`, `checked_with`, `spec`, `status`, `notes` (under 200 characters).

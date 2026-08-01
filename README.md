@@ -51,11 +51,39 @@ Grade F (26/100)  3 breaking, 2 deprecated, 4 advisory
 Add your server to the board:  mcp-migrate entry --repo owner/name
 ```
 
-Zero findings prints `Grade A` and a ready-to-paste badge instead. `check`
-exits `1` if anything `breaking` was found, `0` otherwise, so it drops
-straight into CI. Add `--json` for machine-readable, uncapped output (the
-terminal table caps each rule at 5 rows with a "+N more" line so it stays
-readable; JSON always has every finding).
+Zero findings prints `Grade A` and a ready-to-paste badge instead. Add
+`--json` for machine-readable, uncapped output (the terminal table caps each
+rule at 5 rows with a "+N more" line so it stays readable; JSON always has
+every finding).
+
+Exit codes, so it drops straight into CI:
+
+| code | meaning |
+| ---- | ------- |
+| `0`  | checked it, nothing `breaking` |
+| `1`  | checked it, found something `breaking` |
+| `2`  | **could not check it** — no readable source in a supported language |
+
+The third one matters. **mcp-migrate only reads Python today.** Point it at a
+TypeScript server and it refuses, with no grade and no badge:
+
+```
+$ mcp-migrate check ./my-ts-server
+
+mcp-migrate v0.1.2  ->  my-ts-server
+
+Nothing scannable here. Found 24 TypeScript, 3 JavaScript, but no Python --
+and mcp-migrate only reads Python today.
+TypeScript support is the most-wanted thing in this repo and it is up for
+grabs: https://github.com/dheerajjha/mcp-migrate/issues/30
+No grade and no badge: this tool has no opinion about code it could not read.
+```
+
+An empty finding set means "we read it and it's clean" *or* "we read
+nothing", and a grade that can't tell those apart is worthless. So a tree
+with nothing readable in it gets silence instead of an A — see
+[issue #30](https://github.com/dheerajjha/mcp-migrate/issues/30) if you want
+to make TypeScript work.
 
 By default, `check` skips test code: anything under a `tests/`, `test/`,
 `testing/`, `fixtures/`, `examples/`, or `docs/` directory, plus `test_*.py`,
@@ -235,6 +263,12 @@ one shot:
 ```bash
 uvx mcp-migrate entry --repo owner/name > registry/servers/name.yaml
 ```
+
+`entry` refuses — writing nothing to stdout, so the redirect above leaves no
+file behind — if it can't read your server, or if your Python is a small
+minority of a repo that's mostly something else. A board entry is a claim
+about a whole repo, and this project would rather publish nothing than
+publish a grade it can't stand behind.
 
 That prints something like:
 
