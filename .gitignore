@@ -54,3 +54,6 @@ ACTION-PLAN.md
 
 # ecosystem_scan.py intermediate cache
 .ecosystem-work/
+
+# Promotional drafts -- internal, not for publication
+drafts/
