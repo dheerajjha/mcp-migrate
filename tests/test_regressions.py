@@ -20,6 +20,7 @@ import pytest
 from mcp_migrate.cli import run_check
 from mcp_migrate.grade import RULE_CAP, WEIGHT, score
 from mcp_migrate.rules.base import Finding, Rule
+from mcp_migrate.rules.r007_deprecated_features import DeprecatedCoreFeatures
 from mcp_migrate.rules.r010_server_discover_missing import ServerDiscoverMissing
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
 from mcp_migrate.rules.r017_resource_not_found_code_changed import (
@@ -436,3 +437,62 @@ def test_r016_still_fires_when_no_cache_metadata_exists_anywhere(tmp_path):
     assert CacheableResultMetadataMissing().check(project), (
         "no hints and no literal fields means no cache metadata on the wire"
     )
+
+
+# --- 8. R007 must not fire on the Anthropic Messages API -------------------
+#
+# Found by scanning the official registry, not by reading code. R007's
+# sampling pattern was `sampling/createMessage|create_message|
+# SamplingCapability`. That bare `create_message` has no word boundary and
+# no MCP context, so it matched `_create_message` -- the conventional name
+# for a wrapper around Anthropic's Messages API, and a very large share of
+# the Python AI ecosystem.
+#
+# browser-use took three `deprecated` findings for its Anthropic client and
+# dropped from 79 to 67 for it. None of the three had anything to do with
+# MCP Sampling.
+
+def test_r007_does_not_fire_on_an_anthropic_client_wrapper(tmp_path):
+    # Reduced from browser_use/llm/anthropic/chat.py.
+    (tmp_path / "chat.py").write_text(
+        "from anthropic import AsyncAnthropic\n\n\n"
+        "class ChatAnthropic:\n"
+        "    async def _create_message(self, **params):\n"
+        "        client = self.get_client()\n"
+        "        return await client.messages.create(**params)\n\n"
+        "    async def ainvoke(self, messages):\n"
+        "        return await self._create_message(model=self.model, messages=messages)\n"
+    )
+    findings = DeprecatedCoreFeatures().check(load_project(tmp_path))
+    assert findings == [], (
+        "wrapping the Anthropic Messages API is not MCP Sampling; this fired "
+        f"on real code across the registry: {[f.message for f in findings]}"
+    )
+
+
+def test_r007_still_fires_on_real_mcp_sampling(tmp_path):
+    # The shape every true positive takes -- both the SDK's own examples
+    # (`ctx.session.create_message`) and the low-level API
+    # (`server.request_context.session.create_message`) go through the
+    # session object. That qualifier is what makes the rule precise.
+    (tmp_path / "server.py").write_text(
+        "from mcp.server.fastmcp import Context, FastMCP\n\n"
+        "mcp = FastMCP('demo')\n\n\n"
+        "@mcp.tool()\n"
+        "async def summarize(text: str, ctx: Context) -> str:\n"
+        "    result = await ctx.session.create_message(\n"
+        "        messages=[], max_tokens=100,\n"
+        "    )\n"
+        "    return result.content.text\n"
+    )
+    assert DeprecatedCoreFeatures().check(load_project(tmp_path)), (
+        "a real sampling call through the session must still be reported"
+    )
+
+
+def test_r007_still_fires_on_declared_sampling_capability(tmp_path):
+    (tmp_path / "server.py").write_text(
+        "from mcp.types import SamplingCapability, ServerCapabilities\n\n"
+        "caps = ServerCapabilities(sampling=SamplingCapability())\n"
+    )
+    assert DeprecatedCoreFeatures().check(load_project(tmp_path))

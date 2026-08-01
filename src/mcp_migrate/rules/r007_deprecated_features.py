@@ -1,8 +1,22 @@
 from .base import Finding, Project, Rule
 
+# Every pattern here has to be unambiguously MCP. A bare `create_message`
+# was not: it has no word boundary and no MCP context, so it matched
+# `_create_message` in any wrapper around the Anthropic Messages API --
+# which is a very large share of the Python AI ecosystem, and none of it
+# has anything to do with MCP Sampling. Found by scanning the registry:
+# browser-use took three `deprecated` findings for its Anthropic client.
+#
+# Real MCP sampling always goes through the session object --
+# `ctx.session.create_message(...)` in the SDK examples,
+# `server.request_context.session.create_message(...)` in the low-level
+# API -- so the `session.` qualifier keeps every true positive while
+# dropping the collision.
 FEATURES = {
     r"\broots/list\b|list_roots|RootsCapability": ("Roots", "Use resource URIs instead."),
-    r"sampling/createMessage|create_message|SamplingCapability": ("Sampling", "Sampling is deprecated; plan a migration."),
+    r"sampling/createMessage|SamplingCapability|\bsession\.create_message\b"
+    r"|\bCreateMessageRequest\b|\bCreateMessageResult\b": (
+        "Sampling", "Sampling is deprecated; plan a migration."),
     r"notifications/message|LoggingCapability|set_logging_level": ("Logging", "Logging moves out of core; use an extension."),
 }
 
