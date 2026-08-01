@@ -26,6 +26,11 @@ MCP_METHOD_RX = re.compile(
 # "missing Mcp-Name" was the bug: it isn't missing, it was never required.
 NAME_REQUIRED_RX = re.compile(r"tools/call|resources/read|prompts/get")
 
+TS_HTTP_CALL = r"\b(?:fetch|axios|got)\s*\(|\.(?:post|request)\s*\("
+TS_MCP_SURFACE_RX = re.compile(
+    r"@modelcontextprotocol|tools/call|tools/list|resources/read|prompts/get|jsonrpc",
+    re.IGNORECASE,
+)
 
 # Submodules that are still "the SDK owns the transport entirely", the same
 # way `mcp.server.fastmcp` is -- importing them is configuration of the
@@ -93,8 +98,14 @@ class MissingRoutingHeaders(Rule):
         "is tools/call, resources/read, or prompts/get -- those are the only methods "
         "that carry a name to route on. Or move to an SDK that sets both for you."
     )
+    languages = ("python", "typescript")
 
     def check(self, project: Project) -> list[Finding]:
+        if project.language == "typescript":
+            return self._check_ts(project)
+        return self._check_python(project)
+
+    def _check_python(self, project: Project) -> list[Finding]:
         # Gate on the project actually importing a raw HTTP client -- without
         # that, ".post(" is almost certainly unrelated (an ORM, a queue, a
         # dataclass method) and flagging it would just be noise.
@@ -146,4 +157,41 @@ class MissingRoutingHeaders(Rule):
                     "by hand but never sets Mcp-Name."
                 )
             out.append(self.finding(message, f, i, line.strip()))
+        return out
+
+    def _check_ts(self, project: Project) -> list[Finding]:
+        out: list[Finding] = []
+        for f in project.files:
+            if not TS_MCP_SURFACE_RX.search(f.text):
+                continue
+
+            missing_method = "mcp-method" not in f.text.lower()
+            requires_name = bool(NAME_REQUIRED_RX.search(f.text))
+            missing_name = requires_name and "mcp-name" not in f.text.lower()
+            if not missing_method and not missing_name:
+                continue
+
+            calls = [
+                (line, text)
+                for file_obj, line, text in project.search_wire(TS_HTTP_CALL)
+                if file_obj.path == f.path
+            ]
+            if not calls:
+                continue
+
+            line, text = calls[0]
+            if missing_method and missing_name:
+                message = (
+                    "This project posts MCP traffic by hand but never sets Mcp-Method, "
+                    "and this call site sends tools/call, resources/read, or prompts/get "
+                    "without Mcp-Name either."
+                )
+            elif missing_method:
+                message = "This project posts MCP traffic by hand but never sets Mcp-Method."
+            else:
+                message = (
+                    "This call site sends tools/call, resources/read, or prompts/get "
+                    "by hand but never sets Mcp-Name."
+                )
+            out.append(self.finding(message, f, line, text))
         return out
