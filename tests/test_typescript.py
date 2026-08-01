@@ -21,6 +21,7 @@ from mcp_migrate.cli import main, run_check
 from mcp_migrate.rules import all_rules
 from mcp_migrate.rules.base import Project, SourceFile, _ts_spans
 from mcp_migrate.rules.r001_session_id_removed import SessionIdRemoved
+from mcp_migrate.rules.r003_routing_headers import MissingRoutingHeaders
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
 from mcp_migrate.scan import load_project
 
@@ -84,6 +85,58 @@ def test_neither_fires_on_a_migrated_typescript_server(tmp_path):
     assert DeprecatedSSETransport().check(project) == []
 
 
+def test_r003_finds_missing_headers_in_typescript(tmp_path):
+    code = """\
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+
+export async function callTool(url: string, payload: any) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ method: "tools/call", params: payload })
+  });
+  return res.json();
+}
+"""
+    project = load_project(_write(tmp_path, "client.ts", code))
+    findings = MissingRoutingHeaders().check(project.for_language("typescript"))
+    assert len(findings) == 1
+    assert findings[0].line == 4
+    assert "Mcp-Method" in findings[0].message
+
+
+def test_r003_stays_silent_on_migrated_typescript_client(tmp_path):
+    code = """\
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+
+export async function callTool(url: string, payload: any) {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Mcp-Method": "tools/call",
+      "Mcp-Name": "my-tool"
+    },
+    body: JSON.stringify({ method: "tools/call", params: payload })
+  });
+  return res.json();
+}
+"""
+    project = load_project(_write(tmp_path, "client.ts", code)).for_language("typescript")
+    assert MissingRoutingHeaders().check(project) == []
+
+
+def test_r003_ignores_http_calls_named_only_in_comment(tmp_path):
+    code = """\
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+
+// Legacy note: we used fetch(url) to send tools/call without Mcp-Method or Mcp-Name
+export const info = "Migration complete";
+"""
+    project = load_project(_write(tmp_path, "client.ts", code)).for_language("typescript")
+    assert MissingRoutingHeaders().check(project) == []
+
+
 def test_r001_ignores_the_header_named_only_in_prose(tmp_path):
     project = load_project(_write(
         tmp_path, "docs.ts",
@@ -142,7 +195,7 @@ def test_partial_coverage_is_stated_with_a_denominator(tmp_path, capsys):
     # Collapse whitespace: rich wraps at terminal width and will happily
     # split the fraction across two lines.
     out = " ".join(capsys.readouterr().out.split())
-    assert "2 of 21" in out, (
+    assert "3 of 21" in out, (
         "someone deciding whether to trust this needs the coverage fraction, "
         "and it should move as rules get ported"
     )
