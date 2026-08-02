@@ -46,6 +46,10 @@ def _body_bounds(lines: list[str], line_no: int) -> tuple[int, int]:
     return body_start, end
 
 
+TS_HANDLER_RX = re.compile(r"ListToolsRequestSchema|listTools|tools/list", re.IGNORECASE)
+TS_SORT_RX = re.compile(r"\.(?:sort|toSorted)\s*\(|\bsorted\s*\(|\bsortBy\b|\borderBy\b", re.IGNORECASE)
+
+
 class NondeterministicToolOrder(Rule):
     id = "R004"
     title = "tools/list order is not deterministic"
@@ -55,8 +59,14 @@ class NondeterministicToolOrder(Rule):
         "Sort the tools you return. Stable ordering lets clients cache and it lifts "
         "LLM prompt-cache hit rates for everyone downstream."
     )
+    languages = ("python", "typescript")
 
     def check(self, project: Project) -> list[Finding]:
+        if project.language == "typescript":
+            return self._check_ts(project)
+        return self._check_python(project)
+
+    def _check_python(self, project: Project) -> list[Finding]:
         out: list[Finding] = []
         for f in project.files:
             # A decorator (`@server.list_tools()`) and the `def` line right
@@ -89,6 +99,33 @@ class NondeterministicToolOrder(Rule):
 
                 window = "\n".join(f.lines[line_no - 1:end_line])
                 if "sorted(" in window or ".sort(" in window:
+                    continue
+                out.append(self.finding(
+                    "Tools are returned without an explicit sort.", f, line_no, line.strip(),
+                ))
+        return out
+
+    def _check_ts(self, project: Project) -> list[Finding]:
+        out: list[Finding] = []
+        for f in project.files:
+            covered: list[tuple[int, int]] = []
+            prose = project._prose_spans_for(f)
+            for line_no, line in enumerate(f.lines, start=1):
+                if line.strip().startswith("import "):
+                    continue
+                m = TS_HANDLER_RX.search(line)
+                if not m:
+                    continue
+                if prose is not None and _in_content_span(line_no, m.start(), prose):
+                    continue
+                if any(start <= line_no <= end for start, end in covered):
+                    continue
+
+                end_line = min(len(f.lines), line_no + 40)
+                covered.append((line_no, end_line))
+
+                window = "\n".join(f.lines[line_no - 1:end_line])
+                if TS_SORT_RX.search(window):
                     continue
                 out.append(self.finding(
                     "Tools are returned without an explicit sort.", f, line_no, line.strip(),

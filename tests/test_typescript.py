@@ -22,6 +22,7 @@ from mcp_migrate.rules import all_rules
 from mcp_migrate.rules.base import Project, SourceFile, _ts_spans
 from mcp_migrate.rules.r001_session_id_removed import SessionIdRemoved
 from mcp_migrate.rules.r003_routing_headers import MissingRoutingHeaders
+from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
 from mcp_migrate.scan import load_project
@@ -274,12 +275,52 @@ def test_typescript_only_tree_reports_findings_without_a_grade(tmp_path, capsys)
     assert "partial" in data["reason"]
 
 
+def test_r004_finds_unsorted_tools_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "example", version: "1.0.0" });
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      { name: "b_tool", description: "B" },
+      { name: "a_tool", description: "A" }
+    ]
+  };
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = NondeterministicToolOrder().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 5
+    assert "Tools are returned without an explicit sort." in findings[0].message
+
+
+def test_r004_stays_silent_on_sorted_tools_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "example", version: "1.0.0" });
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  const tools = [
+    { name: "b_tool", description: "B" },
+    { name: "a_tool", description: "A" }
+  ];
+  return { tools: tools.sort((a, b) => a.name.localeCompare(b.name)) };
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert NondeterministicToolOrder().check(project) == []
+
+
 def test_partial_coverage_is_stated_with_a_denominator(tmp_path, capsys):
     main(["check", str(_write(tmp_path, "transport.ts", LEGACY_TS))])
     # Collapse whitespace: rich wraps at terminal width and will happily
     # split the fraction across two lines.
     out = " ".join(capsys.readouterr().out.split())
-    assert "4 of 21" in out, (
+    assert "5 of 21" in out, (
         "someone deciding whether to trust this needs the coverage fraction, "
         "and it should move as rules get ported"
     )
