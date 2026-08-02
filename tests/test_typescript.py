@@ -25,6 +25,9 @@ from mcp_migrate.rules.r003_routing_headers import MissingRoutingHeaders
 from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
+from mcp_migrate.rules.r017_resource_not_found_code_changed import (
+    ResourceNotFoundCodeChanged,
+)
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
 from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
 from mcp_migrate.rules.r016_cacheable_result_required import (
@@ -85,6 +88,45 @@ def test_r006_finds_sse_in_typescript(tmp_path):
     findings = DeprecatedSSETransport().check(project.for_language("typescript"))
     # The SDK import, the route literal, and the constructor.
     assert len(findings) >= 2
+
+
+def test_r017_finds_resource_not_found_code_in_typescript(tmp_path):
+    code = """\
+export function resourceError() {
+  return { code: -32002, message: "resource not found" };
+}
+"""
+    project = load_project(_write(tmp_path, "errors.ts", code)).for_language("typescript")
+    findings = ResourceNotFoundCodeChanged().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 2
+
+
+def test_r017_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export function resourceError() {
+  return { code: -32602, message: "resource not found" };
+}
+"""
+    project = load_project(_write(tmp_path, "errors.ts", code)).for_language("typescript")
+    assert ResourceNotFoundCodeChanged().check(project) == []
+
+
+def test_r017_ignores_typescript_comment_only_mention(tmp_path):
+    code = """\
+// The old -32002 resource-not-found response was replaced by -32602.
+export const protocolVersion = "2026-07-28";
+"""
+    project = load_project(_write(tmp_path, "notes.ts", code)).for_language("typescript")
+    assert ResourceNotFoundCodeChanged().check(project) == []
+
+
+def test_r017_ignores_unrelated_typescript_negative_number(tmp_path):
+    code = """\
+export const TIMEOUT_SENTINEL = -32002;
+"""
+    project = load_project(_write(tmp_path, "config.ts", code)).for_language("typescript")
+    assert ResourceNotFoundCodeChanged().check(project) == []
 
 
 def test_r015_finds_missing_result_type_in_typescript(tmp_path):

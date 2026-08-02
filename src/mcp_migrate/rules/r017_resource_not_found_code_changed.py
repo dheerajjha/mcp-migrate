@@ -22,6 +22,7 @@ class ResourceNotFoundCodeChanged(Rule):
         "The resource-not-found error code changed from -32002 to -32602 (Invalid "
         "params). Update whatever raises or checks for -32002 in this context."
     )
+    languages = ("python", "typescript")
 
     def check(self, project: Project) -> list[Finding]:
         out: list[Finding] = []
