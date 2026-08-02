@@ -26,6 +26,7 @@ from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
+from mcp_migrate.rules.r014_sse_resumability_removed import SSEResumabilityRemoved
 from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
 from mcp_migrate.rules.r016_cacheable_result_required import (
     CacheableResultMetadataMissing,
@@ -85,6 +86,37 @@ def test_r006_finds_sse_in_typescript(tmp_path):
     findings = DeprecatedSSETransport().check(project.for_language("typescript"))
     # The SDK import, the route literal, and the constructor.
     assert len(findings) >= 2
+
+
+def test_r014_finds_last_event_id_resumability_in_typescript(tmp_path):
+    code = """\
+export async function resume(req, eventStore) {
+  const lastEventId = req.headers.get("Last-Event-ID");
+  return eventStore.replayAfter(lastEventId);
+}
+"""
+    project = load_project(_write(tmp_path, "transport.ts", code)).for_language("typescript")
+    findings = SSEResumabilityRemoved().check(project)
+    assert [finding.line for finding in findings] == [2, 3]
+
+
+def test_r014_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export async function handle(req) {
+  return req.json();
+}
+"""
+    project = load_project(_write(tmp_path, "transport.ts", code)).for_language("typescript")
+    assert SSEResumabilityRemoved().check(project) == []
+
+
+def test_r014_ignores_last_event_id_named_only_in_comment(tmp_path):
+    code = """\
+// Last-Event-ID and lastEventId replay support were removed in this migration.
+export const VERSION = "2026-07-28";
+"""
+    project = load_project(_write(tmp_path, "transport.ts", code)).for_language("typescript")
+    assert SSEResumabilityRemoved().check(project) == []
 
 
 def test_r015_finds_missing_result_type_in_typescript(tmp_path):
