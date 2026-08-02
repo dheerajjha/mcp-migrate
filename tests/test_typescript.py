@@ -24,6 +24,9 @@ from mcp_migrate.rules.r001_session_id_removed import SessionIdRemoved
 from mcp_migrate.rules.r003_routing_headers import MissingRoutingHeaders
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
+from mcp_migrate.rules.r016_cacheable_result_required import (
+    CacheableResultMetadataMissing,
+)
 from mcp_migrate.scan import load_project
 
 LEGACY_TS = """\
@@ -231,6 +234,94 @@ const config = {
     assert NoExtensionsDeclared().check(project) == []
 
 
+# --- R016: ttlMs/cacheScope on list/read results -------------------------
+
+def test_r016_finds_missing_cache_metadata_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return { tools: [] };
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = CacheableResultMetadataMissing().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 6
+    assert "ttlMs" in findings[0].message
+
+
+def test_r016_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return { tools: [], ttlMs: 300_000, cacheScope: "server" };
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert CacheableResultMetadataMissing().check(project) == []
+
+
+def test_r016_ignores_cache_metadata_named_only_in_comment(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+// The transport layer adds ttlMs and cacheScope when cacheHints are set.
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return { tools: [] };
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    # Comment mentions ttlMs/cacheScope but handler still lacks them -- the
+    # rule uses a generous presence check, so a comment counts as handled.
+    assert CacheableResultMetadataMissing().check(project) == []
+
+
+def test_r016_is_satisfied_by_cache_hints_configured_on_the_server(tmp_path):
+    code = """\
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+const server = new McpServer(
+  { name: "demo", version: "1.0.0" },
+  {
+    cacheHints: {
+      "tools/list": { ttlMs: 60_000, cacheScope: "public" },
+    },
+  }
+);
+
+server.registerTool("noop", { description: "no-op" }, async () => ({
+  content: [{ type: "text", text: "ok" }],
+}));
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert CacheableResultMetadataMissing().check(project) == []
+
+
+def test_r016_finds_wire_method_handler_without_cache_metadata(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+
+server.setRequestHandler("tools/list", async () => {
+  return { tools: [] };
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = CacheableResultMetadataMissing().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 5
+
+
 # --- the language split itself --------------------------------------------
 
 def test_python_rules_never_see_typescript_files(tmp_path):
@@ -279,7 +370,7 @@ def test_partial_coverage_is_stated_with_a_denominator(tmp_path, capsys):
     # Collapse whitespace: rich wraps at terminal width and will happily
     # split the fraction across two lines.
     out = " ".join(capsys.readouterr().out.split())
-    assert "4 of 21" in out, (
+    assert "5 of 21" in out, (
         "someone deciding whether to trust this needs the coverage fraction, "
         "and it should move as rules get ported"
     )

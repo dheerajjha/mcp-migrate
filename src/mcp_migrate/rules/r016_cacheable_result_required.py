@@ -38,6 +38,33 @@ CACHE_META_MENTION_RX = re.compile(r"ttlMs|cacheScope")
 # cache metadata at all.
 CACHE_HINT_CONFIG_RX = re.compile(r"\bcache_hints\s*=|\bCacheHint\s*\(")
 
+# --- TypeScript -----------------------------------------------------------
+#
+# Low-level servers register list/read handlers with request schemas or wire
+# method names. search_code for the schema identifiers; search_wire for the
+# method string literals in setRequestHandler calls.
+TS_CACHEABLE_HANDLER_RX = (
+    r"setRequestHandler\s*\(\s*(?:ListTools|ListPrompts|ListResources|"
+    r"ReadResource|ListResourceTemplates)RequestSchema\b"
+)
+TS_CACHEABLE_METHOD_RX = (
+    r"setRequestHandler\s*\(\s*"
+    r"[\"'](?:tools/list|prompts/list|resources/list|resources/read|"
+    r"resources/templates/list)[\"']"
+)
+
+# Server-level hints are configured once on construction:
+#   new McpServer({ ... }, { cacheHints: { 'tools/list': { ttlMs, cacheScope }}})
+# Per-resource hints use cacheHint: on registerResource. Either satisfies
+# the rule project-wide -- scanning handler files for literal ttlMs/cacheScope
+# would miss a server that configured hints correctly in a different file.
+TS_CACHE_HINT_CONFIG_RX = re.compile(r"\bcacheHints\b|\bcacheHint\s*:")
+
+MESSAGE = (
+    "This file implements a list/read handler but neither `ttlMs` nor "
+    "`cacheScope` appears in it."
+)
+
 
 # Downgraded from "breaking" after auditing real servers: ttlMs/cacheScope
 # are brand-new required fields introduced by this same spec revision, so
@@ -61,8 +88,14 @@ class CacheableResultMetadataMissing(Rule):
         "per handler: Server(cache_hints={method: CacheHint(...)}). Without hints "
         "the SDK emits no cache metadata at all."
     )
+    languages = ("python", "typescript")
 
     def check(self, project: Project) -> list[Finding]:
+        if project.language == "typescript":
+            return self._check_ts(project)
+        return self._check_python(project)
+
+    def _check_python(self, project: Project) -> list[Finding]:
         # Cache hints are registered once on the server, so this is a
         # project-wide question, not a per-file one.
         if any(project.search_code(CACHE_HINT_CONFIG_RX.pattern)):
@@ -75,9 +108,23 @@ class CacheableResultMetadataMissing(Rule):
             if CACHE_META_MENTION_RX.search(f.text):
                 continue
             seen_files.add(f.path)
-            out.append(self.finding(
-                "This file implements a list/read handler but neither `ttlMs` nor "
-                "`cacheScope` appears in it.",
-                f, line, text,
-            ))
+            out.append(self.finding(MESSAGE, f, line, text))
+        return out
+
+    def _check_ts(self, project: Project) -> list[Finding]:
+        if any(project.search_code(TS_CACHE_HINT_CONFIG_RX.pattern)):
+            return []
+        handler_hits: dict[object, tuple[int, str]] = {}
+        for f, line, text in project.search_code(TS_CACHEABLE_HANDLER_RX):
+            handler_hits.setdefault(f.path, (line, text))
+        for f, line, text in project.search_wire(TS_CACHEABLE_METHOD_RX):
+            handler_hits.setdefault(f.path, (line, text))
+        out: list[Finding] = []
+        for path, (line, text) in sorted(
+            handler_hits.items(), key=lambda item: (str(item[0]), item[1][0])
+        ):
+            f = next(ff for ff in project.files if ff.path == path)
+            if CACHE_META_MENTION_RX.search(f.text):
+                continue
+            out.append(self.finding(MESSAGE, f, line, text))
         return out
