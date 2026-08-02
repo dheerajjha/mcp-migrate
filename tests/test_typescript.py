@@ -30,6 +30,9 @@ from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissin
 from mcp_migrate.rules.r016_cacheable_result_required import (
     CacheableResultMetadataMissing,
 )
+from mcp_migrate.rules.r018_multi_round_trip_replaces_server_initiated import (
+    MultiRoundTripReplacesServerInitiated,
+)
 from mcp_migrate.rules.r020_dynamic_client_registration_deprecated import (
     DynamicClientRegistrationDeprecated,
 )
@@ -85,6 +88,40 @@ def test_r006_finds_sse_in_typescript(tmp_path):
     findings = DeprecatedSSETransport().check(project.for_language("typescript"))
     # The SDK import, the route literal, and the constructor.
     assert len(findings) >= 2
+
+
+def test_r018_finds_server_initiated_request_in_typescript(tmp_path):
+    code = """\
+import { CreateMessageRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+server.setRequestHandler(CreateMessageRequestSchema, async () => ({}));
+export const legacyMethod = "sampling/createMessage";
+"""
+    project = load_project(_write(tmp_path, "requests.ts", code)).for_language(
+        "typescript"
+    )
+    findings = MultiRoundTripReplacesServerInitiated().check(project)
+    assert len(findings) == 3
+    assert [finding.line for finding in findings] == [1, 3, 4]
+
+
+def test_r018_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export const inputRequiredResult = { inputResponses: [] };
+"""
+    project = load_project(_write(tmp_path, "requests.ts", code)).for_language(
+        "typescript"
+    )
+    assert MultiRoundTripReplacesServerInitiated().check(project) == []
+
+
+def test_r018_ignores_typescript_comment_only_mentions(tmp_path):
+    code = """\
+// CreateMessageRequestSchema and sampling/createMessage were replaced by MRTR.
+export const protocolVersion = "2026-07-28";
+"""
+    project = load_project(_write(tmp_path, "notes.ts", code)).for_language("typescript")
+    assert MultiRoundTripReplacesServerInitiated().check(project) == []
 
 
 def test_r015_finds_missing_result_type_in_typescript(tmp_path):
