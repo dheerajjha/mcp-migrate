@@ -36,12 +36,19 @@ RESULT_TYPE_MENTION_RX = re.compile(r"resultType")
 # JSON-RPC responses and therefore owns the envelope itself.
 SDK_SERVER_MODULES = ("mcp.server", "mcp.types", "mcp.shared", "fastmcp")
 
+# TypeScript. The official SDK stamps resultType on every result it
+# serializes, same as the Python runner -- a file that imports
+# @modelcontextprotocol/sdk has nothing to add and nothing to fix.
+TS_SDK_IMPORT_RX = re.compile(r"@modelcontextprotocol/sdk")
+
 # What a server that owns its own envelope looks like: it writes the JSON-RPC
 # framing and the MCP method names itself, as string literals. Both halves are
 # required -- "jsonrpc" alone is any JSON-RPC service on earth, and a method
 # name alone shows up in tests and docs -- and the project must not import the
 # SDK, which is checked first.
 JSONRPC_ENVELOPE_RX = re.compile(r"[\"']jsonrpc[\"']")
+# TypeScript object literals usually use an unquoted `jsonrpc:` key.
+TS_JSONRPC_ENVELOPE_RX = re.compile(r"\bjsonrpc\s*:")
 MCP_METHOD_NAME_RX = re.compile(
     r"[\"'](?:tools/list|tools/call|resources/list|resources/read|"
     r"resources/templates/list|prompts/list|prompts/get)[\"']"
@@ -53,6 +60,10 @@ def _sdk_owns_serialization(project) -> bool:
         if mod == "mcp" or mod.startswith(SDK_SERVER_MODULES):
             return True
     return False
+
+
+def _ts_sdk_owns_serialization(project: Project) -> bool:
+    return any(TS_SDK_IMPORT_RX.search(f.text) for f in project.files)
 
 
 # Downgraded from "breaking" after auditing real servers: resultType is a
@@ -79,8 +90,20 @@ class RequiredResultTypeMissing(Rule):
         "return. On the official SDK you do not need to do anything: the runner "
         "stamps resultType on every result it serializes."
     )
+    languages = ("python", "typescript")
+
+    MESSAGE = (
+        "This file builds JSON-RPC responses for MCP methods without the "
+        "official SDK, so it owns the result envelope, and `resultType` "
+        "never appears in it."
+    )
 
     def check(self, project: Project) -> list[Finding]:
+        if project.language == "typescript":
+            return self._check_ts(project)
+        return self._check_python(project)
+
+    def _check_python(self, project: Project) -> list[Finding]:
         # The SDK stamps `resultType` on every result it serializes, so an
         # SDK-based server has nothing to add and this rule has nothing to
         # say. Only a project that owns its own JSON-RPC envelope can be
@@ -106,9 +129,41 @@ class RequiredResultTypeMissing(Rule):
             line = f.text[: m.start()].count("\n") + 1
             seen_files.add(f.path)
             out.append(self.finding(
-                "This file builds JSON-RPC responses for MCP methods without the "
-                "official SDK, so it owns the result envelope, and `resultType` "
-                "never appears in it.",
+                self.MESSAGE,
                 f, line, f.lines[line - 1].strip() if line <= len(f.lines) else None,
             ))
+        return out
+
+    def _check_ts(self, project: Project) -> list[Finding]:
+        if _ts_sdk_owns_serialization(project):
+            return []
+        out: list[Finding] = []
+        seen_files = set()
+        for f in project.files:
+            if RESULT_TYPE_MENTION_RX.search(f.text):
+                continue
+            if f.path in seen_files:
+                continue
+            # search_wire keeps string literals ("jsonrpc", "tools/list")
+            # and drops comments -- a README-style comment naming the
+            # protocol is not a hand-rolled envelope.
+            has_jsonrpc = any(
+                ff.path == f.path
+                for ff, _line, _text in project.search_wire(TS_JSONRPC_ENVELOPE_RX.pattern)
+            ) or any(
+                ff.path == f.path
+                for ff, _line, _text in project.search_wire(JSONRPC_ENVELOPE_RX.pattern)
+            )
+            if not has_jsonrpc:
+                continue
+            method_hit: tuple[int, str] | None = None
+            for ff, line, text in project.search_wire(MCP_METHOD_NAME_RX.pattern):
+                if ff.path == f.path:
+                    method_hit = (line, text)
+                    break
+            if method_hit is None:
+                continue
+            line, text = method_hit
+            seen_files.add(f.path)
+            out.append(self.finding(self.MESSAGE, f, line, text))
         return out
