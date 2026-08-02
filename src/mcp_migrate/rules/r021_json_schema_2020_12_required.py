@@ -26,8 +26,19 @@ class OldJSONSchemaDialect(Rule):
         "outputSchema. If you pin an older draft explicitly, move it to 2020-12 (or "
         "drop the pin and let a modern validator pick the default)."
     )
+    languages = ("python", "typescript")
+
+    MESSAGE = "Pins an older JSON Schema dialect; 2026-07-28 requires 2020-12 support."
 
     def check(self, project: Project) -> list[Finding]:
+        if project.language == "typescript":
+            # A TypeScript schema pin is a string literal. search_wire keeps
+            # the literal but ignores comments that only describe the upgrade.
+            return [
+                self.finding(self.MESSAGE, f, line, text)
+                for f, line, text in project.search_wire(OLD_DIALECT_RX.pattern)
+            ]
+
         out: list[Finding] = []
         # Raw text, not search_code: a `$schema` dialect pin is always a
         # URL/date string (`"http://json-schema.org/draft-07/schema#"`,
@@ -35,8 +46,5 @@ class OldJSONSchemaDialect(Rule):
         # starts inside a STRING token -- search_code would silently never
         # find it (see the notifications/initialized note in r009).
         for f, line, text in project.search_wire(OLD_DIALECT_RX.pattern):
-            out.append(self.finding(
-                "Pins an older JSON Schema dialect; 2026-07-28 requires 2020-12 support.",
-                f, line, text,
-            ))
+            out.append(self.finding(self.MESSAGE, f, line, text))
         return out

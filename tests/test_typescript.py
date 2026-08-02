@@ -25,6 +25,7 @@ from mcp_migrate.rules.r003_routing_headers import MissingRoutingHeaders
 from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
+from mcp_migrate.rules.r021_json_schema_2020_12_required import OldJSONSchemaDialect
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
 from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
 from mcp_migrate.rules.r016_cacheable_result_required import (
@@ -85,6 +86,39 @@ def test_r006_finds_sse_in_typescript(tmp_path):
     findings = DeprecatedSSETransport().check(project.for_language("typescript"))
     # The SDK import, the route literal, and the constructor.
     assert len(findings) >= 2
+
+
+def test_r021_finds_old_schema_dialect_in_typescript(tmp_path):
+    code = """\
+export const inputSchema = {
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  type: "object",
+};
+"""
+    project = load_project(_write(tmp_path, "schema.ts", code)).for_language("typescript")
+    findings = OldJSONSchemaDialect().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 2
+
+
+def test_r021_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export const inputSchema = {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  type: "object",
+};
+"""
+    project = load_project(_write(tmp_path, "schema.ts", code)).for_language("typescript")
+    assert OldJSONSchemaDialect().check(project) == []
+
+
+def test_r021_ignores_typescript_comment_only_mentions(tmp_path):
+    code = """\
+// Replace draft-07 with JSON Schema 2020-12 before publishing this schema.
+export const protocolVersion = "2026-07-28";
+"""
+    project = load_project(_write(tmp_path, "notes.ts", code)).for_language("typescript")
+    assert OldJSONSchemaDialect().check(project) == []
 
 
 def test_r015_finds_missing_result_type_in_typescript(tmp_path):
