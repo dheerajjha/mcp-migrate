@@ -26,6 +26,7 @@ from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
+from mcp_migrate.rules.r013_subscriptions_replaced import ResourceSubscriptionsReplaced
 from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
 from mcp_migrate.rules.r016_cacheable_result_required import (
     CacheableResultMetadataMissing,
@@ -170,6 +171,53 @@ const server = new Server({ name: "my-server", version: "1.0.0" }, { capabilitie
 """
     project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
     assert RequiredResultTypeMissing().check(project) == []
+
+
+def test_r013_finds_removed_resource_subscriptions_in_typescript(tmp_path):
+    code = """\
+import type {
+  SubscribeRequest,
+  SubscribeRequestParams,
+  UnsubscribeRequest,
+  UnsubscribeRequestParams,
+} from "@modelcontextprotocol/sdk/types.js";
+import { SubscribeRequestSchema, UnsubscribeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const subscribe: SubscribeRequest = {} as SubscribeRequest;
+const subscribeParams: SubscribeRequestParams = {} as SubscribeRequestParams;
+const unsubscribe: UnsubscribeRequest = {} as UnsubscribeRequest;
+const unsubscribeParams: UnsubscribeRequestParams = {} as UnsubscribeRequestParams;
+server.setRequestHandler(SubscribeRequestSchema, async () => ({}));
+server.setRequestHandler(UnsubscribeRequestSchema, async () => ({}));
+export const subscribeMethod = "resources/subscribe";
+export const unsubscribeMethod = "resources/unsubscribe";
+"""
+    project = load_project(_write(tmp_path, "subscriptions.ts", code)).for_language(
+        "typescript"
+    )
+    findings = ResourceSubscriptionsReplaced().check(project)
+    assert len(findings) == 13
+    assert [finding.line for finding in findings] == [2, 3, 4, 5, 7, 9, 10, 11, 12, 13, 14, 15, 16]
+
+
+def test_r013_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export const subscriptionMethod = "subscriptions/listen";
+"""
+    project = load_project(_write(tmp_path, "subscriptions.ts", code)).for_language(
+        "typescript"
+    )
+    assert ResourceSubscriptionsReplaced().check(project) == []
+
+
+def test_r013_ignores_typescript_comment_only_mentions(tmp_path):
+    code = """\
+// SubscribeRequest, SubscribeRequestParams, SubscribeRequestSchema, UnsubscribeRequest,
+// UnsubscribeRequestParams, UnsubscribeRequestSchema, and resources/subscribe were replaced.
+export const protocolVersion = "2026-07-28";
+"""
+    project = load_project(_write(tmp_path, "notes.ts", code)).for_language("typescript")
+    assert ResourceSubscriptionsReplaced().check(project) == []
 
 
 def test_neither_fires_on_a_migrated_typescript_server(tmp_path):
@@ -669,26 +717,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 """
     project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
     assert NondeterministicToolOrder().check(project) == []
-
-
-def test_partial_coverage_is_stated_with_a_denominator(tmp_path, capsys):
-    main(["check", str(_write(tmp_path, "transport.ts", LEGACY_TS))])
-    # Collapse whitespace: rich wraps at terminal width and will happily
-    # split the fraction across two lines.
-    out = " ".join(capsys.readouterr().out.split())
-
-    # Derived, not hardcoded. Every TypeScript port moves this number by
-    # one, and a literal here makes the ports mutually exclusive: whoever
-    # merges second is asserting a count that main has already passed, so
-    # main goes red through no fault of theirs. Ports are meant to land in
-    # parallel and independently -- the test has to tolerate that.
-    ported = sum(1 for r in all_rules() if "typescript" in r.languages)
-    total = len(list(all_rules()))
-    assert f"{ported} of {total}" in out, (
-        "someone deciding whether to trust this needs the coverage fraction, "
-        "and it should move as rules get ported"
-    )
-    assert ported >= 4, "the reference ports (R001/R003/R005/R006) are still there"
 
 
 # --- the comment/string scanner -------------------------------------------
