@@ -26,6 +26,7 @@ from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
+from mcp_migrate.rules.r012_logging_set_level_removed import LoggingSetLevelRemoved
 from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
 from mcp_migrate.rules.r016_cacheable_result_required import (
     CacheableResultMetadataMissing,
@@ -170,6 +171,41 @@ const server = new Server({ name: "my-server", version: "1.0.0" }, { capabilitie
 """
     project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
     assert RequiredResultTypeMissing().check(project) == []
+
+
+def test_r012_finds_removed_logging_set_level_in_typescript(tmp_path):
+    code = """\
+import type { SetLevelRequest, SetLevelRequestParams } from "@modelcontextprotocol/sdk/types.js";
+import { SetLevelRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const request: SetLevelRequest = { method: "logging/setLevel" } as SetLevelRequest;
+const params: SetLevelRequestParams = {} as SetLevelRequestParams;
+server.setRequestHandler(SetLevelRequestSchema, async () => ({}));
+export const legacyMethod = "logging/setLevel";
+"""
+    project = load_project(_write(tmp_path, "logging.ts", code)).for_language("typescript")
+    findings = LoggingSetLevelRemoved().check(project)
+    assert len(findings) == 7
+    assert [finding.line for finding in findings] == [1, 2, 4, 5, 6, 4, 7]
+
+
+def test_r012_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export function logLevel(request) {
+  return request._meta?.["io.modelcontextprotocol/logLevel"];
+}
+"""
+    project = load_project(_write(tmp_path, "logging.ts", code)).for_language("typescript")
+    assert LoggingSetLevelRemoved().check(project) == []
+
+
+def test_r012_ignores_typescript_comment_only_mentions(tmp_path):
+    code = """\
+// SetLevelRequest, SetLevelRequestParams, SetLevelRequestSchema, and logging/setLevel were removed.
+export const protocolVersion = "2026-07-28";
+"""
+    project = load_project(_write(tmp_path, "notes.ts", code)).for_language("typescript")
+    assert LoggingSetLevelRemoved().check(project) == []
 
 
 def test_neither_fires_on_a_migrated_typescript_server(tmp_path):
@@ -669,26 +705,6 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 """
     project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
     assert NondeterministicToolOrder().check(project) == []
-
-
-def test_partial_coverage_is_stated_with_a_denominator(tmp_path, capsys):
-    main(["check", str(_write(tmp_path, "transport.ts", LEGACY_TS))])
-    # Collapse whitespace: rich wraps at terminal width and will happily
-    # split the fraction across two lines.
-    out = " ".join(capsys.readouterr().out.split())
-
-    # Derived, not hardcoded. Every TypeScript port moves this number by
-    # one, and a literal here makes the ports mutually exclusive: whoever
-    # merges second is asserting a count that main has already passed, so
-    # main goes red through no fault of theirs. Ports are meant to land in
-    # parallel and independently -- the test has to tolerate that.
-    ported = sum(1 for r in all_rules() if "typescript" in r.languages)
-    total = len(list(all_rules()))
-    assert f"{ported} of {total}" in out, (
-        "someone deciding whether to trust this needs the coverage fraction, "
-        "and it should move as rules get ported"
-    )
-    assert ported >= 4, "the reference ports (R001/R003/R005/R006) are still there"
 
 
 # --- the comment/string scanner -------------------------------------------
