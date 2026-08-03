@@ -24,6 +24,9 @@ from mcp_migrate.rules.r001_session_id_removed import SessionIdRemoved
 from mcp_migrate.rules.r003_routing_headers import MissingRoutingHeaders
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
+from mcp_migrate.rules.r020_dynamic_client_registration_deprecated import (
+    DynamicClientRegistrationDeprecated,
+)
 from mcp_migrate.scan import load_project
 
 LEGACY_TS = """\
@@ -217,6 +220,81 @@ const server = new Server(
     assert "extensions" in findings[0].message
 
 
+# --- R020: Dynamic Client Registration deprecated -----------------------
+
+def test_r020_finds_register_client_in_typescript(tmp_path):
+    code = """\
+import type { OAuthClientMetadata } from "@modelcontextprotocol/sdk/types.js";
+
+export async function registerClient(
+  authorizationServerUrl: URL,
+  metadata: OAuthClientMetadata,
+) {
+  const registrationUrl = new URL("/register", authorizationServerUrl);
+  const res = await fetch(registrationUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(metadata),
+  });
+  return res.json();
+}
+"""
+    project = load_project(_write(tmp_path, "auth.ts", code)).for_language("typescript")
+    findings = DynamicClientRegistrationDeprecated().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 3
+
+
+def test_r020_finds_register_client_request_type_in_typescript(tmp_path):
+    code = """\
+import type { RegisterClientRequest } from "@modelcontextprotocol/sdk/types.js";
+
+export function buildRequest(): RegisterClientRequest {
+  return { redirect_uris: ["https://app.example/callback"] };
+}
+"""
+    project = load_project(_write(tmp_path, "auth.ts", code)).for_language("typescript")
+    findings = DynamicClientRegistrationDeprecated().check(project)
+    assert len(findings) >= 1
+    assert any("RegisterClientRequest" in (f.snippet or "") for f in findings)
+
+
+def test_r020_stays_silent_on_migrated_typescript_auth(tmp_path):
+    # CIMD: client metadata is hosted at a well-known URL, no /register call.
+    code = """\
+import type { OAuthClientMetadata } from "@modelcontextprotocol/sdk/types.js";
+
+export const CLIENT_METADATA: OAuthClientMetadata = {
+  client_id: "https://app.example/.well-known/oauth-client",
+  redirect_uris: ["https://app.example/callback"],
+};
+"""
+    project = load_project(_write(tmp_path, "auth.ts", code)).for_language("typescript")
+    assert DynamicClientRegistrationDeprecated().check(project) == []
+
+
+def test_r020_ignores_dynamic_client_registration_named_only_in_comment(tmp_path):
+    code = """\
+// Legacy note: we used registerClient against the /register endpoint.
+// RegisterClientRequest and DynamicClientRegistration are deprecated.
+export const AUTH_MODE = "cimd";
+"""
+    project = load_project(_write(tmp_path, "docs.ts", code)).for_language("typescript")
+    assert DynamicClientRegistrationDeprecated().check(project) == []
+
+
+def test_r020_does_not_fire_on_unrelated_register_method(tmp_path):
+    code = """\
+class CRM {
+  registerNewCustomer(info: Record<string, unknown>) {
+    return { customer_id: 1, ...info };
+  }
+}
+"""
+    project = load_project(_write(tmp_path, "billing.ts", code)).for_language("typescript")
+    assert DynamicClientRegistrationDeprecated().check(project) == []
+
+
 def test_r005_stays_silent_on_non_mcp_typescript(tmp_path):
     # capabilities: {} is an ordinary property name. Without an SDK import
     # this is not an MCP server, so the rule stays quiet.
@@ -279,7 +357,7 @@ def test_partial_coverage_is_stated_with_a_denominator(tmp_path, capsys):
     # Collapse whitespace: rich wraps at terminal width and will happily
     # split the fraction across two lines.
     out = " ".join(capsys.readouterr().out.split())
-    assert "4 of 21" in out, (
+    assert "5 of 21" in out, (
         "someone deciding whether to trust this needs the coverage fraction, "
         "and it should move as rules get ported"
     )
