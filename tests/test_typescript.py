@@ -279,10 +279,19 @@ def test_partial_coverage_is_stated_with_a_denominator(tmp_path, capsys):
     # Collapse whitespace: rich wraps at terminal width and will happily
     # split the fraction across two lines.
     out = " ".join(capsys.readouterr().out.split())
-    assert "4 of 21" in out, (
+
+    # Derived, not hardcoded. Every TypeScript port moves this number by
+    # one, and a literal here makes the ports mutually exclusive: whoever
+    # merges second is asserting a count that main has already passed, so
+    # main goes red through no fault of theirs. Ports are meant to land in
+    # parallel and independently -- the test has to tolerate that.
+    ported = sum(1 for r in all_rules() if "typescript" in r.languages)
+    total = len(list(all_rules()))
+    assert f"{ported} of {total}" in out, (
         "someone deciding whether to trust this needs the coverage fraction, "
         "and it should move as rules get ported"
     )
+    assert ported >= 4, "the reference ports (R001/R003/R005/R006) are still there"
 
 
 # --- the comment/string scanner -------------------------------------------
