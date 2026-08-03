@@ -9,6 +9,7 @@ answer any request.
 from __future__ import annotations
 
 from mcp.server import Server
+from mcp.server.caching import CacheHint
 from mcp.server.streamable_http import StreamableHTTPServerTransport
 from mcp.types import (
     ServerCapabilities,
@@ -20,7 +21,8 @@ from .store import NoteStore
 
 store = NoteStore()
 
-server = Server("notes-server")
+cache_hints = {"list_tools": CacheHint(ttl_ms=60000)}
+server = Server("notes-server", cache_hints=cache_hints)
 
 capabilities = ServerCapabilities(
     tools=ToolsCapability(list_changed=True),

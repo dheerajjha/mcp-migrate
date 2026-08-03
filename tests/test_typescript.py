@@ -535,7 +535,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     assert CacheableResultMetadataMissing().check(project) == []
 
 
-def test_r016_ignores_cache_metadata_named_only_in_comment(tmp_path):
+def test_r016_flags_cache_metadata_named_only_in_comment(tmp_path):
     code = """\
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -546,9 +546,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 });
 """
     project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
-    # Comment mentions ttlMs/cacheScope but handler still lacks them -- the
-    # rule uses a generous presence check, so a comment counts as handled.
-    assert CacheableResultMetadataMissing().check(project) == []
+    # Comment mentions ttlMs/cacheScope but handler still lacks them in code --
+    # prose mentions do not satisfy the rule.
+    assert len(CacheableResultMetadataMissing().check(project)) == 1
 
 
 def test_r016_is_satisfied_by_cache_hints_configured_on_the_server(tmp_path):

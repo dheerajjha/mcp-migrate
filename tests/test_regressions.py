@@ -444,6 +444,29 @@ def test_r016_still_fires_when_no_cache_metadata_exists_anywhere(tmp_path):
     )
 
 
+def test_r016_flags_cache_metadata_named_only_in_python_comment(tmp_path):
+    # A comment mentioning ttlMs or cacheScope does not satisfy the rule.
+    (tmp_path / "server.py").write_text(
+        "# The transport layer adds ttlMs and cacheScope when cache_hints are set.\n"
+        "@app.list_tools()\n"
+        "async def list_tools():\n"
+        "    return []\n"
+    )
+    project = load_project(tmp_path)
+    assert len(CacheableResultMetadataMissing().check(project)) == 1
+
+
+def test_r016_suppressed_by_cache_metadata_in_python_code(tmp_path):
+    # A code mention of ttlMs or cacheScope satisfies the rule.
+    (tmp_path / "server.py").write_text(
+        "@app.list_tools()\n"
+        "async def list_tools():\n"
+        "    return [{'ttlMs': 5000}]\n"
+    )
+    project = load_project(tmp_path)
+    assert CacheableResultMetadataMissing().check(project) == []
+
+
 # --- 8. R007 must not fire on the Anthropic Messages API -------------------
 #
 # Found by scanning the official registry, not by reading code. R007's

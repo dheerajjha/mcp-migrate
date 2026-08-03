@@ -11,11 +11,10 @@ CACHEABLE_HANDLER_RX = re.compile(
     r"list_resource_templates)\s*\("
 )
 
-# Presence check, deliberately raw text (same permissive direction as
-# r005_extensions.py / r015_result_type_required.py): a mention anywhere in
-# the file is enough to count the metadata as handled, because a wrong
-# "still missing" (breaking) claim costs far more than a generous read of
-# "present" does.
+# Presence check: a mention anywhere in code or string literals in the file is
+# enough to count the metadata as handled, because a wrong "still missing"
+# (breaking) claim costs far more than a generous read of "present" does.
+# Searched via search_wire to ignore comments and docstrings.
 CACHE_META_MENTION_RX = re.compile(r"ttlMs|cacheScope")
 
 # The other, and more likely, way these fields get onto the wire.
@@ -100,12 +99,15 @@ class CacheableResultMetadataMissing(Rule):
         # project-wide question, not a per-file one.
         if any(project.search_code(CACHE_HINT_CONFIG_RX.pattern)):
             return []
+        files_with_mention = {
+            f.path for f, _, _ in project.search_wire(CACHE_META_MENTION_RX.pattern)
+        }
         out: list[Finding] = []
         seen_files = set()
         for f, line, text in project.search_code(CACHEABLE_HANDLER_RX.pattern):
             if f.path in seen_files:
                 continue
-            if CACHE_META_MENTION_RX.search(f.text):
+            if f.path in files_with_mention:
                 continue
             seen_files.add(f.path)
             out.append(self.finding(MESSAGE, f, line, text))
@@ -114,6 +116,9 @@ class CacheableResultMetadataMissing(Rule):
     def _check_ts(self, project: Project) -> list[Finding]:
         if any(project.search_code(TS_CACHE_HINT_CONFIG_RX.pattern)):
             return []
+        files_with_mention = {
+            f.path for f, _, _ in project.search_wire(CACHE_META_MENTION_RX.pattern)
+        }
         handler_hits: dict[object, tuple[int, str]] = {}
         for f, line, text in project.search_code(TS_CACHEABLE_HANDLER_RX):
             handler_hits.setdefault(f.path, (line, text))
@@ -123,8 +128,8 @@ class CacheableResultMetadataMissing(Rule):
         for path, (line, text) in sorted(
             handler_hits.items(), key=lambda item: (str(item[0]), item[1][0])
         ):
-            f = next(ff for ff in project.files if ff.path == path)
-            if CACHE_META_MENTION_RX.search(f.text):
+            if path in files_with_mention:
                 continue
+            f = next(ff for ff in project.files if ff.path == path)
             out.append(self.finding(MESSAGE, f, line, text))
         return out
