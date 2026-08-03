@@ -25,6 +25,7 @@ from mcp_migrate.rules.r003_routing_headers import MissingRoutingHeaders
 from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
+from mcp_migrate.rules.r007_deprecated_features import DeprecatedCoreFeatures
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
 from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
 from mcp_migrate.rules.r016_cacheable_result_required import (
@@ -500,6 +501,126 @@ export function handle(message: string) {
 """
     project = load_project(_write(tmp_path, "game.ts", code)).for_language("typescript")
     assert PingRemoved().check(project) == []
+# --- R007: deprecated core features (Roots / Sampling / Logging) ---------
+
+def test_r007_finds_the_sdk_names_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import {
+  ListRootsRequestSchema,
+  CreateMessageRequestSchema,
+  LoggingMessageNotificationSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = DeprecatedCoreFeatures().check(project)
+    named = {f.line: f.message for f in findings}
+    assert "Roots" in named[3]
+    assert "Sampling" in named[4]
+    assert "Logging" in named[5]
+    assert len(findings) == 3
+
+
+def test_r007_finds_the_wire_names_in_typescript(tmp_path):
+    # JSON-RPC method names only ever exist inside string literals, so
+    # this is the half search_code would never find.
+    code = """\
+export const DEPRECATED = [
+  "roots/list",
+  "sampling/createMessage",
+  "notifications/message",
+];
+"""
+    project = load_project(_write(tmp_path, "methods.ts", code)).for_language("typescript")
+    findings = DeprecatedCoreFeatures().check(project)
+    assert [f.line for f in findings] == [2, 3, 4]
+
+
+def test_r007_finds_sampling_through_the_server_object(tmp_path):
+    code = """\
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+const mcpServer = new McpServer({ name: "demo", version: "1.0.0" });
+
+export async function summarise(text: string) {
+  return mcpServer.server.createMessage({
+    messages: [{ role: "user", content: { type: "text", text } }],
+    maxTokens: 100,
+  });
+}
+"""
+    project = load_project(_write(tmp_path, "sample.ts", code)).for_language("typescript")
+    findings = DeprecatedCoreFeatures().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 6
+    assert "Sampling" in findings[0].message
+
+
+def test_r007_does_not_fire_on_a_chat_wrapper_without_mcp_context(tmp_path):
+    # The Python rule's whole false-positive story: a `createMessage`
+    # wrapper around a chat API has nothing to do with MCP Sampling. In a
+    # file that never mentions MCP, this stays quiet.
+    code = """\
+import Anthropic from "@anthropic-ai/sdk";
+
+export class ChatClient {
+  constructor(private client: Anthropic) {}
+
+  async createMessage(prompt: string) {
+    return this.client.messages.create({
+      model: "claude-sonnet-5",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
+    });
+  }
+}
+
+const chatClient = new ChatClient(new Anthropic());
+await chatClient.createMessage("hello");
+"""
+    project = load_project(_write(tmp_path, "chat.ts", code)).for_language("typescript")
+    assert DeprecatedCoreFeatures().check(project) == []
+
+
+def test_r007_charges_one_line_once_per_feature(tmp_path):
+    # Two signals for Sampling on one line is one dependency on Sampling.
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+
+const result: CreateMessageResult = await server.createMessage(params);
+"""
+    project = load_project(_write(tmp_path, "sample.ts", code)).for_language("typescript")
+    findings = DeprecatedCoreFeatures().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 3
+
+
+def test_r007_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert DeprecatedCoreFeatures().check(project) == []
+
+
+def test_r007_ignores_deprecated_features_named_only_in_comments(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+
+// Migration note: we dropped roots/list, sampling/createMessage and
+// notifications/message. RootsCapability and SamplingCapability are gone.
+/** server.createMessage() and server.listRoots() are no longer called. */
+export const NOTE = 1;
+"""
+    project = load_project(_write(tmp_path, "docs.ts", code)).for_language("typescript")
+    assert DeprecatedCoreFeatures().check(project) == []
+
+
 # --- R016: ttlMs/cacheScope on list/read results -------------------------
 
 def test_r016_finds_missing_cache_metadata_in_typescript(tmp_path):
