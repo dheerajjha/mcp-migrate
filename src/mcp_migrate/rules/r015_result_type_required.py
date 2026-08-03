@@ -137,33 +137,29 @@ class RequiredResultTypeMissing(Rule):
     def _check_ts(self, project: Project) -> list[Finding]:
         if _ts_sdk_owns_serialization(project):
             return []
+        # search_wire keeps string literals ("jsonrpc", "tools/list")
+        # and drops comments -- a README-style comment naming the
+        # protocol is not a hand-rolled envelope. Scan the project once
+        # per pattern, rather than once per file in the loop below.
+        jsonrpc_paths = {
+            f.path for f, _line, _text in project.search_wire(TS_JSONRPC_ENVELOPE_RX.pattern)
+        }
+        jsonrpc_paths.update(
+            f.path for f, _line, _text in project.search_wire(JSONRPC_ENVELOPE_RX.pattern)
+        )
+        method_hits: dict[object, tuple[int, str]] = {}
+        for f, line, text in project.search_wire(MCP_METHOD_NAME_RX.pattern):
+            method_hits.setdefault(f.path, (line, text))
+
         out: list[Finding] = []
-        seen_files = set()
         for f in project.files:
             if RESULT_TYPE_MENTION_RX.search(f.text):
                 continue
-            if f.path in seen_files:
+            if f.path not in jsonrpc_paths:
                 continue
-            # search_wire keeps string literals ("jsonrpc", "tools/list")
-            # and drops comments -- a README-style comment naming the
-            # protocol is not a hand-rolled envelope.
-            has_jsonrpc = any(
-                ff.path == f.path
-                for ff, _line, _text in project.search_wire(TS_JSONRPC_ENVELOPE_RX.pattern)
-            ) or any(
-                ff.path == f.path
-                for ff, _line, _text in project.search_wire(JSONRPC_ENVELOPE_RX.pattern)
-            )
-            if not has_jsonrpc:
-                continue
-            method_hit: tuple[int, str] | None = None
-            for ff, line, text in project.search_wire(MCP_METHOD_NAME_RX.pattern):
-                if ff.path == f.path:
-                    method_hit = (line, text)
-                    break
+            method_hit = method_hits.get(f.path)
             if method_hit is None:
                 continue
             line, text = method_hit
-            seen_files.add(f.path)
             out.append(self.finding(self.MESSAGE, f, line, text))
         return out
