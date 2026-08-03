@@ -39,7 +39,7 @@ def fix(name: str, source: str, path: str = "server.py"):
 # ---------------------------------------------------------------------------
 
 def test_ships_a_fixer_for_every_rule_the_task_calls_out():
-    assert {"R001", "R004", "R005", "R006", "R017"} <= FIXER_RULE_IDS
+    assert {"R001", "R004", "R005", "R006", "R014", "R017"} <= FIXER_RULE_IDS
 
 
 def test_every_fixer_has_a_valid_confidence_and_metadata():
@@ -268,6 +268,86 @@ def test_r006_idempotent():
     )
     once = fix("SseTransportFixer", before)
     twice = fix("SseTransportFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+# ---------------------------------------------------------------------------
+# R014 -- SSE resumability (Last-Event-ID)
+# ---------------------------------------------------------------------------
+
+R014_BEFORE = (
+    'def handle_reconnect(request):\n'
+    '    last_event_id = request.headers.get("Last-Event-ID")\n'
+    '    if last_event_id is None:\n'
+    '        return []\n'
+    '    return list(_EventLog().replay_after(last_event_id))\n'
+)
+R014_AFTER = (
+    'def handle_reconnect(request):\n'
+    '    # TODO(mcp-migrate): SSE resumability via Last-Event-ID is removed; see '
+    'https://modelcontextprotocol.io/specification/2026-07-28/changelog and '
+    'cookbook/08-sse-resumability-removed.md\n'
+    '    # last_event_id = request.headers.get("Last-Event-ID")\n'
+    '    if last_event_id is None:\n'
+    '        return []\n'
+    '    # TODO(mcp-migrate): SSE resumability via Last-Event-ID is removed; see '
+    'https://modelcontextprotocol.io/specification/2026-07-28/changelog and '
+    'cookbook/08-sse-resumability-removed.md\n'
+    '    # return list(_EventLog().replay_after(last_event_id))\n'
+)
+
+
+def test_r014_comments_out_header_read_and_replay_call():
+    result = fix("SseResumabilityFixer", R014_BEFORE)
+    assert result.changed
+    assert result.text == R014_AFTER
+    assert FIXERS["SseResumabilityFixer"].confidence == "review"
+    ast.parse(result.text)
+
+
+def test_r014_skips_block_opener_header_reads():
+    before = 'if request.headers.get("Last-Event-ID"):\n    replay()\n'
+    result = fix("SseResumabilityFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r014_adds_todo_without_touching_replay_after_def():
+    before = (
+        "class _EventLog:\n"
+        "    def replay_after(self, last_event_id: str):\n"
+        "        if event_id == last_event_id:\n"
+        "            yield event_id, payload\n"
+    )
+    result = fix("SseResumabilityFixer", before)
+    assert result.changed is False
+    assert result.text == before
+    ast.parse(result.text)
+
+
+def test_r014_comments_out_bracket_header_access():
+    before = 'last_id = request.headers["Last-Event-ID"]\n'
+    result = fix("SseResumabilityFixer", before)
+    assert result.changed
+    assert '# last_id = request.headers["Last-Event-ID"]' in result.text
+    ast.parse(result.text)
+
+
+def test_r014_leaves_event_store_append_logic_alone():
+    before = (
+        "class _EventLog:\n"
+        "    def append(self, event_id: str, payload: dict) -> None:\n"
+        "        self._events.append((event_id, payload))\n"
+    )
+    result = fix("SseResumabilityFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r014_idempotent():
+    once = fix("SseResumabilityFixer", R014_BEFORE)
+    twice = fix("SseResumabilityFixer", once.text)
     assert twice.changed is False
     assert twice.text == once.text
 
