@@ -638,3 +638,43 @@ def test_ts_scanner_handles_escapes_and_unterminated_strings():
     text = 'const a = "he said \\"hi\\"";\nconst b = 1;\n'
     spans = _ts_spans(text, prose_only=False)
     assert all(s[0][0] == 1 for s in spans), f"string leaked past line 1: {spans}"
+
+
+# --- test-code exclusion is a cross-language concern ----------------------
+#
+# The exclusion list was written for Python and silently did nothing for
+# TypeScript, so every TS project's test suite was scanned as if it were
+# the server. Found by running the newly ported rules against
+# modelcontextprotocol/servers: both findings for `src/filesystem` came
+# out of `__tests__/`.
+
+@pytest.mark.parametrize("rel", [
+    "__tests__/server.test.ts",
+    "__mocks__/transport.ts",
+    "spec/server.ts",
+    "e2e/flow.ts",
+    "src/server.test.ts",
+    "src/server.spec.ts",
+    "src/server.test.tsx",
+])
+def test_typescript_test_code_is_skipped_by_default(tmp_path, rel):
+    path = tmp_path / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(LEGACY_TS)
+    assert load_project(tmp_path).files == [], f"{rel} is test code, not the server"
+
+
+def test_typescript_test_code_is_scanned_with_include_tests(tmp_path):
+    path = tmp_path / "__tests__" / "server.test.ts"
+    path.parent.mkdir(parents=True)
+    path.write_text(LEGACY_TS)
+    assert load_project(tmp_path, include_tests=True).files != []
+
+
+def test_production_typescript_that_merely_contains_test_in_the_name_is_kept(tmp_path):
+    # `testUtils.ts` ships in the server; `latest.ts` ends in "test" as a
+    # substring. Neither is test code and a sloppier match would drop both.
+    (tmp_path / "testUtils.ts").write_text(LEGACY_TS)
+    (tmp_path / "latest.ts").write_text(LEGACY_TS)
+    names = sorted(f.path.name for f in load_project(tmp_path).files)
+    assert names == ["latest.ts", "testUtils.ts"]

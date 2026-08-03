@@ -17,12 +17,29 @@ SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", "dist",
 # legacy transport. Both are evidence the project is well tested, not
 # evidence the server itself is broken, so they're skipped by default.
 # `--include-tests` disables this.
-TEST_DIR_SEGMENTS = {"tests", "test", "testing", "fixtures", "examples", "docs"}
+#
+# `__tests__` / `__mocks__` / `spec` / `e2e` are the JavaScript and
+# TypeScript spellings of the same idea. Leaving them out meant every TS
+# project's test suite was read as production code -- caught by pointing
+# the freshly ported rules at modelcontextprotocol/servers, where both
+# findings for `src/filesystem` were in `__tests__/`.
+TEST_DIR_SEGMENTS = {
+    "tests", "test", "testing", "fixtures", "examples", "docs",
+    "__tests__", "__mocks__", "spec", "specs", "e2e",
+}
 
 # Filenames that mark a module as test code even when it doesn't live
 # under one of TEST_DIR_SEGMENTS (e.g. a `test_foo.py` next to the module
 # it tests, or a root-level `conftest.py`).
-TEST_FILE_PATTERNS = ("test_*.py", "*_test.py", "conftest.py")
+#
+# The `*.test.*` / `*.spec.*` pair is close to universal in JS/TS and is
+# the dominant convention for tests that sit *beside* the module they
+# cover, where no directory segment can give them away.
+TEST_FILE_PATTERNS = (
+    "test_*.py", "*_test.py", "conftest.py",
+    "*.test.ts", "*.test.tsx", "*.test.mts", "*.test.cts",
+    "*.spec.ts", "*.spec.tsx", "*.spec.mts", "*.spec.cts",
+)
 
 
 def _is_test_path(rel_path: Path) -> bool:
