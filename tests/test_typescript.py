@@ -26,6 +26,7 @@ from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
+from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
 from mcp_migrate.scan import load_project
 
 LEGACY_TS = """\
@@ -78,6 +79,91 @@ def test_r006_finds_sse_in_typescript(tmp_path):
     findings = DeprecatedSSETransport().check(project.for_language("typescript"))
     # The SDK import, the route literal, and the constructor.
     assert len(findings) >= 2
+
+
+def test_r015_finds_missing_result_type_in_typescript(tmp_path):
+    code = """\
+export function handle(request: { method: string; id: string | number }) {
+  if (request.method === "tools/list") {
+    return JSON.stringify({
+      jsonrpc: "2.0",
+      id: request.id,
+      result: { tools: [{ name: "echo", description: "Echo input" }] },
+    });
+  }
+  return JSON.stringify({
+    jsonrpc: "2.0",
+    id: request.id,
+    error: { code: -32601, message: "Method not found" },
+  });
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = RequiredResultTypeMissing().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 2
+
+
+def test_r015_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export function handle(request: { method: string; id: string | number }) {
+  if (request.method === "tools/list") {
+    return JSON.stringify({
+      jsonrpc: "2.0",
+      id: request.id,
+      result: { tools: [], resultType: "complete" },
+    });
+  }
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert RequiredResultTypeMissing().check(project) == []
+
+
+def test_r015_finds_missing_result_type_with_quoted_jsonrpc_key(tmp_path):
+    code = """\
+export function handle(request: { method: string; id: string | number }) {
+  if (request.method === "tools/list") {
+    return JSON.stringify({
+      "jsonrpc": "2.0",
+      id: request.id,
+      result: { tools: [] },
+    });
+  }
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = RequiredResultTypeMissing().check(project)
+    assert len(findings) == 1
+
+
+def test_r015_ignores_jsonrpc_named_only_in_comment(tmp_path):
+    code = """\
+// This file builds jsonrpc responses for tools/list without resultType.
+export const NOTE = 1;
+"""
+    project = load_project(_write(tmp_path, "docs.ts", code)).for_language("typescript")
+    assert RequiredResultTypeMissing().check(project) == []
+
+
+def test_r015_stays_silent_when_sdk_owns_serialization(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+
+export function handle(request: { method: string; id: string | number }) {
+  if (request.method === "tools/list") {
+    return JSON.stringify({
+      jsonrpc: "2.0",
+      id: request.id,
+      result: { tools: [] },
+    });
+  }
+}
+
+const server = new Server({ name: "my-server", version: "1.0.0" }, { capabilities: {} });
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert RequiredResultTypeMissing().check(project) == []
 
 
 def test_neither_fires_on_a_migrated_typescript_server(tmp_path):
