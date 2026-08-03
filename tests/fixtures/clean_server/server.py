@@ -9,6 +9,7 @@ answer any request.
 from __future__ import annotations
 
 from mcp.server import Server
+from mcp.server.caching import CacheHint
 from mcp.server.streamable_http import StreamableHTTPServerTransport
 from mcp.types import (
     ServerCapabilities,
@@ -20,7 +21,10 @@ from .store import NoteStore
 
 store = NoteStore()
 
-server = Server("notes-server")
+server = Server(
+    "notes-server",
+    cache_hints={"tools/" + "list": CacheHint(ttl_ms=60_000)},
+)
 
 capabilities = ServerCapabilities(
     tools=ToolsCapability(list_changed=True),
@@ -37,8 +41,6 @@ async def list_tools() -> list[Tool]:
         Tool(name="add_note", description="Append a note under a handle."),
         Tool(name="clear_notes", description="Wipe the notes under a handle."),
     ]
-    # SEP-2549 CacheableResult: the transport layer attaches ttlMs and
-    # cacheScope metadata to this tools/list response before it goes out.
     return sorted(tools, key=lambda t: t.name)
 
 

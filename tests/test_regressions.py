@@ -444,6 +444,21 @@ def test_r016_still_fires_when_no_cache_metadata_exists_anywhere(tmp_path):
     )
 
 
+def test_r016_does_not_treat_a_python_comment_as_cache_metadata(tmp_path):
+    (tmp_path / "server.py").write_text(
+        "from mcp.server import Server\n"
+        "\n"
+        "app = Server('demo')\n"
+        "\n"
+        "# The transport adds ttlMs and cacheScope later.\n"
+        "@app.list_tools()\n"
+        "async def list_tools():\n"
+        "    return []\n"
+    )
+    project = load_project(tmp_path)
+    assert CacheableResultMetadataMissing().check(project)
+
+
 # --- 8. R007 must not fire on the Anthropic Messages API -------------------
 #
 # Found by scanning the official registry, not by reading code. R007's

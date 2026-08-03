@@ -535,7 +535,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     assert CacheableResultMetadataMissing().check(project) == []
 
 
-def test_r016_ignores_cache_metadata_named_only_in_comment(tmp_path):
+def test_r016_finds_missing_cache_metadata_when_comment_mentions_it(tmp_path):
     code = """\
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -543,11 +543,26 @@ import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 // The transport layer adds ttlMs and cacheScope when cacheHints are set.
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools: [] };
-});
+    });
 """
     project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
-    # Comment mentions ttlMs/cacheScope but handler still lacks them -- the
-    # rule uses a generous presence check, so a comment counts as handled.
+    # A comment must not count as metadata in the handler's response.
+    findings = CacheableResultMetadataMissing().check(project)
+    assert len(findings) == 1
+
+
+def test_r016_accepts_cache_metadata_in_a_string_built_response(tmp_path):
+    code = '''\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return JSON.parse('{"tools": [], "ttlMs": 300000, "cacheScope": "server"}');
+});
+'''
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
     assert CacheableResultMetadataMissing().check(project) == []
 
 

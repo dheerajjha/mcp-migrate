@@ -11,11 +11,9 @@ CACHEABLE_HANDLER_RX = re.compile(
     r"list_resource_templates)\s*\("
 )
 
-# Presence check, deliberately raw text (same permissive direction as
-# r005_extensions.py / r015_result_type_required.py): a mention anywhere in
-# the file is enough to count the metadata as handled, because a wrong
-# "still missing" (breaking) claim costs far more than a generous read of
-# "present" does.
+# Presence check keeps string literals but ignores comments and docstrings:
+# a metadata field in a response or a string-built response counts, while a
+# prose mention must not silence a real finding.
 CACHE_META_MENTION_RX = re.compile(r"ttlMs|cacheScope")
 
 # The other, and more likely, way these fields get onto the wire.
@@ -100,12 +98,15 @@ class CacheableResultMetadataMissing(Rule):
         # project-wide question, not a per-file one.
         if any(project.search_code(CACHE_HINT_CONFIG_RX.pattern)):
             return []
+        cache_meta_paths = {
+            f.path for f, _line, _text in project.search_wire(CACHE_META_MENTION_RX.pattern)
+        }
         out: list[Finding] = []
         seen_files = set()
         for f, line, text in project.search_code(CACHEABLE_HANDLER_RX.pattern):
             if f.path in seen_files:
                 continue
-            if CACHE_META_MENTION_RX.search(f.text):
+            if f.path in cache_meta_paths:
                 continue
             seen_files.add(f.path)
             out.append(self.finding(MESSAGE, f, line, text))
@@ -119,12 +120,15 @@ class CacheableResultMetadataMissing(Rule):
             handler_hits.setdefault(f.path, (line, text))
         for f, line, text in project.search_wire(TS_CACHEABLE_METHOD_RX):
             handler_hits.setdefault(f.path, (line, text))
+        cache_meta_paths = {
+            f.path for f, _line, _text in project.search_wire(CACHE_META_MENTION_RX.pattern)
+        }
         out: list[Finding] = []
         for path, (line, text) in sorted(
             handler_hits.items(), key=lambda item: (str(item[0]), item[1][0])
         ):
             f = next(ff for ff in project.files if ff.path == path)
-            if CACHE_META_MENTION_RX.search(f.text):
+            if f.path in cache_meta_paths:
                 continue
             out.append(self.finding(MESSAGE, f, line, text))
         return out
