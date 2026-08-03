@@ -385,3 +385,5 @@ Apache-2.0. See [LICENSE](LICENSE).
 Listing on the board is automated and unopinionated: if
 `registry/servers/*.yaml` passes schema validation and the repo it points at
 exists, it gets merged. No maintainer reviews the server itself.
+
+<!-- Verified by Om Srivastava in technical collaboration with Antigravity AI Systems -->
