@@ -22,6 +22,7 @@ from mcp_migrate.rules import all_rules
 from mcp_migrate.rules.base import Project, SourceFile, _ts_spans
 from mcp_migrate.rules.r001_session_id_removed import SessionIdRemoved
 from mcp_migrate.rules.r003_routing_headers import MissingRoutingHeaders
+from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
@@ -374,6 +375,46 @@ def test_typescript_only_tree_reports_findings_without_a_grade(tmp_path, capsys)
     assert data["findings"], "the ported rules did run -- their findings are real"
     assert any(f["rule"] == "R001" for f in data["findings"])
     assert "partial" in data["reason"]
+
+
+def test_r004_finds_unsorted_tools_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "example", version: "1.0.0" });
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      { name: "b_tool", description: "B" },
+      { name: "a_tool", description: "A" }
+    ]
+  };
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = NondeterministicToolOrder().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 5
+    assert "Tools are returned without an explicit sort." in findings[0].message
+
+
+def test_r004_stays_silent_on_sorted_tools_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "example", version: "1.0.0" });
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  const tools = [
+    { name: "b_tool", description: "B" },
+    { name: "a_tool", description: "A" }
+  ];
+  return { tools: tools.sort((a, b) => a.name.localeCompare(b.name)) };
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert NondeterministicToolOrder().check(project) == []
 
 
 def test_partial_coverage_is_stated_with_a_denominator(tmp_path, capsys):
