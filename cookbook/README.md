@@ -34,6 +34,7 @@ Every recipe follows [`_TEMPLATE.md`](_TEMPLATE.md):
 | 03 | [HTTP+SSE to Streamable HTTP](03-sse-to-streamable-http.md) | R006 | R006 (review) |
 | 04 | [subscribe/unsubscribe to subscriptions/listen](04-subscribe-to-subscriptions-listen.md) | R013 | none |
 | 05 | [resultType and cache metadata on results](05-result-type-and-cache-metadata.md) | R015, R016 | none |
+| 14 | [Required Mcp-Method / Mcp-Name routing headers](14-routing-headers.md) | R003 | none |
 
 ## Stubs -- open slots
 
@@ -53,7 +54,6 @@ ready-to-file issue for each.
 | 11 | [Tasks moved to an extension, polling replaces blocking result](11-tasks-polling.md) | R019 |
 | 12 | [Dynamic Client Registration deprecated](12-dynamic-client-registration-deprecated.md) | R020 |
 | 13 | [JSON Schema 2020-12 required](13-json-schema-2020-12.md) | R021 |
-| 14 | [Required Mcp-Method / Mcp-Name routing headers](14-routing-headers.md) | R003 |
 | 15 | [Deterministic tools/list ordering](15-deterministic-tool-ordering.md) | R004 |
 | 16 | [extensions map on ServerCapabilities](16-extensions-map.md) | R005 |
 | 17 | [Trace context propagation from _meta](17-trace-context-propagation.md) | R008 |
