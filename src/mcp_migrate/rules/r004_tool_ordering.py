@@ -46,8 +46,43 @@ def _body_bounds(lines: list[str], line_no: int) -> tuple[int, int]:
     return body_start, end
 
 
-TS_HANDLER_RX = re.compile(r"ListToolsRequestSchema|listTools|tools/list", re.IGNORECASE)
+TS_HANDLER_RX = re.compile(r"ListToolsRequestSchema|listTools|tools/list")
 TS_SORT_RX = re.compile(r"\.(?:sort|toSorted)\s*\(|\bsorted\s*\(|\bsortBy\b|\borderBy\b", re.IGNORECASE)
+
+
+def _ts_body_bounds(
+    lines: list[str], line_no: int, spans: list[tuple[tuple[int, int], tuple[int, int]]] | None
+) -> tuple[int, int]:
+    """Return (body_start, body_end) 0-based bounds for the TypeScript handler
+    block starting at 1-based `line_no` using brace-depth scanning.
+
+    Scans forward from `line_no` to find the opening '{' of the handler body,
+    then tracks '{' and '}' braces (skipping any inside comments or strings via
+    `spans`) until depth returns to 0. If no matching closing brace is found,
+    falls back to min(len(lines), line_no + 40).
+    """
+    depth = 0
+    found_first_brace = False
+    body_start = line_no
+
+    for cur_line_no in range(line_no, len(lines) + 1):
+        line = lines[cur_line_no - 1]
+        for col, char in enumerate(line):
+            if spans is not None and _in_content_span(cur_line_no, col, spans):
+                continue
+            if char == "{":
+                if not found_first_brace:
+                    found_first_brace = True
+                    body_start = cur_line_no
+                depth += 1
+            elif char == "}" and found_first_brace:
+                depth -= 1
+                if depth == 0:
+                    return body_start, cur_line_no
+
+    if not found_first_brace:
+        return line_no, min(len(lines), line_no + 40)
+    return body_start, len(lines)
 
 
 class NondeterministicToolOrder(Rule):
@@ -110,6 +145,7 @@ class NondeterministicToolOrder(Rule):
         for f in project.files:
             covered: list[tuple[int, int]] = []
             prose = project._prose_spans_for(f)
+            content_spans = project._spans_for(f)
             for line_no, line in enumerate(f.lines, start=1):
                 if line.strip().startswith("import "):
                     continue
@@ -121,7 +157,7 @@ class NondeterministicToolOrder(Rule):
                 if any(start <= line_no <= end for start, end in covered):
                     continue
 
-                end_line = min(len(f.lines), line_no + 40)
+                body_start, end_line = _ts_body_bounds(f.lines, line_no, content_spans)
                 covered.append((line_no, end_line))
 
                 window = "\n".join(f.lines[line_no - 1:end_line])
@@ -131,3 +167,4 @@ class NondeterministicToolOrder(Rule):
                     "Tools are returned without an explicit sort.", f, line_no, line.strip(),
                 ))
         return out
+

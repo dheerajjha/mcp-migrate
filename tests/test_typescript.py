@@ -671,6 +671,65 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     assert NondeterministicToolOrder().check(project) == []
 
 
+def test_r004_ignores_unrelated_sort_outside_handler_body(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "example", version: "1.0.0" });
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  return {
+    tools: [
+      { name: "b_tool", description: "B" },
+      { name: "a_tool", description: "A" }
+    ]
+  };
+});
+
+// Unrelated sort 10 lines later
+const items = getItems();
+items.sort((a, b) => a.id - b.id);
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = NondeterministicToolOrder().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 5
+
+
+def test_r004_scopes_long_handlers_correctly_past_40_lines(tmp_path):
+    padding = "\n".join(f"  const step{i} = {i};" for i in range(45))
+    code = f"""\
+import {{ Server }} from "@modelcontextprotocol/sdk/server/index.js";
+import {{ ListToolsRequestSchema }} from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({{ name: "example", version: "1.0.0" }});
+server.setRequestHandler(ListToolsRequestSchema, async () => {{
+{padding}
+  const tools = [{{ name: "b" }}, {{ name: "a" }}];
+  return {{ tools: tools.sort((a, b) => a.name.localeCompare(b.name)) }};
+}});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert NondeterministicToolOrder().check(project) == []
+
+
+def test_r004_handles_closing_braces_inside_strings_and_template_literals(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "example", version: "1.0.0" });
+server.setRequestHandler(ListToolsRequestSchema, async () => {
+  const msg = `Closing brace inside string: }`;
+  const tools = [{ name: "b" }, { name: "a" }];
+  return { tools: tools.sort((a, b) => a.name.localeCompare(b.name)) };
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert NondeterministicToolOrder().check(project) == []
+
+
+
 def test_partial_coverage_is_stated_with_a_denominator(tmp_path, capsys):
     main(["check", str(_write(tmp_path, "transport.ts", LEGACY_TS))])
     # Collapse whitespace: rich wraps at terminal width and will happily
