@@ -30,6 +30,9 @@ from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissin
 from mcp_migrate.rules.r016_cacheable_result_required import (
     CacheableResultMetadataMissing,
 )
+from mcp_migrate.rules.r020_dynamic_client_registration_deprecated import (
+    DynamicClientRegistrationDeprecated,
+)
 from mcp_migrate.scan import load_project
 
 LEGACY_TS = """\
@@ -306,6 +309,81 @@ const server = new Server(
     findings = NoExtensionsDeclared().check(project)
     assert len(findings) == 1
     assert "extensions" in findings[0].message
+
+
+# --- R020: Dynamic Client Registration deprecated -----------------------
+
+def test_r020_finds_register_client_in_typescript(tmp_path):
+    code = """\
+import type { OAuthClientMetadata } from "@modelcontextprotocol/sdk/types.js";
+
+export async function registerClient(
+  authorizationServerUrl: URL,
+  metadata: OAuthClientMetadata,
+) {
+  const registrationUrl = new URL("/register", authorizationServerUrl);
+  const res = await fetch(registrationUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(metadata),
+  });
+  return res.json();
+}
+"""
+    project = load_project(_write(tmp_path, "auth.ts", code)).for_language("typescript")
+    findings = DynamicClientRegistrationDeprecated().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 3
+
+
+def test_r020_finds_register_client_request_type_in_typescript(tmp_path):
+    code = """\
+import type { RegisterClientRequest } from "@modelcontextprotocol/sdk/types.js";
+
+export function buildRequest(): RegisterClientRequest {
+  return { redirect_uris: ["https://app.example/callback"] };
+}
+"""
+    project = load_project(_write(tmp_path, "auth.ts", code)).for_language("typescript")
+    findings = DynamicClientRegistrationDeprecated().check(project)
+    assert len(findings) >= 1
+    assert any("RegisterClientRequest" in (f.snippet or "") for f in findings)
+
+
+def test_r020_stays_silent_on_migrated_typescript_auth(tmp_path):
+    # CIMD: client metadata is hosted at a well-known URL, no /register call.
+    code = """\
+import type { OAuthClientMetadata } from "@modelcontextprotocol/sdk/types.js";
+
+export const CLIENT_METADATA: OAuthClientMetadata = {
+  client_id: "https://app.example/.well-known/oauth-client",
+  redirect_uris: ["https://app.example/callback"],
+};
+"""
+    project = load_project(_write(tmp_path, "auth.ts", code)).for_language("typescript")
+    assert DynamicClientRegistrationDeprecated().check(project) == []
+
+
+def test_r020_ignores_dynamic_client_registration_named_only_in_comment(tmp_path):
+    code = """\
+// Legacy note: we used registerClient against the /register endpoint.
+// RegisterClientRequest and DynamicClientRegistration are deprecated.
+export const AUTH_MODE = "cimd";
+"""
+    project = load_project(_write(tmp_path, "docs.ts", code)).for_language("typescript")
+    assert DynamicClientRegistrationDeprecated().check(project) == []
+
+
+def test_r020_does_not_fire_on_unrelated_register_method(tmp_path):
+    code = """\
+class CRM {
+  registerNewCustomer(info: Record<string, unknown>) {
+    return { customer_id: 1, ...info };
+  }
+}
+"""
+    project = load_project(_write(tmp_path, "billing.ts", code)).for_language("typescript")
+    assert DynamicClientRegistrationDeprecated().check(project) == []
 
 
 def test_r005_stays_silent_on_non_mcp_typescript(tmp_path):
