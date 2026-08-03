@@ -12,6 +12,13 @@ RESOURCE_NOT_FOUND_RX = re.compile(
     r"(?=.*-32002\b)(?=.*(?:resource|not[_ ]?found|notfound))", re.IGNORECASE
 )
 
+# TypeScript commonly spells the context as a camelCase identifier or keeps
+# it inside an error message. The same line-level positive evidence keeps the
+# generic numeric code from matching unrelated sentinels.
+TS_RESOURCE_NOT_FOUND_RX = (
+    r"(?=.*-32002\b)(?=.*(?:resource|not[_ -]?found))"
+)
+
 
 class ResourceNotFoundCodeChanged(Rule):
     id = "R017"
@@ -22,8 +29,20 @@ class ResourceNotFoundCodeChanged(Rule):
         "The resource-not-found error code changed from -32002 to -32602 (Invalid "
         "params). Update whatever raises or checks for -32002 in this context."
     )
+    languages = ("python", "typescript")
 
     def check(self, project: Project) -> list[Finding]:
+        if project.language == "typescript":
+            return [
+                self.finding(
+                    "-32002 for resource-not-found is the old code; 2026-07-28 uses -32602.",
+                    f, line, text,
+                )
+                for f, line, text in project.search_wire(
+                    TS_RESOURCE_NOT_FOUND_RX, flags=re.IGNORECASE
+                )
+            ]
+
         out: list[Finding] = []
         # Raw text, not search_code: the qualifying context is as likely
         # to be a trailing comment ("# resource not found") as it is to be

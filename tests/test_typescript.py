@@ -30,6 +30,9 @@ from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissin
 from mcp_migrate.rules.r016_cacheable_result_required import (
     CacheableResultMetadataMissing,
 )
+from mcp_migrate.rules.r017_resource_not_found_code_changed import (
+    ResourceNotFoundCodeChanged,
+)
 from mcp_migrate.rules.r020_dynamic_client_registration_deprecated import (
     DynamicClientRegistrationDeprecated,
 )
@@ -170,6 +173,37 @@ const server = new Server({ name: "my-server", version: "1.0.0" }, { capabilitie
 """
     project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
     assert RequiredResultTypeMissing().check(project) == []
+
+
+def test_r017_finds_old_resource_not_found_code_in_typescript(tmp_path):
+    code = """\
+export function readResource(uri: string) {
+  throw new Error(`resource not found (-32002): ${uri}`);
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = ResourceNotFoundCodeChanged().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 2
+
+
+def test_r017_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export function readResource(uri: string) {
+  throw new Error(`resource not found (-32602): ${uri}`);
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert ResourceNotFoundCodeChanged().check(project) == []
+
+
+def test_r017_ignores_old_code_named_only_in_typescript_comment(tmp_path):
+    code = """\
+// The old resource not found code was -32002; this server uses -32602.
+export const RESOURCE_NOT_FOUND_CODE = -32602;
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert ResourceNotFoundCodeChanged().check(project) == []
 
 
 def test_neither_fires_on_a_migrated_typescript_server(tmp_path):
