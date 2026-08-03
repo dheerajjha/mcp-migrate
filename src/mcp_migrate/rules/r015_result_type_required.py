@@ -137,33 +137,25 @@ class RequiredResultTypeMissing(Rule):
     def _check_ts(self, project: Project) -> list[Finding]:
         if _ts_sdk_owns_serialization(project):
             return []
+        jsonrpc_paths = {
+            ff.path for ff, _, _ in project.search_wire(TS_JSONRPC_ENVELOPE_RX.pattern)
+        }
+        jsonrpc_paths |= {
+            ff.path for ff, _, _ in project.search_wire(JSONRPC_ENVELOPE_RX.pattern)
+        }
+        method_hits: dict[object, tuple[int, str]] = {}
+        for ff, line, text in project.search_wire(MCP_METHOD_NAME_RX.pattern):
+            method_hits.setdefault(ff.path, (line, text))
+
         out: list[Finding] = []
-        seen_files = set()
         for f in project.files:
             if RESULT_TYPE_MENTION_RX.search(f.text):
                 continue
-            if f.path in seen_files:
+            if f.path not in jsonrpc_paths:
                 continue
-            # search_wire keeps string literals ("jsonrpc", "tools/list")
-            # and drops comments -- a README-style comment naming the
-            # protocol is not a hand-rolled envelope.
-            has_jsonrpc = any(
-                ff.path == f.path
-                for ff, _line, _text in project.search_wire(TS_JSONRPC_ENVELOPE_RX.pattern)
-            ) or any(
-                ff.path == f.path
-                for ff, _line, _text in project.search_wire(JSONRPC_ENVELOPE_RX.pattern)
-            )
-            if not has_jsonrpc:
+            if f.path not in method_hits:
                 continue
-            method_hit: tuple[int, str] | None = None
-            for ff, line, text in project.search_wire(MCP_METHOD_NAME_RX.pattern):
-                if ff.path == f.path:
-                    method_hit = (line, text)
-                    break
-            if method_hit is None:
-                continue
-            line, text = method_hit
-            seen_files.add(f.path)
+            line, text = method_hits[f.path]
             out.append(self.finding(self.MESSAGE, f, line, text))
         return out
+
