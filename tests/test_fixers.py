@@ -372,6 +372,47 @@ def test_r021_already_2020_12_is_unchanged():
 
 
 # ---------------------------------------------------------------------------
+# R020 -- Dynamic Client Registration deprecated
+# ---------------------------------------------------------------------------
+
+def test_r020_annotates_register_client():
+    before = "def register_client(request):\n    pass\n"
+    result = fix("DynamicClientRegistrationDeprecatedFixer", before)
+    assert result.changed
+    assert "TODO(mcp-migrate): RFC 7591 Dynamic Client Registration is deprecated" in result.text
+    assert FIXERS["DynamicClientRegistrationDeprecatedFixer"].confidence == "review"
+
+
+def test_r020_annotates_register_client_request():
+    before = "req = RegisterClientRequest()\n"
+    result = fix("DynamicClientRegistrationDeprecatedFixer", before)
+    assert result.changed
+    assert "TODO(mcp-migrate)" in result.text
+
+
+def test_r020_annotates_dynamic_client_registration():
+    before = "class DynamicClientRegistration:\n    pass\n"
+    result = fix("DynamicClientRegistrationDeprecatedFixer", before)
+    assert result.changed
+    assert "TODO(mcp-migrate)" in result.text
+
+
+def test_r020_leaves_comments_alone():
+    before = "# Note: register_client was used previously\n"
+    result = fix("DynamicClientRegistrationDeprecatedFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r020_idempotent():
+    before = "req = RegisterClientRequest()\n"
+    once = fix("DynamicClientRegistrationDeprecatedFixer", before)
+    twice = fix("DynamicClientRegistrationDeprecatedFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+# ---------------------------------------------------------------------------
 # CLI: fix / fixers
 # ---------------------------------------------------------------------------
 
