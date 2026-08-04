@@ -26,6 +26,7 @@ from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
 from mcp_migrate.rules.r007_deprecated_features import DeprecatedCoreFeatures
+from mcp_migrate.rules.r008_trace_context import NoTraceContextPropagation
 from mcp_migrate.rules.r009_initialize_handshake_removed import (
     InitializeHandshakeStillImplemented,
 )
@@ -1083,6 +1084,104 @@ const pipeline = builder
 """
     project = load_project(_write(tmp_path, "build.ts", code)).for_language("typescript")
     assert ServerDiscoverMissing().check(project) == []
+
+# --- R008: OpenTelemetry trace context from _meta ------------------------
+
+def test_r008_finds_otel_without_traceparent_in_typescript(tmp_path):
+    code = """\
+import { trace } from "@opentelemetry/api";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+
+const tracer = trace.getTracer("demo");
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  return tracer.startActiveSpan("call_tool", async (span) => {
+    span.end();
+    return { content: [] };
+  });
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = NoTraceContextPropagation().check(project)
+    assert len(findings) == 1
+    assert "traceparent" in findings[0].message
+
+
+def test_r008_stays_silent_when_traceparent_is_read_as_a_string_key(tmp_path):
+    code = """\
+import { trace } from "@opentelemetry/api";
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const parent = request.params._meta?.["traceparent"];
+  return handle(request, parent);
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert NoTraceContextPropagation().check(project) == []
+
+
+def test_r008_stays_silent_when_traceparent_is_read_as_a_property(tmp_path):
+    # The other spelling. search_code would find this one but miss the
+    # string-key form above, which is why the rule uses search_wire.
+    code = """\
+import { trace } from "@opentelemetry/api";
+
+const parent = request.params._meta.traceparent;
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert NoTraceContextPropagation().check(project) == []
+
+
+def test_r008_stays_silent_when_the_propagator_extracts_the_context(tmp_path):
+    # The idiomatic OTel API consumes the header through the propagator and
+    # may never spell `traceparent` at all. This server does the right
+    # thing; flagging it would be a false positive on correct code.
+    code = """\
+import { context, propagation, trace } from "@opentelemetry/api";
+
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
+  const parent = propagation.extract(context.active(), request.params._meta ?? {});
+  return context.with(parent, () => handle(request));
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert NoTraceContextPropagation().check(project) == []
+
+
+def test_r008_stays_silent_without_opentelemetry_in_typescript(tmp_path):
+    # No tracing at all is not a failure to propagate trace context --
+    # there is nothing to propagate.
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert NoTraceContextPropagation().check(project) == []
+
+
+def test_r008_does_not_treat_a_commented_otel_import_as_usage(tmp_path):
+    # The gate opening is what lets this rule fire at all, so a comment
+    # planning to add OpenTelemetry must not open it.
+    code = """\
+// TODO: add "@opentelemetry/api" and start tracing tool calls.
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert NoTraceContextPropagation().check(project) == []
+
+
+def test_r008_still_fires_when_traceparent_is_only_in_a_comment(tmp_path):
+    # The mirror of the case above: intending to read the header is not
+    # reading it.
+    code = """\
+import { trace } from "@opentelemetry/api";
+
+// TODO: pull traceparent off _meta and seed the span context with it.
+const tracer = trace.getTracer("demo");
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert len(NoTraceContextPropagation().check(project)) == 1
 
 
 # --- the language split itself --------------------------------------------
