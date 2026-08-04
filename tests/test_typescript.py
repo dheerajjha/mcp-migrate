@@ -25,6 +25,9 @@ from mcp_migrate.rules.r003_routing_headers import MissingRoutingHeaders
 from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
+from mcp_migrate.rules.r009_initialize_handshake_removed import (
+    InitializeHandshakeStillImplemented,
+)
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
 from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
 from mcp_migrate.rules.r016_cacheable_result_required import (
@@ -500,6 +503,104 @@ export function handle(message: string) {
 """
     project = load_project(_write(tmp_path, "game.ts", code)).for_language("typescript")
     assert PingRemoved().check(project) == []
+# --- R009: the removed initialize handshake ------------------------------
+
+def test_r009_finds_the_initialize_handshake_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import {
+  InitializeRequestSchema,
+  InitializedNotificationSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+
+server.setRequestHandler(InitializeRequestSchema, async () => {
+  return { protocolVersion: "2025-06-18", capabilities: {}, serverInfo: {} };
+});
+
+server.setNotificationHandler(InitializedNotificationSchema, async () => {
+  ready = true;
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = InitializeHandshakeStillImplemented().check(project)
+    # The two imports and the two registrations -- four lines, four findings.
+    assert [f.line for f in findings] == [3, 4, 9, 13]
+    assert all("initialize handshake" in f.message for f in findings)
+
+
+def test_r009_finds_the_wire_name_in_typescript(tmp_path):
+    # The literal only ever exists inside a string, so this is the half
+    # search_code would silently never find.
+    code = """\
+export async function handshake(send: (m: unknown) => void) {
+  send({ jsonrpc: "2.0", method: "notifications/initialized" });
+}
+"""
+    project = load_project(_write(tmp_path, "client.ts", code)).for_language("typescript")
+    findings = InitializeHandshakeStillImplemented().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 2
+    assert "notifications/initialized" in findings[0].message
+
+
+def test_r009_charges_a_dual_signal_line_once(tmp_path):
+    # Both signals land on line 2. That is one handshake implementation,
+    # and one finding -- findings are grade penalties.
+    code = """\
+switch (method) {
+  case "notifications/initialized": return onInitializedNotification();
+}
+"""
+    project = load_project(_write(tmp_path, "dispatch.ts", code)).for_language("typescript")
+    findings = InitializeHandshakeStillImplemented().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 2
+
+
+def test_r009_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+
+server.setRequestHandler("server/discover", async () => {
+  return { protocolVersions: ["2026-07-28"], capabilities: {} };
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert InitializeHandshakeStillImplemented().check(project) == []
+
+
+def test_r009_ignores_the_handshake_named_only_in_a_comment(tmp_path):
+    code = """\
+// Migration note: we deleted the InitializeRequestSchema handler and the
+// notifications/initialized round trip in the 2026-07-28 migration.
+/** InitializeResult and InitializedNotification are gone; see server/discover. */
+export const NOTE = 1;
+"""
+    project = load_project(_write(tmp_path, "docs.ts", code)).for_language("typescript")
+    assert InitializeHandshakeStillImplemented().check(project) == []
+
+
+def test_r009_does_not_fire_on_an_unrelated_initialize(tmp_path):
+    # `initialize` is one of the most overloaded words in software. Only
+    # the SDK's own compound names count.
+    code = """\
+export class Pool {
+  async initialize() {
+    this.ready = true;
+  }
+}
+
+const db = new Pool();
+await db.initialize();
+"""
+    project = load_project(_write(tmp_path, "pool.ts", code)).for_language("typescript")
+    assert InitializeHandshakeStillImplemented().check(project) == []
+
+
 # --- R016: ttlMs/cacheScope on list/read results -------------------------
 
 def test_r016_finds_missing_cache_metadata_in_typescript(tmp_path):
