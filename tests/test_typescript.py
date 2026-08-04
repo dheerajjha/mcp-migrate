@@ -30,6 +30,7 @@ from mcp_migrate.rules.r009_initialize_handshake_removed import (
     InitializeHandshakeStillImplemented,
 )
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
+from mcp_migrate.rules.r012_logging_set_level_removed import LoggingSetLevelRemoved
 from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
 from mcp_migrate.rules.r016_cacheable_result_required import (
     CacheableResultMetadataMissing,
@@ -174,6 +175,41 @@ const server = new Server({ name: "my-server", version: "1.0.0" }, { capabilitie
 """
     project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
     assert RequiredResultTypeMissing().check(project) == []
+
+
+def test_r012_finds_removed_logging_set_level_in_typescript(tmp_path):
+    code = """\
+import type { SetLevelRequest, SetLevelRequestParams } from "@modelcontextprotocol/sdk/types.js";
+import { SetLevelRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const request: SetLevelRequest = { method: "logging/setLevel" } as SetLevelRequest;
+const params: SetLevelRequestParams = {} as SetLevelRequestParams;
+server.setRequestHandler(SetLevelRequestSchema, async () => ({}));
+export const legacyMethod = "logging/setLevel";
+"""
+    project = load_project(_write(tmp_path, "logging.ts", code)).for_language("typescript")
+    findings = LoggingSetLevelRemoved().check(project)
+    assert len(findings) == 7
+    assert [finding.line for finding in findings] == [1, 2, 4, 5, 6, 4, 7]
+
+
+def test_r012_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export function logLevel(request) {
+  return request._meta?.["io.modelcontextprotocol/logLevel"];
+}
+"""
+    project = load_project(_write(tmp_path, "logging.ts", code)).for_language("typescript")
+    assert LoggingSetLevelRemoved().check(project) == []
+
+
+def test_r012_ignores_typescript_comment_only_mentions(tmp_path):
+    code = """\
+// SetLevelRequest, SetLevelRequestParams, SetLevelRequestSchema, and logging/setLevel were removed.
+export const protocolVersion = "2026-07-28";
+"""
+    project = load_project(_write(tmp_path, "notes.ts", code)).for_language("typescript")
+    assert LoggingSetLevelRemoved().check(project) == []
 
 
 def test_neither_fires_on_a_migrated_typescript_server(tmp_path):
