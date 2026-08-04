@@ -29,6 +29,9 @@ from mcp_migrate.rules.r007_deprecated_features import DeprecatedCoreFeatures
 from mcp_migrate.rules.r009_initialize_handshake_removed import (
     InitializeHandshakeStillImplemented,
 )
+from mcp_migrate.rules.r019_tasks_polling_replaces_blocking_result import (
+    TasksPollingReplacesBlockingResult,
+)
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
 from mcp_migrate.rules.r012_logging_set_level_removed import LoggingSetLevelRemoved
 from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
@@ -90,6 +93,45 @@ def test_r006_finds_sse_in_typescript(tmp_path):
     findings = DeprecatedSSETransport().check(project.for_language("typescript"))
     # The SDK import, the route literal, and the constructor.
     assert len(findings) >= 2
+
+
+def test_r019_finds_removed_task_methods_in_typescript(tmp_path):
+    code = """\
+export function listTasks() {
+  return { method: "tasks/list" };
+}
+
+export function waitForTask() {
+  return { method: "tasks/result" };
+}
+"""
+    project = load_project(_write(tmp_path, "tasks.ts", code)).for_language("typescript")
+    findings = TasksPollingReplacesBlockingResult().check(project)
+    assert len(findings) == 2
+    assert [finding.line for finding in findings] == [2, 6]
+
+
+def test_r019_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export function pollTask() {
+  return { method: "tasks/get" };
+}
+
+export function updateTask() {
+  return { method: "tasks/update" };
+}
+"""
+    project = load_project(_write(tmp_path, "tasks.ts", code)).for_language("typescript")
+    assert TasksPollingReplacesBlockingResult().check(project) == []
+
+
+def test_r019_ignores_typescript_comment_only_mentions(tmp_path):
+    code = """\
+// tasks/list and tasks/result were replaced by polling tasks/get.
+export const protocolVersion = "2026-07-28";
+"""
+    project = load_project(_write(tmp_path, "notes.ts", code)).for_language("typescript")
+    assert TasksPollingReplacesBlockingResult().check(project) == []
 
 
 def test_r015_finds_missing_result_type_in_typescript(tmp_path):

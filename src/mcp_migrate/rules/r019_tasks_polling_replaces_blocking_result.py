@@ -18,8 +18,24 @@ class TasksPollingReplacesBlockingResult(Rule):
         "tasks/get + tasks/update. Tasks itself moved out of core into the "
         "io.modelcontextprotocol/tasks extension -- declare it there instead."
     )
+    languages = ("python", "typescript")
 
     def check(self, project: Project) -> list[Finding]:
+        if project.language == "typescript":
+            # The removed task methods are JSON-RPC wire names, so they
+            # appear as string literals. search_wire keeps those literals
+            # while ignoring comments that merely describe the migration.
+            return [
+                self.finding(
+                    "References the removed tasks/list or blocking tasks/result JSON-RPC "
+                    "method.",
+                    f,
+                    line,
+                    text,
+                )
+                for f, line, text in project.search_wire(r"tasks/list|tasks/result")
+            ]
+
         out: list[Finding] = []
         for f, line, text in project.search_code(TASKS_CODE_RX.pattern):
             out.append(self.finding(
