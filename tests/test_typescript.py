@@ -1130,6 +1130,8 @@ def test_ts_scanner_handles_escapes_and_unterminated_strings():
     "src/server.test.ts",
     "src/server.spec.ts",
     "src/server.test.tsx",
+    "src/server.examples.ts",
+    "src/server.examples.tsx",
 ])
 def test_typescript_test_code_is_skipped_by_default(tmp_path, rel):
     path = tmp_path / rel
@@ -1143,6 +1145,15 @@ def test_typescript_test_code_is_scanned_with_include_tests(tmp_path):
     path.parent.mkdir(parents=True)
     path.write_text(LEGACY_TS)
     assert load_project(tmp_path, include_tests=True).files != []
+
+def test_typescript_examples_are_scanned_with_include_tests(tmp_path):
+    path = tmp_path / "src" / "mcp.examples.ts"
+    path.parent.mkdir(parents=True)
+    path.write_text(LEGACY_TS)
+    assert load_project(tmp_path).files == []
+    assert load_project(tmp_path, include_tests=True).files != []
+
+
 
 
 def test_production_typescript_that_merely_contains_test_in_the_name_is_kept(tmp_path):
