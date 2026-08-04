@@ -39,7 +39,7 @@ def fix(name: str, source: str, path: str = "server.py"):
 # ---------------------------------------------------------------------------
 
 def test_ships_a_fixer_for_every_rule_the_task_calls_out():
-    assert {"R001", "R004", "R005", "R006", "R017"} <= FIXER_RULE_IDS
+    assert {"R001", "R004", "R005", "R006", "R007", "R017"} <= FIXER_RULE_IDS
 
 
 def test_every_fixer_has_a_valid_confidence_and_metadata():
@@ -268,6 +268,75 @@ def test_r006_idempotent():
     )
     once = fix("SseTransportFixer", before)
     twice = fix("SseTransportFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+# ---------------------------------------------------------------------------
+# R007 -- Roots / Sampling / Logging deprecated
+# ---------------------------------------------------------------------------
+
+R007_ROOTS_BEFORE = (
+    "from mcp.types import ServerCapabilities\n\n"
+    "caps = ServerCapabilities(roots=RootsCapability())\n"
+)
+R007_ROOTS_AFTER = (
+    "from mcp.types import ServerCapabilities\n\n"
+    "# TODO(mcp-migrate): Roots is deprecated as a core capability; see "
+    "https://modelcontextprotocol.io/specification/draft/changelog and "
+    "cookbook/18-roots-sampling-logging-deprecated.md\n"
+    "# caps = ServerCapabilities(roots=RootsCapability())\n"
+)
+
+
+def test_r007_comments_out_roots_capability_and_leaves_a_todo():
+    result = fix("DeprecatedCoreFeaturesFixer", R007_ROOTS_BEFORE)
+    assert result.changed
+    assert result.text == R007_ROOTS_AFTER
+    assert FIXERS["DeprecatedCoreFeaturesFixer"].confidence == "review"
+    ast.parse(result.text)
+
+
+def test_r007_adds_todo_without_commenting_multiline_sampling_opener():
+    before = (
+        "async def summarize(ctx):\n"
+        "    result = await ctx.session.create_message(\n"
+        "        messages=[], max_tokens=100,\n"
+        "    )\n"
+        "    return result\n"
+    )
+    result = fix("DeprecatedCoreFeaturesFixer", before)
+    assert result.changed
+    assert "TODO(mcp-migrate): Sampling is deprecated" in result.text
+    assert "result = await ctx.session.create_message(" in result.text
+    assert "#     result = await ctx.session.create_message(" not in result.text
+    ast.parse(result.text)
+
+
+def test_r007_comments_out_logging_capability_declaration():
+    before = "from mcp.types import LoggingCapability, ServerCapabilities\n\n"
+    before += "caps = ServerCapabilities(logging=LoggingCapability())\n"
+    result = fix("DeprecatedCoreFeaturesFixer", before)
+    assert result.changed
+    assert "TODO(mcp-migrate): Logging is deprecated" in result.text
+    assert "# caps = ServerCapabilities(logging=LoggingCapability())" in result.text
+    ast.parse(result.text)
+
+
+def test_r007_never_touches_anthropic_client_wrappers():
+    before = (
+        "class ChatAnthropic:\n"
+        "    async def _create_message(self, **params):\n"
+        "        return await client.messages.create(**params)\n"
+    )
+    result = fix("DeprecatedCoreFeaturesFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r007_idempotent():
+    once = fix("DeprecatedCoreFeaturesFixer", R007_ROOTS_BEFORE)
+    twice = fix("DeprecatedCoreFeaturesFixer", once.text)
     assert twice.changed is False
     assert twice.text == once.text
 
