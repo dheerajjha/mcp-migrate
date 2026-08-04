@@ -303,6 +303,75 @@ def test_r017_idempotent():
 
 
 # ---------------------------------------------------------------------------
+# R021 -- old JSON Schema dialect pin
+# ---------------------------------------------------------------------------
+
+_TARGET_DIALECT = "http://json-schema.org/draft/2020-12/schema"
+
+
+def test_r021_rewrites_draft07_url():
+    before = '"$schema": "http://json-schema.org/draft-07/schema#"\n'
+    result = fix("OldJSONSchemaDialectFixer", before)
+    assert result.changed
+    assert result.text == f'"$schema": "{_TARGET_DIALECT}"\n'
+    assert FIXERS["OldJSONSchemaDialectFixer"].confidence == "safe"
+
+
+def test_r021_rewrites_draft04_url():
+    before = '"$schema": "http://json-schema.org/draft-04/schema"\n'
+    result = fix("OldJSONSchemaDialectFixer", before)
+    assert result.changed
+    assert f'"{_TARGET_DIALECT}"' in result.text
+
+
+def test_r021_rewrites_2019_09_url():
+    before = '"$schema": "http://json-schema.org/draft/2019-09/schema"\n'
+    result = fix("OldJSONSchemaDialectFixer", before)
+    assert result.changed
+    assert f'"{_TARGET_DIALECT}"' in result.text
+
+
+def test_r021_rewrites_short_2019_09():
+    before = '"$schema": "2019-09"\n'
+    result = fix("OldJSONSchemaDialectFixer", before)
+    assert result.changed
+    assert f'"{_TARGET_DIALECT}"' in result.text
+
+
+def test_r021_leaves_ambiguous_comment_alone():
+    """A mention of draft-07 that is NOT inside a $schema assignment must not
+    be touched -- that would be a false positive and silent corruption."""
+    before = "# Previously used draft-07 schema dialect\n"
+    result = fix("OldJSONSchemaDialectFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r021_leaves_unrelated_key_alone():
+    """An old dialect string in a value keyed by something other than $schema
+    must not be rewritten -- the fixer cannot know what that string means."""
+    before = '"description": "http://json-schema.org/draft-07/schema#"\n'
+    result = fix("OldJSONSchemaDialectFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r021_idempotent():
+    before = '"$schema": "http://json-schema.org/draft-07/schema#"\n'
+    once = fix("OldJSONSchemaDialectFixer", before)
+    twice = fix("OldJSONSchemaDialectFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+def test_r021_already_2020_12_is_unchanged():
+    before = f'"$schema": "{_TARGET_DIALECT}"\n'
+    result = fix("OldJSONSchemaDialectFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+# ---------------------------------------------------------------------------
 # CLI: fix / fixers
 # ---------------------------------------------------------------------------
 
