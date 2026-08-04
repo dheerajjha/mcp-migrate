@@ -349,6 +349,26 @@ Listing your own server on the board is separate from all three and takes
 about 60 seconds -- see
 [CONTRIBUTING.md](CONTRIBUTING.md#add-your-server-to-the-board-60-seconds).
 
+## Contributors
+
+TypeScript support exists because these people built it. The language
+backend shipped with two reference ports (R001 and R006). **The other twelve
+were contributed** -- in parallel, by seven people who mostly hadn't spoken
+to each other, each working from a separate issue.
+
+| | Contribution |
+| --- | --- |
+| [@syf2211](https://github.com/syf2211) | R015, R016, R020 ports; R007 and R014 fixers; the R003 cookbook recipe. Also found and reported the R016 false negative that became [#66](https://github.com/dheerajjha/mcp-migrate/issues/66) rather than leaving it buried. |
+| [@PuvaanRaaj](https://github.com/PuvaanRaaj) | R012, R018, R019 ports |
+| [@atiqur-rahman-pro](https://github.com/atiqur-rahman-pro) | R003 and R004 ports, then replaced R004's fixed 40-line look-ahead with a brace-depth scan ([#65](https://github.com/dheerajjha/mcp-migrate/issues/65)) |
+| [@MasRama](https://github.com/MasRama) | R005 and R011 ports. Reported the hardcoded coverage assertion that would have made every parallel port conflict with every other one -- the single most useful bug anyone has filed here. |
+| [@s35153](https://github.com/s35153) | R007 and R009 ports |
+| [@IronLad123](https://github.com/IronLad123) | Routed R016's metadata check through content spans, so a comment can no longer silence a real finding ([#66](https://github.com/dheerajjha/mcp-migrate/issues/66)) |
+| [@li2631026381-alt](https://github.com/li2631026381-alt) | Hoisted R015's TypeScript scans out of the per-file loop -- 63.0ms to 3.1ms at 200 files |
+
+`git shortlog -sne` is the authoritative list; [`.mailmap`](.mailmap) folds
+the duplicate identities so nobody is counted twice or split in half.
+
 ## Working principles
 
 **A false positive is worse than a missed finding.** This tool publishes

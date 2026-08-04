@@ -1,0 +1,14 @@
+# Canonical identities, so `git shortlog -sne` and GitHub's contributor
+# graph agree with reality. Several people committed under two spellings of
+# their own name or from two addresses (a local git config on one machine,
+# GitHub's noreply address on another), which splits one person into two
+# rows and undercounts them.
+#
+# Left of the angle brackets is the canonical name; entries after it are the
+# variants being folded in.
+
+Dheeraj Jha <iamdheerajjha@gmail.com> Dheeraj <iamdheerajjha@gmail.com>
+
+Atiqur Rahman <rahman.atiqur.pro@gmail.com> atiqur rahman <rahman.atiqur.pro@gmail.com>
+
+MasRama <53245560+MasRama@users.noreply.github.com> MasRama <ryushineo@gmail.com>
