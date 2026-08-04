@@ -32,6 +32,7 @@ from mcp_migrate.rules.r009_initialize_handshake_removed import (
 from mcp_migrate.rules.r019_tasks_polling_replaces_blocking_result import (
     TasksPollingReplacesBlockingResult,
 )
+from mcp_migrate.rules.r010_server_discover_missing import ServerDiscoverMissing
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
 from mcp_migrate.rules.r012_logging_set_level_removed import LoggingSetLevelRemoved
 from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
@@ -923,6 +924,125 @@ server.setRequestHandler("tools/list", async () => {
     findings = CacheableResultMetadataMissing().check(project)
     assert len(findings) == 1
     assert findings[0].line == 5
+
+
+# --- R010: server/discover missing ---------------------------------------
+
+def test_r010_finds_handlers_without_discover_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = ServerDiscoverMissing().check(project)
+    assert len(findings) == 1
+    assert "server/discover" in findings[0].message
+
+
+def test_r010_counts_mcpserver_registration_when_the_sdk_is_imported(tmp_path):
+    code = """\
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+
+const server = new McpServer({ name: "demo", version: "1.0.0" });
+
+server.registerTool("echo", { description: "echo" }, async () => ({ content: [] }));
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert len(ServerDiscoverMissing().check(project)) == 1
+
+
+def test_r010_stays_silent_when_discover_is_implemented_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
+server.setRequestHandler("server/discover", async () => ({
+  protocolVersions: ["2026-07-28"],
+  capabilities: {},
+}));
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert ServerDiscoverMissing().check(project) == []
+
+
+def test_r010_accepts_a_named_discover_handler_in_typescript(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
+
+export async function handleDiscover() {
+  return { protocolVersions: ["2026-07-28"], capabilities: {} };
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert ServerDiscoverMissing().check(project) == []
+
+
+def test_r010_is_not_satisfied_by_a_name_merely_containing_discover(tmp_path):
+    # The Python side's worst bug: `_try_discover_fields_from_existing_epic`
+    # read as "implements server/discover" and suppressed the rule for a
+    # whole project. A withheld finding is the one nobody ever sees.
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
+
+async function autoDiscoverTools() { return []; }
+async function discoverCapabilitiesFromCache() { return {}; }
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert len(ServerDiscoverMissing().check(project)) == 1
+
+
+def test_r010_is_not_satisfied_by_discover_named_only_in_a_comment(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
+
+// TODO: implement server/discover before the 2026-07-28 deadline.
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert len(ServerDiscoverMissing().check(project)) == 1
+
+
+def test_r010_stays_silent_on_typescript_with_no_handlers(tmp_path):
+    # A client, or a library. Not an MCP server, so the absence of
+    # server/discover says nothing about it.
+    code = """\
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+
+const client = new Client({ name: "demo", version: "1.0.0" });
+await client.connect(transport);
+"""
+    project = load_project(_write(tmp_path, "client.ts", code)).for_language("typescript")
+    assert ServerDiscoverMissing().check(project) == []
+
+
+def test_r010_stays_silent_without_the_sdk_in_play(tmp_path):
+    # `.tool(` and `.prompt(` are generic builder-API names. Without the
+    # SDK imported anywhere, this is somebody else's fluent interface.
+    code = """\
+const pipeline = builder
+  .tool("resize", { width: 100 })
+  .prompt("describe this image");
+"""
+    project = load_project(_write(tmp_path, "build.ts", code)).for_language("typescript")
+    assert ServerDiscoverMissing().check(project) == []
 
 
 # --- the language split itself --------------------------------------------
