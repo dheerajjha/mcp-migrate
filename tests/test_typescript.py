@@ -21,6 +21,7 @@ from mcp_migrate.cli import main, run_check
 from mcp_migrate.rules import all_rules
 from mcp_migrate.rules.base import Project, SourceFile, _ts_spans
 from mcp_migrate.rules.r001_session_id_removed import SessionIdRemoved
+from mcp_migrate.rules.r002_connection_state import PerConnectionState
 from mcp_migrate.rules.r003_routing_headers import MissingRoutingHeaders
 from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
@@ -85,6 +86,40 @@ def test_r006_finds_sse_in_typescript(tmp_path):
     findings = DeprecatedSSETransport().check(project.for_language("typescript"))
     # The SDK import, the route literal, and the constructor.
     assert len(findings) >= 2
+
+
+def test_r002_finds_module_level_connection_state_in_typescript(tmp_path):
+    code = """\
+const sessions = new Map<string, any>();
+
+export async function handleRequest(req, res) {
+  sessions.set(req.id, req);
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = PerConnectionState().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 1
+
+
+def test_r002_stays_silent_on_stateless_typescript_server(tmp_path):
+    code = """\
+export async function handleRequest(req, res) {
+  const localCache = new Map();
+  return req;
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert PerConnectionState().check(project) == []
+
+
+def test_r002_ignores_connection_state_named_only_in_comment(tmp_path):
+    code = """\
+// const sessions = new Map();
+export const STACK = "mcp";
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert PerConnectionState().check(project) == []
 
 
 def test_r015_finds_missing_result_type_in_typescript(tmp_path):
