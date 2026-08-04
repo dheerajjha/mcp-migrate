@@ -362,6 +362,46 @@ def test_r001_ignores_the_header_named_only_in_prose(tmp_path):
     assert SessionIdRemoved().check(project) == []
 
 
+def test_r001_ignores_the_identifier_in_a_log_string(tmp_path):
+    # R001's identifier half uses search_code, which skips string tokens.
+    # A console.info/log/warn/error string *naming* mcpSessionId is prose,
+    # not a real reference to it.
+    project = load_project(_write(
+        tmp_path, "server.ts",
+        'console.info("Ignoring obsolete mcpSessionId metadata");\n'
+        'export const x = 1;\n',
+    )).for_language("typescript")
+    assert SessionIdRemoved().check(project) == []
+
+
+def test_r001_finds_header_access_in_typescript(tmp_path):
+    # The header-string half still uses search_wire, so a real header
+    # access still fires.
+    project = load_project(_write(
+        tmp_path, "transport.ts",
+        'export function handle(req) {\n'
+        '  const sid = req.headers["mcp-session-id"];\n'
+        '  return sid;\n'
+        '}\n',
+    )).for_language("typescript")
+    findings = SessionIdRemoved().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 2
+
+
+def test_r001_finds_identifier_as_code_in_typescript(tmp_path):
+    # A real variable declaration still fires through search_code.
+    project = load_project(_write(
+        tmp_path, "server.ts",
+        'export function handle(req) {\n'
+        '  const mcpSessionId = req.sessionId;\n'
+        '  return mcpSessionId;\n'
+        '}\n',
+    )).for_language("typescript")
+    findings = SessionIdRemoved().check(project)
+    assert {f.line for f in findings} == {2, 3}
+
+
 # --- R005: extensions map on ServerCapabilities --------------------------
 
 def test_r005_finds_missing_extensions_in_typescript(tmp_path):
