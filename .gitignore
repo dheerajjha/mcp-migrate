@@ -57,3 +57,6 @@ ACTION-PLAN.md
 
 # Promotional drafts -- internal, not for publication
 drafts/
+
+# Local operator scripts -- daily standup, scans. Not for publication.
+dev/
