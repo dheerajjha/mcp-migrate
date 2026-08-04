@@ -35,10 +35,14 @@ TEST_DIR_SEGMENTS = {
 # The `*.test.*` / `*.spec.*` pair is close to universal in JS/TS and is
 # the dominant convention for tests that sit *beside* the module they
 # cover, where no directory segment can give them away.
+# Name is historical (tests first). Also covers type-checked docs
+# examples (*.examples.ts) used by e.g. modelcontextprotocol/typescript-sdk
+# for JSDoc snippet sync — prose that compiles, not production servers.
 TEST_FILE_PATTERNS = (
     "test_*.py", "*_test.py", "conftest.py",
     "*.test.ts", "*.test.tsx", "*.test.mts", "*.test.cts",
     "*.spec.ts", "*.spec.tsx", "*.spec.mts", "*.spec.cts",
+    "*.examples.ts", "*.examples.tsx", "*.examples.mts", "*.examples.cts",
 )
 
 
