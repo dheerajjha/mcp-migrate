@@ -31,6 +31,15 @@ FEATURES_LITERAL = {
     r"notifications/elicitation/complete": "notifications/elicitation/complete",
 }
 
+# The TypeScript SDK exports Zod schemas for request handling. These names
+# are specific to the removed MCP server-initiated requests, unlike generic
+# callback names such as `createMessage` or `listRoots`.
+TS_FEATURES_CODE = {
+    r"\bListRootsRequestSchema\b": "Server-initiated roots/list",
+    r"\bCreateMessageRequestSchema\b": "Server-initiated sampling/createMessage",
+    r"\bElicitRequestSchema\b": "Server-initiated elicitation/create",
+}
+
 
 class MultiRoundTripReplacesServerInitiated(Rule):
     id = "R018"
@@ -43,8 +52,31 @@ class MultiRoundTripReplacesServerInitiated(Rule):
         "an InputRequiredResult instead and let the client retry the call with "
         "inputResponses."
     )
+    languages = ("python", "typescript")
 
     def check(self, project: Project) -> list[Finding]:
+        if project.language == "typescript":
+            out: list[Finding] = []
+            for pattern, name in TS_FEATURES_CODE.items():
+                for f, line, text in project.search_code(pattern):
+                    out.append(self.finding(
+                        f"{name} was replaced by Multi Round-Trip Requests (InputRequiredResult "
+                        "+ inputResponses).",
+                        f,
+                        line,
+                        text,
+                    ))
+            for pattern, name in FEATURES_LITERAL.items():
+                for f, line, text in project.search_wire(pattern):
+                    out.append(self.finding(
+                        f"{name} was replaced by Multi Round-Trip Requests (InputRequiredResult "
+                        "+ inputResponses).",
+                        f,
+                        line,
+                        text,
+                    ))
+            return out
+
         out: list[Finding] = []
         for pattern, name in FEATURES_CODE.items():
             # search_code: a comment/docstring mentioning "sampling" or
