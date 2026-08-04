@@ -39,7 +39,7 @@ def fix(name: str, source: str, path: str = "server.py"):
 # ---------------------------------------------------------------------------
 
 def test_ships_a_fixer_for_every_rule_the_task_calls_out():
-    assert {"R001", "R004", "R005", "R006", "R007", "R014", "R017", "R019"} <= FIXER_RULE_IDS
+    assert {"R001", "R003", "R004", "R005", "R006", "R007", "R014", "R017", "R019"} <= FIXER_RULE_IDS
 
 
 def test_every_fixer_has_a_valid_confidence_and_metadata():
@@ -268,6 +268,141 @@ def test_r006_idempotent():
     )
     once = fix("SseTransportFixer", before)
     twice = fix("SseTransportFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+# ---------------------------------------------------------------------------
+# R003 -- Mcp-Method / Mcp-Name routing headers
+# ---------------------------------------------------------------------------
+
+R003_INLINE_HEADERS_BEFORE = (
+    'import httpx\n'
+    '\n'
+    '_client = httpx.Client()\n'
+    '\n'
+    '\n'
+    'def call_tool(tool_name: str, arguments: dict) -> None:\n'
+    '    _client.post(\n'
+    '        "https://relay.internal/mcp",\n'
+    '        headers={"Content-Type": "application/json"},\n'
+    '        json={"jsonrpc": "2.0", "method": "tools/call", "params": {"name": tool_name, "arguments": arguments}},\n'
+    '    )\n'
+)
+R003_INLINE_HEADERS_AFTER = (
+    'import httpx\n'
+    '\n'
+    '_client = httpx.Client()\n'
+    '\n'
+    '\n'
+    'def call_tool(tool_name: str, arguments: dict) -> None:\n'
+    '    _client.post(\n'
+    '        "https://relay.internal/mcp",\n'
+    '        headers={"Content-Type": "application/json", "Mcp-Method": "tools/call", "Mcp-Name": tool_name},\n'
+    '        json={"jsonrpc": "2.0", "method": "tools/call", "params": {"name": tool_name, "arguments": arguments}},\n'
+    '    )\n'
+)
+
+R003_TODO_BEFORE = (
+    'import httpx\n'
+    '\n'
+    '_client = httpx.Client()\n'
+    '\n'
+    '\n'
+    'def notify(method: str, event: dict) -> None:\n'
+    '    _client.post(\n'
+    '        "https://hooks.internal.example.com/mcp-events",\n'
+    '        json={"jsonrpc": "2.0", "method": method, "params": event},\n'
+    '    )\n'
+)
+
+
+def test_r003_adds_routing_headers_to_inline_headers_dict():
+    result = fix("RoutingHeadersFixer", R003_INLINE_HEADERS_BEFORE)
+    assert result.changed
+    assert result.text == R003_INLINE_HEADERS_AFTER
+    assert FIXERS["RoutingHeadersFixer"].confidence == "review"
+    ast.parse(result.text)
+
+
+def test_r003_leaves_plain_rest_client_alone():
+    before = (
+        'import httpx\n'
+        '\n'
+        'def fetch_issue(issue_id: str):\n'
+        '    return httpx.get(f"https://jira.example.com/rest/api/2/issue/{issue_id}")\n'
+    )
+    result = fix("RoutingHeadersFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r003_adds_routing_headers_to_multiline_headers_dict():
+    before = (
+        'import httpx\n'
+        '\n'
+        '_client = httpx.Client()\n'
+        '\n'
+        '\n'
+        'def call_tool(tool_name: str, arguments: dict) -> None:\n'
+        '    _client.post(\n'
+        '        "https://relay.internal/mcp",\n'
+        '        headers={\n'
+        '            "Content-Type": "application/json",\n'
+        '        },\n'
+        '        json={"jsonrpc": "2.0", "method": "tools/call", "params": {"name": tool_name, "arguments": arguments}},\n'
+        '    )\n'
+    )
+    after = (
+        'import httpx\n'
+        '\n'
+        '_client = httpx.Client()\n'
+        '\n'
+        '\n'
+        'def call_tool(tool_name: str, arguments: dict) -> None:\n'
+        '    _client.post(\n'
+        '        "https://relay.internal/mcp",\n'
+        '        headers={\n'
+        '            "Content-Type": "application/json",\n'
+        '            "Mcp-Method": "tools/call",\n'
+        '            "Mcp-Name": tool_name,\n'
+        '        },\n'
+        '        json={"jsonrpc": "2.0", "method": "tools/call", "params": {"name": tool_name, "arguments": arguments}},\n'
+        '    )\n'
+    )
+    result = fix("RoutingHeadersFixer", before)
+    assert result.changed
+    assert result.text == after
+    ast.parse(result.text)
+
+
+def test_r003_adds_todo_when_headers_dict_is_not_inline():
+    result = fix("RoutingHeadersFixer", R003_TODO_BEFORE)
+    assert result.changed
+    assert result.text.count("TODO(mcp-migrate): add Mcp-Method") == 1
+    assert result.text.index("TODO(mcp-migrate)") < result.text.index("_client.post(")
+    assert '"Mcp-Method":' not in result.text
+    ast.parse(result.text)
+
+
+def test_r003_refuses_to_guess_on_headers_variable():
+    before = (
+        'import httpx\n'
+        '\n'
+        'def relay(method: str, payload: dict, base_headers: dict) -> None:\n'
+        '    httpx.post("https://relay/mcp", headers=base_headers, json={"method": method, "jsonrpc": "2.0"})\n'
+    )
+    result = fix("RoutingHeadersFixer", before)
+    assert result.changed
+    assert "TODO(mcp-migrate)" in result.text
+    assert "headers=base_headers" in result.text
+    assert '"Mcp-Method":' not in result.text
+    ast.parse(result.text)
+
+
+def test_r003_idempotent():
+    once = fix("RoutingHeadersFixer", R003_INLINE_HEADERS_BEFORE)
+    twice = fix("RoutingHeadersFixer", once.text)
     assert twice.changed is False
     assert twice.text == once.text
 
