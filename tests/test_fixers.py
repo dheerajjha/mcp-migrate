@@ -39,7 +39,7 @@ def fix(name: str, source: str, path: str = "server.py"):
 # ---------------------------------------------------------------------------
 
 def test_ships_a_fixer_for_every_rule_the_task_calls_out():
-    assert {"R001", "R004", "R005", "R006", "R007", "R014", "R017"} <= FIXER_RULE_IDS
+    assert {"R001", "R004", "R005", "R006", "R007", "R014", "R017", "R019"} <= FIXER_RULE_IDS
 
 
 def test_every_fixer_has_a_valid_confidence_and_metadata():
@@ -417,6 +417,79 @@ def test_r014_leaves_event_store_append_logic_alone():
 def test_r014_idempotent():
     once = fix("SseResumabilityFixer", R014_BEFORE)
     twice = fix("SseResumabilityFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+# ---------------------------------------------------------------------------
+# R019 -- tasks/list and blocking tasks/result removed
+# ---------------------------------------------------------------------------
+
+R019_BEFORE = (
+    'from mcp.types import GetTaskPayloadRequest, ListTasksRequest\n'
+    '\n'
+    'async def wait_for_result(session, task_id: str):\n'
+    '    req = GetTaskPayloadRequest(taskId=task_id)\n'
+    '    return await session.send_request(req)\n'
+    '\n'
+    'METHODS = {"tasks/list": list_tasks, "tasks/result": blocking_result}\n'
+)
+R019_AFTER = (
+    '# TODO(mcp-migrate): tasks/list and blocking tasks/result are removed; '
+    'poll with tasks/get + tasks/update and declare io.modelcontextprotocol/tasks '
+    'under extensions — see https://modelcontextprotocol.io/specification/2026-07-28/changelog '
+    'and cookbook/11-tasks-polling.md\n'
+    '# from mcp.types import GetTaskPayloadRequest, ListTasksRequest\n'
+    '\n'
+    'async def wait_for_result(session, task_id: str):\n'
+    '    # TODO(mcp-migrate): tasks/list and blocking tasks/result are removed; '
+    'poll with tasks/get + tasks/update and declare io.modelcontextprotocol/tasks '
+    'under extensions — see https://modelcontextprotocol.io/specification/2026-07-28/changelog '
+    'and cookbook/11-tasks-polling.md\n'
+    '    # req = GetTaskPayloadRequest(taskId=task_id)\n'
+    '    return await session.send_request(req)\n'
+    '\n'
+    '# TODO(mcp-migrate): tasks/list and blocking tasks/result are removed; '
+    'poll with tasks/get + tasks/update and declare io.modelcontextprotocol/tasks '
+    'under extensions — see https://modelcontextprotocol.io/specification/2026-07-28/changelog '
+    'and cookbook/11-tasks-polling.md\n'
+    '# METHODS = {"tasks/list": list_tasks, "tasks/result": blocking_result}\n'
+)
+
+
+def test_r019_comments_out_sdk_types_and_wire_methods():
+    result = fix("TasksPollingFixer", R019_BEFORE)
+    assert result.changed
+    assert result.text == R019_AFTER
+    assert FIXERS["TasksPollingFixer"].confidence == "review"
+    ast.parse(result.text)
+
+
+def test_r019_skips_block_opener_handler_signatures():
+    before = (
+        "async def handle_tasks(request: ListTasksRequest):\n"
+        "    return []\n"
+    )
+    result = fix("TasksPollingFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r019_leaves_docstring_prose_alone():
+    before = (
+        '"""blocking tasks/list + tasks/result pair. Kept only as a migration example."""\n'
+        'METHODS = {"tasks/list": list_tasks}\n'
+    )
+    result = fix("TasksPollingFixer", before)
+    assert result.changed
+    assert before.splitlines()[0] in result.text
+    assert '# METHODS = {"tasks/list": list_tasks}' in result.text
+    ast.parse(result.text)
+
+
+def test_r019_idempotent():
+    once = fix("TasksPollingFixer", R019_BEFORE)
+    twice = fix("TasksPollingFixer", once.text)
     assert twice.changed is False
     assert twice.text == once.text
 
