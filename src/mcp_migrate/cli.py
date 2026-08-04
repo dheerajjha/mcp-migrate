@@ -130,6 +130,25 @@ def cmd_check(args) -> int:
     sdk_info = detect_sdk(root)
 
     if args.json:
+        if sdk_info.is_sdk:
+            print(json.dumps({
+                "spec": SPEC,
+                "path": str(root),
+                "scannable": True,
+                "is_sdk": True,
+                "sdk_reason": sdk_info.reason,
+                "languages": dict(counts),
+                "grade": None,
+                "score": None,
+                "files_scanned": len(project.files),
+                "findings": [{
+                    "rule": f.rule_id,
+                    "severity": rules[f.rule_id].severity,
+                    "message": f.message,
+                    "location": f.location(),
+                } for f in findings],
+            }, indent=2))
+            return EXIT_OK
         if reason:
             print(json.dumps({
                 "spec": SPEC,
@@ -151,25 +170,6 @@ def cmd_check(args) -> int:
                 } for f in findings],
             }, indent=2))
             return EXIT_UNSCANNABLE
-        if sdk_info.is_sdk:
-            print(json.dumps({
-                "spec": SPEC,
-                "path": str(root),
-                "scannable": True,
-                "is_sdk": True,
-                "sdk_reason": sdk_info.reason,
-                "languages": dict(counts),
-                "grade": None,
-                "score": None,
-                "files_scanned": len(project.files),
-                "findings": [{
-                    "rule": f.rule_id,
-                    "severity": rules[f.rule_id].severity,
-                    "message": f.message,
-                    "location": f.location(),
-                } for f in findings],
-            }, indent=2))
-            return EXIT_OK
         print(json.dumps({
             "spec": SPEC,
             "path": str(root),
@@ -191,35 +191,6 @@ def cmd_check(args) -> int:
 
     console.print()
     console.print(f"[bold]mcp-migrate[/bold] [dim]v{__version__}[/dim]  ->  {root.name}")
-
-    if reason:
-        console.print()
-        # Not .capitalize() -- that lowercases the rest, turning "24
-        # TypeScript" into "24 typescript".
-        headline = "No grade for this one." if findings else "Nothing scannable here."
-        console.print(
-            f"[bold yellow]{headline}[/bold yellow] {reason[0].upper()}{reason[1:]}."
-        )
-        if findings:
-            console.print()
-            for f in findings:
-                sev = rules[f.rule_id].severity
-                console.print(
-                    f"  [{SEV_STYLE[sev]}]{sev}[/]  {f.rule_id}  {f.location()}  {f.message}"
-                )
-            console.print()
-            console.print(
-                f"[dim]{len(findings)} finding(s) from the rules that do cover this "
-                "language. Real, and worth fixing -- but a letter grade would be a "
-                "claim about the rules that didn't run.[/dim]"
-            )
-        _print_language_hint(console, counts)
-        console.print(
-            "[dim]No grade and no badge: this tool has no opinion about code it could "
-            "not read.[/dim]"
-        )
-        console.print()
-        return EXIT_UNSCANNABLE
 
     if sdk_info.is_sdk:
         console.print()
@@ -259,6 +230,35 @@ def cmd_check(args) -> int:
         )
         console.print()
         return EXIT_OK
+
+    if reason:
+        console.print()
+        # Not .capitalize() -- that lowercases the rest, turning "24
+        # TypeScript" into "24 typescript".
+        headline = "No grade for this one." if findings else "Nothing scannable here."
+        console.print(
+            f"[bold yellow]{headline}[/bold yellow] {reason[0].upper()}{reason[1:]}."
+        )
+        if findings:
+            console.print()
+            for f in findings:
+                sev = rules[f.rule_id].severity
+                console.print(
+                    f"  [{SEV_STYLE[sev]}]{sev}[/]  {f.rule_id}  {f.location()}  {f.message}"
+                )
+            console.print()
+            console.print(
+                f"[dim]{len(findings)} finding(s) from the rules that do cover this "
+                "language. Real, and worth fixing -- but a letter grade would be a "
+                "claim about the rules that didn't run.[/dim]"
+            )
+        _print_language_hint(console, counts)
+        console.print(
+            "[dim]No grade and no badge: this tool has no opinion about code it could "
+            "not read.[/dim]"
+        )
+        console.print()
+        return EXIT_UNSCANNABLE
 
     n_python = sum(1 for f in project.files if f.language == "python")
     console.print(f"[dim]{n_python} Python files, {len(rules)} rules, spec {SPEC}[/dim]")
@@ -518,6 +518,21 @@ def cmd_entry(args) -> int:
 
     project, _, findings, value, grade = run_check(root)
     counts = survey(root)
+
+    sdk_info = detect_sdk(root)
+    if sdk_info.is_sdk:
+        if sdk_info.package_name:
+            err.print(
+                f"[bold red]Refusing to generate an entry:[/bold red] {root.name} looks like a protocol SDK "
+                f"(package name \"{sdk_info.package_name}\"), not a server. mcp-migrate does not publish "
+                f"registry entries for protocol implementations."
+            )
+        else:
+            err.print(
+                f"[bold red]Refusing to generate an entry:[/bold red] {root.name} is configured as a library/SDK. "
+                f"mcp-migrate does not publish registry entries for protocol implementations."
+            )
+        return EXIT_UNSCANNABLE
 
     reason = unscannable_reason(root, project, counts, include_tests=False)
     if reason:
