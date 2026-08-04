@@ -53,19 +53,26 @@ class SessionIdRemoved(Rule):
         ]
 
     def _check_ts(self, project: Project) -> list[Finding]:
-        # search_wire, not search_code: in TypeScript the header name lives
-        # in a string literal, which search_code discards wholesale -- it
-        # would find nothing at all. search_wire keeps string literals and
-        # drops comments, which is exactly the split needed here.
         seen: set[tuple[str, int]] = set()
         out: list[Finding] = []
-        for pattern in (TS_IDENT_RX, TS_HEADER_RX):
-            for f, line, text in project.search_wire(pattern, flags=re.IGNORECASE):
-                # The two patterns can both hit the same line
-                # (`const mcpSessionId = req.headers["mcp-session-id"]`);
-                # that is one problem, not two.
-                if (str(f.path), line) in seen:
-                    continue
-                seen.add((str(f.path), line))
-                out.append(self.finding(self.MESSAGE, f, line, text))
+
+        # Identifiers (mcpSessionId, MCP_SESSION_ID) use search_code:
+        # a log/comment/error-message string that merely mentions the
+        # identifier isn't a real reference to it.
+        for f, line, text in project.search_code(TS_IDENT_RX, flags=re.IGNORECASE):
+            seen.add((str(f.path), line))
+            out.append(self.finding(self.MESSAGE, f, line, text))
+
+        # Header-string literals ("mcp-session-id") use search_wire:
+        # the header name lives in a string literal, which search_code
+        # discards wholesale -- it would find nothing at all. search_wire
+        # keeps string literals and drops comments.
+        for f, line, text in project.search_wire(TS_HEADER_RX, flags=re.IGNORECASE):
+            # The two patterns can both hit the same line
+            # (`const mcpSessionId = req.headers["mcp-session-id"]`);
+            # that is one problem, not two.
+            if (str(f.path), line) in seen:
+                continue
+            seen.add((str(f.path), line))
+            out.append(self.finding(self.MESSAGE, f, line, text))
         return sorted(out, key=lambda x: (str(x.path or ""), x.line or 0))
