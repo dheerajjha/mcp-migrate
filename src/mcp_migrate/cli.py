@@ -19,6 +19,7 @@ from .languages import PARTIAL, SUPPORTED, describe, primary, survey
 from .rules import all_rules
 from .rules.base import Project, SourceFile
 from .scan import load_project
+from .sdk import detect_sdk
 
 SPEC = "2026-07-28"
 SEV_STYLE = {"breaking": "bold red", "deprecated": "yellow", "advisory": "cyan"}
@@ -126,6 +127,7 @@ def cmd_check(args) -> int:
     project, rules, findings, value, grade = run_check(root, include_tests=args.include_tests)
     counts = survey(root)
     reason = unscannable_reason(root, project, counts, include_tests=args.include_tests)
+    sdk_info = detect_sdk(root)
 
     if args.json:
         if reason:
@@ -149,6 +151,25 @@ def cmd_check(args) -> int:
                 } for f in findings],
             }, indent=2))
             return EXIT_UNSCANNABLE
+        if sdk_info.is_sdk:
+            print(json.dumps({
+                "spec": SPEC,
+                "path": str(root),
+                "scannable": True,
+                "is_sdk": True,
+                "sdk_reason": sdk_info.reason,
+                "languages": dict(counts),
+                "grade": None,
+                "score": None,
+                "files_scanned": len(project.files),
+                "findings": [{
+                    "rule": f.rule_id,
+                    "severity": rules[f.rule_id].severity,
+                    "message": f.message,
+                    "location": f.location(),
+                } for f in findings],
+            }, indent=2))
+            return EXIT_OK
         print(json.dumps({
             "spec": SPEC,
             "path": str(root),
@@ -199,6 +220,45 @@ def cmd_check(args) -> int:
         )
         console.print()
         return EXIT_UNSCANNABLE
+
+    if sdk_info.is_sdk:
+        console.print()
+        if sdk_info.package_name:
+            console.print(
+                f"[bold yellow]No grade:[/] this looks like a protocol SDK (package name \"{sdk_info.package_name}\"), not a server."
+            )
+        else:
+            console.print(
+                "[bold yellow]No grade:[/] project configured as a library/SDK."
+            )
+        if findings:
+            console.print(
+                f"An SDK implements the removed surface on purpose. {len(findings)} findings listed below as a migration checklist, not a verdict."
+            )
+            console.print()
+            table = Table(show_header=True, header_style="bold", box=None, pad_edge=False)
+            table.add_column("", width=10)
+            table.add_column("rule", width=6)
+            table.add_column("where", overflow="fold")
+            table.add_column("what")
+            for rule_id, group in itertools.groupby(findings, key=lambda f: f.rule_id):
+                group = list(group)
+                sev = rules[rule_id].severity
+                for f in group[:MAX_SHOWN_PER_RULE]:
+                    table.add_row(f"[{SEV_STYLE[sev]}]{sev}[/]", f.rule_id, f.location(), f.message)
+                extra = len(group) - MAX_SHOWN_PER_RULE
+                if extra > 0:
+                    table.add_row("", "", "", f"[dim]+{extra} more {rule_id} finding(s) (see --json for all)[/dim]")
+            console.print(table)
+            console.print()
+        else:
+            console.print("No findings listed for this SDK.")
+            console.print()
+        console.print(
+            "[dim]No grade and no badge: this tool has no opinion about code that implements the protocol itself.[/dim]"
+        )
+        console.print()
+        return EXIT_OK
 
     n_python = sum(1 for f in project.files if f.language == "python")
     console.print(f"[dim]{n_python} Python files, {len(rules)} rules, spec {SPEC}[/dim]")
