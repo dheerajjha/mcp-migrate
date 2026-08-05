@@ -20,7 +20,7 @@ from pathlib import Path
 from .base import Fixer, FixResult
 
 TODO = (
-    "# TODO(mcp-migrate): RFC 7591 Dynamic Client Registration is deprecated in "
+    "TODO(mcp-migrate): RFC 7591 Dynamic Client Registration is deprecated in "
     "2026-07-28; migrate to Client ID Metadata Document (CIMD). "
     "See cookbook/12-dynamic-client-registration-deprecated.md"
 )
