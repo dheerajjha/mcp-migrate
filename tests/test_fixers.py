@@ -448,3 +448,65 @@ def test_fix_write_then_check_improves_the_grade(roundtrip_copy, capsys):
     # And overall (not just the rules we fix), the project has strictly
     # fewer findings after the fix than before.
     assert len(findings_after) < len(findings_before)
+
+
+# ---------------------------------------------------------------------------
+# Issue #105 -- String literal protection in fixers
+# ---------------------------------------------------------------------------
+
+from mcp_migrate.fixers._textedit import string_lines
+
+
+def test_string_lines_helper_detects_python_docstrings_and_ts_template_literals():
+    py_src = 'x = 1\n"""\ndocstring\nline 3\n"""\ny = 2\n'
+    assert string_lines(py_src, "python") == {2, 3, 4, 5}
+
+    ts_src = "let a = 1;\nconst b = `\nmultiline\ntemplate\n`;\nlet c = 2;\n"
+    assert string_lines(ts_src, "typescript") == {2, 3, 4, 5}
+
+
+def test_fixers_decline_to_edit_inside_docstrings_issue_105():
+    """Reproduction from Issue #105: Fixers must not insert comments or rewrite inside string literals."""
+    src = '''HELP = """
+Legacy notes, do not execute:
+  method "tasks/list" and "tasks/result" are gone
+  resources/read returned -32002 back then
+"""
+'''
+    for fx in all_fixers():
+        r = fx.fix(src, Path("server.py"))
+        assert r.changed is False
+        assert r.text == src
+        assert ast.dump(ast.parse(src)) == ast.dump(ast.parse(r.text))
+
+
+def test_r017_fixer_skips_docstring_and_rewrites_code_line():
+    """R017 skips -32002 in docstrings, but still rewrites -32002 on real code line."""
+    src = (
+        '# Docstring mentioning -32002\n'
+        '"""\n'
+        'resources/read returned -32002 back then\n'
+        '"""\n'
+        '# Real code\n'
+        'err_code = -32002  # resource not found\n'
+    )
+    result = FIXERS["ResourceNotFoundErrorCodeFixer"].fix(src, Path("server.py"))
+    assert result.changed
+    assert 'resources/read returned -32002 back then' in result.text
+    assert 'err_code = -32602  # resource not found' in result.text
+
+
+def test_r001_fixer_skips_docstring_and_comments_code_line():
+    """R001 skips header access in docstrings, but still comments out real code header access."""
+    src = (
+        '"""\n'
+        'request.headers.get("Mcp-Session-Id")\n'
+        '"""\n'
+        'def get_session(req):\n'
+        '    s = req.headers.get("Mcp-Session-Id")\n'
+    )
+    result = FIXERS["SessionIdHeaderFixer"].fix(src, Path("server.py"))
+    assert result.changed
+    lines = result.text.splitlines()
+    assert lines[1] == 'request.headers.get("Mcp-Session-Id")'
+    assert any('TODO(mcp-migrate)' in ln for ln in lines)

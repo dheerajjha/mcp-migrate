@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ._textedit import string_lines
 from .base import Fixer, FixResult
 
 CODE_RX = re.compile(r"-32002\b")
@@ -32,8 +33,11 @@ class ResourceNotFoundErrorCodeFixer(Fixer):
     def fix(self, source: str, path: Path) -> FixResult:
         lines = source.splitlines(keepends=True)
         changes: list[str] = []
+        str_lines = string_lines(source, path)
 
         for i, line in enumerate(lines):
+            if (i + 1) in str_lines:
+                continue
             if not CODE_RX.search(line):
                 continue
             if not CONTEXT_RX.search(line):
