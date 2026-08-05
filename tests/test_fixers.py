@@ -306,14 +306,14 @@ def test_r017_idempotent():
 # R021 -- old JSON Schema dialect pin
 # ---------------------------------------------------------------------------
 
-_TARGET_DIALECT = "http://json-schema.org/draft/2020-12/schema"
+_TARGET_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 
 
 def test_r021_rewrites_draft07_url():
     before = '"$schema": "http://json-schema.org/draft-07/schema#"\n'
     result = fix("OldJSONSchemaDialectFixer", before)
     assert result.changed
-    assert result.text == f'"$schema": "{_TARGET_DIALECT}"\n'
+    assert result.text == '"$schema": "https://json-schema.org/draft/2020-12/schema"\n'
     assert FIXERS["OldJSONSchemaDialectFixer"].confidence == "safe"
 
 

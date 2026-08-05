@@ -24,7 +24,7 @@ from pathlib import Path
 from .base import Fixer, FixResult
 
 # The authoritative 2020-12 $schema URL (no trailing #)
-_TARGET_DIALECT = "http://json-schema.org/draft/2020-12/schema"
+_TARGET_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 
 # Matches the old-dialect string only when it appears on the same line as
 # a "$schema": assignment (JSON, Python dict literal, YAML mapping, etc.).
