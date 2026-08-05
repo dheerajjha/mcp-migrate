@@ -10,10 +10,10 @@ from .base import Finding, Project, Rule, wire_method
 # double-reporting between R007 and R018 on the same line is expected, not
 # a bug.
 FEATURES_CODE = {
-    r"\blist_roots\b": "Server-initiated roots/list",
-    r"\bcreate_message\b": "Server-initiated sampling/createMessage",
-    r"\bElicitRequest\b": "Server-initiated elicitation/create",
-    r"\bElicitCompleteNotificationParams\b": "notifications/elicitation/complete",
+    r"\blist_roots\b|\bListRootsRequest(?:Params|Schema)?\b|\bListRootsResult(?:Schema)?\b": "Server-initiated roots/list",
+    r"\bcreate_message\b|\bCreateMessageRequest(?:Params|Schema)?\b|\bCreateMessageResult(?:Schema)?\b": "Server-initiated sampling/createMessage",
+    r"\bElicitRequest(?:Params|Schema)?\b|\bElicitResult(?:Schema)?\b": "Server-initiated elicitation/create",
+    r"\bElicitCompleteNotificationParams(?:Schema)?\b": "notifications/elicitation/complete",
     r"\belicitationId\b": "elicitationId",
 }
 

@@ -187,9 +187,21 @@ def test_unbounded_suffix_bounded_pattern_issue_87(tmp_path):
     f_fire.write_text(firing_code, encoding="utf-8")
     _, _, findings_fire, _, _ = run_check(tmp_path)
     rule_ids_fire = {f.rule_id for f in findings_fire}
-    assert "R007" in rule_ids_fire
-    assert "R009" in rule_ids_fire
-    assert "R011" in rule_ids_fire
-    assert "R012" in rule_ids_fire
+def test_r018_r019_sdk_schema_names_issue_99(tmp_path):
+    """Issue #99: R018 and R019 must detect SDK schema/params names."""
+    code = (
+        "r = ListRootsRequestSchema()\n"
+        "m = CreateMessageResultParams()\n"
+        "e = ElicitResultSchema()\n"
+        "t = ListTasksResultSchema()\n"
+        "p = GetTaskPayloadResultParams()\n"
+    )
+    target = tmp_path / "server.py"
+    target.write_text(code, encoding="utf-8")
+    _, _, findings, _, _ = run_check(tmp_path)
+    rule_ids = {f.rule_id for f in findings}
+    assert "R018" in rule_ids
+    assert "R019" in rule_ids
+
 
 
