@@ -1,6 +1,4 @@
-import re
-
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, wire_method
 
 # Code-shaped identifiers -- SDK model/class names or plain Python names,
 # matched with search_code so a docstring/comment mention doesn't count.
@@ -57,7 +55,7 @@ class MultiRoundTripReplacesServerInitiated(Rule):
                     f, line, text,
                 ))
         for pattern, name in FEATURES_LITERAL.items():
-            for f, line, text in project.search_wire(pattern):
+            for f, line, text in project.search_wire(wire_method(pattern)):
                 out.append(self.finding(
                     f"{name} was replaced by Multi Round-Trip Requests (InputRequiredResult "
                     "+ inputResponses).",

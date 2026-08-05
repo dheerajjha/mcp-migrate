@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, wire_method
 
 # `SetLevelRequest`/`SetLevelRequestParams` are the MCP SDK's own model
 # names for this request -- distinctive, no false-positive risk.
@@ -29,7 +29,7 @@ class LoggingSetLevelRemoved(Rule):
         # identifier -- like notifications/initialized in r009, it can only
         # ever appear inside a STRING token, so search_code would never
         # find it. Scan the raw text for the literal instead.
-        for f, line, text in project.search_wire(r"logging/setLevel"):
+        for f, line, text in project.search_wire(wire_method("logging/setLevel")):
             out.append(self.finding(
                 "References the removed logging/setLevel JSON-RPC method.", f, line, text,
             ))

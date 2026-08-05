@@ -130,3 +130,44 @@ def test_cli_entry_command_prints_registry_yaml(capsys):
     assert "name: notes-mcp" in out
     assert "repo: acme/notes-mcp" in out
     assert "grade: A" in out
+
+
+def test_wire_method_bounds_prevent_false_positives_on_longer_strings(tmp_path):
+    r"""Issue #88: Wire method patterns bounded by (?![\w/-]) must stay silent
+    when encountering longer, unrelated string names like roots/listeners or
+    tasks/listeners."""
+    code = (
+        'const r = "roots/listeners";\n'
+        'const t = "notifications/initializedElsewhere";\n'
+        'const m = "logging/setLevelLatency";\n'
+        'const e = "tasks/listeners";\n'
+    )
+    target = tmp_path / "app.py"
+    target.write_text(code, encoding="utf-8")
+    _, _, findings, _, _ = run_check(tmp_path)
+    rule_ids = {f.rule_id for f in findings}
+    assert "R007" not in rule_ids
+    assert "R009" not in rule_ids
+    assert "R012" not in rule_ids
+    assert "R018" not in rule_ids
+    assert "R019" not in rule_ids
+
+
+def test_wire_method_bounds_still_catch_exact_wire_method_names(tmp_path):
+    """Exact wire method strings must still be detected by search_wire."""
+    code = (
+        'const r = "roots/list";\n'
+        'const t = "notifications/initialized";\n'
+        'const m = "logging/setLevel";\n'
+        'const e = "tasks/list";\n'
+    )
+    target = tmp_path / "app.py"
+    target.write_text(code, encoding="utf-8")
+    _, _, findings, _, _ = run_check(tmp_path)
+    rule_ids = {f.rule_id for f in findings}
+    assert "R007" in rule_ids or "R018" in rule_ids
+    assert "R009" in rule_ids
+    assert "R012" in rule_ids
+    assert "R019" in rule_ids
+
+

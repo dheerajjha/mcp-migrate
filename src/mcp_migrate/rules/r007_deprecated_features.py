@@ -1,4 +1,4 @@
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, wire_method
 
 # Every pattern here has to be unambiguously MCP. A bare `create_message`
 # was not: it has no word boundary and no MCP context, so it matched
@@ -13,7 +13,7 @@ from .base import Finding, Project, Rule
 # API -- so the `session.` qualifier keeps every true positive while
 # dropping the collision.
 FEATURES = {
-    r"\broots/list\b|list_roots|RootsCapability": ("Roots", "Use resource URIs instead."),
+    rf"{wire_method('roots/list')}|list_roots|RootsCapability": ("Roots", "Use resource URIs instead."),
     r"sampling/createMessage|SamplingCapability|\bsession\.create_message\b"
     r"|\bCreateMessageRequest\b|\bCreateMessageResult\b": (
         "Sampling", "Sampling is deprecated; plan a migration."),

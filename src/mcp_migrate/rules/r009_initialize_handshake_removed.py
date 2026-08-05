@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, wire_method
 
 # `InitializeRequest`, `InitializeResult` and `InitializedNotification` are
 # the MCP SDK's own pydantic model names for the initialize handshake --
@@ -40,7 +40,7 @@ class InitializeHandshakeStillImplemented(Rule):
         # so it always starts inside a STRING token and search_code would
         # silently never find it. Match the literal directly instead, the
         # same way r004_tool_ordering.py matches the literal `tools/list`.
-        for f, line, text in project.search_wire(r"notifications/initialized"):
+        for f, line, text in project.search_wire(wire_method("notifications/initialized")):
             out.append(self.finding(
                 "References the removed notifications/initialized handshake message.",
                 f, line, text,

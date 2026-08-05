@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, wire_method
 
 # `ListTasksRequest`/`GetTaskPayloadRequest` are the MCP SDK's own model
 # names for the two removed shapes (tasks/list, and the blocking
@@ -31,7 +31,7 @@ class TasksPollingReplacesBlockingResult(Rule):
         # valid bare identifiers -- they can only appear inside a STRING
         # token, so search_code would never find them (see the
         # notifications/initialized note in r009). Raw scan instead.
-        for f, line, text in project.search_wire(r"tasks/list|tasks/result"):
+        for f, line, text in project.search_wire(wire_method("tasks/list", "tasks/result")):
             out.append(self.finding(
                 "References the removed tasks/list or blocking tasks/result JSON-RPC "
                 "method.",
