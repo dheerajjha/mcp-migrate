@@ -35,3 +35,12 @@ async def list_tools() -> list[Tool]:
         Tool(name="zeta", description="Last alphabetically."),
         Tool(name="alpha", description="First alphabetically."),
     ]
+
+# R021: old JSON Schema dialect pin -- the fixer must rewrite this
+TOOL_INPUT_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+    },
+}
