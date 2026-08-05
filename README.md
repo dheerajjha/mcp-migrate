@@ -23,7 +23,7 @@ uvx mcp-migrate fix . --write
 ```
 $ uvx mcp-migrate check tests/fixtures/fixer_roundtrip
 
-mcp-migrate v0.1.2  ->  fixer_roundtrip
+mcp-migrate v0.1.3  ->  fixer_roundtrip
 2 Python files, 21 rules, spec 2026-07-28
 
             rule    where         what
@@ -70,7 +70,7 @@ TypeScript server and it refuses, with no grade and no badge:
 ```
 $ mcp-migrate check ./my-ts-server
 
-mcp-migrate v0.1.2  ->  my-ts-server
+mcp-migrate v0.1.3  ->  my-ts-server
 
 Nothing scannable here. Found 24 TypeScript, 3 JavaScript, but no Python --
 and mcp-migrate only reads Python today.
