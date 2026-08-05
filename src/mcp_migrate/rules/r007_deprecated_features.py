@@ -15,7 +15,7 @@ from .base import Finding, Project, Rule, wire_method
 FEATURES = {
     rf"{wire_method('roots/list')}|list_roots|RootsCapability": ("Roots", "Use resource URIs instead."),
     r"sampling/createMessage|SamplingCapability|\bsession\.create_message\b"
-    r"|\bCreateMessageRequest\b|\bCreateMessageResult\b": (
+    r"|\bCreateMessageRequest(?:Params|Schema)?\b|\bCreateMessageResult(?:Schema)?\b": (
         "Sampling", "Sampling is deprecated; plan a migration."),
     r"notifications/message|LoggingCapability|set_logging_level": ("Logging", "Logging moves out of core; use an extension."),
 }

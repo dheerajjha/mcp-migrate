@@ -5,8 +5,8 @@ from .base import Finding, Project, Rule
 # `PingRequest` is the MCP SDK's own model name -- distinctive, essentially
 # never appears outside MCP code. In TypeScript the SDK exports
 # `PingRequestSchema` (Zod) and `PingRequest` (inferred type), so we match
-# any identifier starting with PingRequest.
-PING_CODE_RX = re.compile(r"\bPingRequest\w*")
+# specific TypeScript/Python SDK type & schema names.
+PING_CODE_RX = re.compile(r"\bPingRequest(?:Params|Schema|Result|ResultSchema)?\b")
 
 # A bare `"ping"` string is one of the most overloaded tokens in server
 # code (health checks, keepalives, load-balancer probes have nothing to do
@@ -33,7 +33,7 @@ PING_DISPATCH_RX = re.compile(
 # operator in TypeScript, and template literals (backticks) are valid
 # string delimiters. The dispatch-object alternative keeps the same
 # `{`/`,` anchor trick so search_code doesn't drop the match.
-TS_PING_CODE_RX = r"\bPingRequest\w*"
+TS_PING_CODE_RX = r"\bPingRequest(?:Params|Schema|Result|ResultSchema)?\b"
 TS_PING_DISPATCH_RX = (
     r"method\s*===?\s*[\"'`]ping[\"'`]"
     r"|case\s+[\"'`]ping[\"'`]\s*:"

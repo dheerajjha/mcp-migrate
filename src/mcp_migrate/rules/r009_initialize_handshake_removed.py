@@ -9,7 +9,7 @@ from .base import Finding, Project, Rule, wire_method
 # which is one of the most overloaded words in software: class
 # initializers, database `.initialize()` calls, config keys, ...).
 HANDSHAKE_CODE_RX = re.compile(
-    r"\bInitializeRequest\b|\bInitializeResult\b|\bInitializedNotification\b"
+    r"\bInitializeRequest(?:Params|Schema)?\b|\bInitializeResult(?:Schema)?\b|\bInitializedNotification(?:Schema)?\b"
 )
 
 

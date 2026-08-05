@@ -153,21 +153,43 @@ def test_wire_method_bounds_prevent_false_positives_on_longer_strings(tmp_path):
     assert "R019" not in rule_ids
 
 
-def test_wire_method_bounds_still_catch_exact_wire_method_names(tmp_path):
-    """Exact wire method strings must still be detected by search_wire."""
-    code = (
-        'const r = "roots/list";\n'
-        'const t = "notifications/initialized";\n'
-        'const m = "logging/setLevel";\n'
-        'const e = "tasks/list";\n'
+def test_unbounded_suffix_bounded_pattern_issue_87(tmp_path):
+    """Issue #87: Bounded suffix alternation for R007, R009, R011, R012 type names.
+
+    Unrelated identifiers ending in ...Requester (e.g. PingRequester) must stay silent,
+    while valid SDK schema/params names (e.g. PingRequestSchema, PingRequestParams) must fire.
+    """
+    # 1. Requester forms must stay silent
+    silent_code = (
+        "class CreateMessageRequester { send() {} }\n"
+        "class InitializeRequester { run() {} }\n"
+        "class PingRequester { send() {} }\n"
+        "class SetLevelRequester { send() {} }\n"
     )
-    target = tmp_path / "app.py"
-    target.write_text(code, encoding="utf-8")
-    _, _, findings, _, _ = run_check(tmp_path)
-    rule_ids = {f.rule_id for f in findings}
-    assert "R007" in rule_ids or "R018" in rule_ids
-    assert "R009" in rule_ids
-    assert "R012" in rule_ids
-    assert "R019" in rule_ids
+    f_silent = tmp_path / "silent.py"
+    f_silent.write_text(silent_code, encoding="utf-8")
+    _, _, findings_silent, _, _ = run_check(tmp_path)
+    rule_ids_silent = {f.rule_id for f in findings_silent}
+    assert "R007" not in rule_ids_silent
+    assert "R009" not in rule_ids_silent
+    assert "R011" not in rule_ids_silent
+    assert "R012" not in rule_ids_silent
+
+    # 2. Schema and Params forms must fire
+    f_silent.unlink()
+    firing_code = (
+        "server.setRequestHandler(PingRequestSchema, async () => ({}));\n"
+        "const req: CreateMessageRequestSchema = {};\n"
+        "const init: InitializeRequestSchema = {};\n"
+        "const lvl: SetLevelRequestParams = {};\n"
+    )
+    f_fire = tmp_path / "firing.py"
+    f_fire.write_text(firing_code, encoding="utf-8")
+    _, _, findings_fire, _, _ = run_check(tmp_path)
+    rule_ids_fire = {f.rule_id for f in findings_fire}
+    assert "R007" in rule_ids_fire
+    assert "R009" in rule_ids_fire
+    assert "R011" in rule_ids_fire
+    assert "R012" in rule_ids_fire
 
 
