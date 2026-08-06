@@ -728,6 +728,57 @@ def test_r020_idempotent():
 
 
 # ---------------------------------------------------------------------------
+# R008 -- trace context not propagated from _meta
+# ---------------------------------------------------------------------------
+
+def test_r008_annotates_python_start_as_current_span():
+    before = "    with tracer.start_as_current_span(\"call_tool\"):\n        pass\n"
+    result = fix("TraceContextFixer", before)
+    assert result.changed
+    assert "# TODO(mcp-migrate): extract traceparent/tracestate/baggage from _meta" in result.text
+    # the span-creation line itself must survive untouched, not get commented out
+    assert "    with tracer.start_as_current_span(\"call_tool\"):\n" in result.text
+
+
+def test_r008_annotates_python_start_span():
+    before = "span = tracer.start_span(\"call_tool\")\n"
+    result = fix("TraceContextFixer", before)
+    assert result.changed
+    assert "TODO(mcp-migrate)" in result.text
+    assert 'span = tracer.start_span("call_tool")\n' in result.text
+
+
+def test_r008_annotates_typescript_start_active_span():
+    before = 'tracer.startActiveSpan("call_tool", (span) => {\n});\n'
+    result = fix("TraceContextFixer", before, path="server.ts")
+    assert result.changed
+    assert "// TODO(mcp-migrate)" in result.text
+    assert FIXERS["TraceContextFixer"].confidence == "review"
+
+
+def test_r008_leaves_comments_alone():
+    before = "# tracer.start_span(\"call_tool\") used to be called here\n"
+    result = fix("TraceContextFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r008_leaves_unrelated_code_alone():
+    before = "def handle_call_tool(request):\n    return dispatch(request)\n"
+    result = fix("TraceContextFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r008_idempotent():
+    before = "span = tracer.start_span(\"call_tool\")\n"
+    once = fix("TraceContextFixer", before)
+    twice = fix("TraceContextFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+# ---------------------------------------------------------------------------
 # CLI: fix / fixers
 # ---------------------------------------------------------------------------
 
