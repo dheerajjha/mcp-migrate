@@ -587,6 +587,109 @@ def test_r019_idempotent():
 
 
 # ---------------------------------------------------------------------------
+# R011 -- ping removed
+# ---------------------------------------------------------------------------
+
+R011_TODO = (
+    "# TODO(mcp-migrate): ping is removed from the protocol; liveness now rides "
+    "on the transport itself -- see "
+    "https://modelcontextprotocol.io/specification/2026-07-28/changelog "
+    "and cookbook/06-ping-removed.md"
+)
+
+R011_BEFORE = (
+    'from mcp.types import PingRequest\n'
+    '\n'
+    'async def handle_ping(request: PingRequest):\n'
+    '    return {}\n'
+    '\n'
+    'METHODS = {"ping": handle_ping}\n'
+)
+R011_AFTER = (
+    f'{R011_TODO}\n'
+    '# from mcp.types import PingRequest\n'
+    '\n'
+    'async def handle_ping(request: PingRequest):\n'
+    '    return {}\n'
+    '\n'
+    f'{R011_TODO}\n'
+    '# METHODS = {"ping": handle_ping}\n'
+)
+
+
+def test_r011_comments_out_ping_references_and_dispatch():
+    result = fix("PingRemovedFixer", R011_BEFORE)
+    assert result.changed
+    assert result.text == R011_AFTER
+    assert FIXERS["PingRemovedFixer"].confidence == "review"
+    ast.parse(result.text)
+
+
+def test_r011_never_comments_out_a_block_opener():
+    """The handler signature (`async def handle_ping(request: PingRequest):`)
+    still references PingRequest, but commenting it out would leave a
+    dangling suite -- a syntax error. Only the actual reference/dispatch
+    lines are touched."""
+    result = fix("PingRemovedFixer", R011_BEFORE)
+    assert 'async def handle_ping(request: PingRequest):' in result.text
+    assert '    return {}' in result.text
+
+
+def test_r011_declines_a_method_equality_check_on_a_block_opener():
+    """`if method == "ping":` carries the dispatch signal, but the line
+    itself opens a suite -- commenting it out would leave a dangling `if`
+    with no condition, a syntax error. Same rule as R001's block-opener
+    guard: when the only carrier of a hit is also a block opener, leave it
+    alone rather than guess at a safe rewrite."""
+    before = (
+        'def dispatch(method):\n'
+        '    if method == "ping":\n'
+        '        return {}\n'
+    )
+    result = fix("PingRemovedFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r011_declines_a_case_dispatch_on_a_block_opener():
+    """Same shape in TypeScript: `case "ping":` ends the line with `:`,
+    so it's treated as a block opener and left untouched."""
+    before = (
+        'switch (method) {\n'
+        '    case "ping":\n'
+        '        return {};\n'
+        '}\n'
+    )
+    result = fix("PingRemovedFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r011_comments_out_dict_shaped_dispatch():
+    before = 'const METHODS = { "ping": pingHandler };\n'
+    result = fix("PingRemovedFixer", before)
+    assert result.changed
+    assert f'{R011_TODO}\n# const METHODS = {{ "ping": pingHandler }};\n' in result.text
+
+
+def test_r011_leaves_comment_only_mentions_alone():
+    before = (
+        '# ping used to be a liveness check, now handled by the transport\n'
+        'METHODS = {"tools/list": list_tools}\n'
+    )
+    result = fix("PingRemovedFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r011_idempotent():
+    once = fix("PingRemovedFixer", R011_BEFORE)
+    twice = fix("PingRemovedFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+# ---------------------------------------------------------------------------
 # R017 -- resource-not-found error code
 # ---------------------------------------------------------------------------
 
