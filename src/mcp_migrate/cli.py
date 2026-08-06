@@ -279,7 +279,14 @@ def cmd_check(args) -> int:
                 "claim about the rules that didn't run.[/dim]"
             )
         _print_language_hint(console, counts)
+        # Two different silences, and saying the wrong one is worse than
+        # saying nothing. When we read files and ran rules over them, "code
+        # it could not read" contradicts the findings printed directly
+        # above -- what we withheld is the grade, not the reading.
         console.print(
+            "[dim]No grade and no badge: a letter grade would be a claim about the "
+            "rules that didn't run.[/dim]"
+            if _checked_something(project) else
             "[dim]No grade and no badge: this tool has no opinion about code it could "
             "not read.[/dim]"
         )

@@ -78,15 +78,17 @@ almost certainly neither (and no shipped rule uses raw `search`).
   JSON-RPC method names and other wire text that only appears inside strings
   (e.g. `tools/list`, `resources/subscribe`). Raw `search` over-matches prose
   such as module docstrings describing the handshake; that produced real
-  false-positive `breaking` findings. See any of the ~16 rules that call
+  false-positive `breaking` findings. See any of the 17 rules that call
   `search_wire`, and the docstring on `Project.search_wire` in
   `src/mcp_migrate/rules/base.py`.
 - `project.search(pattern, *, flags=0)` -- yields `(SourceFile, lineno, stripped_line)`
   for every line matching a regex, including matches inside comments and
-  strings. **Exactly one shipped rule uses it** --
-  `r010_server_discover_missing.py`, as a suppression check -- and that use is
-  itself a bug (#113), because a comment saying `server/discover` is missing
-  convinces the rule that it isn't. Reach for it only if you have a reason
+  strings. **No shipped rule uses it.** The last one that did was
+  `r010_server_discover_missing.py`, as a suppression check, and it was a bug
+  (#113): a comment saying `server/discover` is missing convinced the rule
+  that it wasn't. That is the characteristic failure -- raw `search` inside a
+  "should I stay silent?" gate lets prose switch a real finding off.
+  Reach for it only if you have a reason
   neither `search_code` nor `search_wire` fits (for example, matching free-form
   prose you intentionally want). Prefer `search_wire` for method names and
   other string-literal wire content.

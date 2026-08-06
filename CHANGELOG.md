@@ -4,7 +4,45 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Live badge endpoints.** `scripts/render_badges.py` turns the registry into
+  [shields.io endpoint](https://shields.io/badges/endpoint-badge) documents, so
+  a badge reports the grade at request time instead of the grade at the moment
+  someone pasted a URL. Addressed per-entry and per-repo; where a repo holds
+  several servers the badge reports the **worst** grade with a count, because
+  "something in here is an F" is the fact a reader needs and averaging hides
+  it. Unlisted repos get a real `not listed` badge rather than a broken image.
+  ([#101](https://github.com/dheerajjha/mcp-migrate/issues/101), @djubx)
+- **R017 reads TypeScript**, taking coverage to 17 of 21 rules. No language
+  branch needed — the qualifying context is a numeric literal plus nearby
+  English, not a language-specific identifier.
+  ([#46](https://github.com/dheerajjha/mcp-migrate/issues/46), @waterlemonnn)
+- **A regression guard against quadratic scans.** `tests/test_scan_complexity.py`
+  counts `search_*` calls rather than timing them: a correctly-written rule
+  issues the same number of calls at 20 files as at 200, so the assertion needs
+  no tolerance and cannot flake on shared CI runners.
+  ([#86](https://github.com/dheerajjha/mcp-migrate/issues/86), @s35153)
+
 ### Fixed
+
+- **`fix --write` corrupted TypeScript.** Five fixers emitted Python `#`
+  comments regardless of the file being edited, so on a `.ts` file they wrote
+  lines that are a syntax error — and the tool reported success on its way out.
+  The prefix is now derived from the file once, in `fixers/base.py`, rather
+  than remembered correctly by each fixer independently. Also covers
+  `.mts`/`.cts`/`.mjs`/`.cjs`, which the scanner reads and the one previously
+  correct fixer missed.
+  ([#117](https://github.com/dheerajjha/mcp-migrate/issues/117), @Vicky-Jha)
+- **Every TypeScript project exited `2`**, meaning "could not check", so a
+  breaking finding could not fail a build. Exit codes are now derived from
+  findings whenever files were actually read; `2` is reserved for trees where
+  nothing was read at all. The "Nothing scannable here." headline is likewise
+  reserved for that case.
+  ([#98](https://github.com/dheerajjha/mcp-migrate/issues/98), @iphonekumar)
+- **R003 re-ran a whole-project scan inside its per-file loop**, the same
+  quadratic shape as #67. Found by the new complexity guard on its first run.
+  ([#86](https://github.com/dheerajjha/mcp-migrate/issues/86), @s35153)
 
 - **R010 could be silenced by a comment.** A `# TODO: server/discover is not
   implemented yet` satisfied the Python "does this project already implement
@@ -26,12 +64,11 @@ All notable changes to this project are documented here.
 
 ### Known issues
 
-- **`fix --write` corrupts TypeScript.**
-  ([#117](https://github.com/dheerajjha/mcp-migrate/issues/117)) Five fixers
-  emit Python `#` comments regardless of the file being edited, so on a `.ts`
-  file they produce a syntax error and the tool still reports success. This
-  is present in v0.1.3. `check` is unaffected. Until it's fixed, run `fix`
-  without `--write` on TypeScript and apply the diff by hand.
+- **v0.1.3 on PyPI still has all of the above.** Everything in this section
+  is fixed on `main` and unreleased. In particular, **`fix --write` corrupts
+  TypeScript in v0.1.3** and **TypeScript always exits `2`** there. Until the
+  next release, run `fix` without `--write` on TypeScript and parse `check`
+  output rather than trusting its status.
 
 ## [0.1.3] - 2026-08-05
 
