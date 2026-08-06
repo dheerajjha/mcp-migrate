@@ -358,6 +358,52 @@ def test_r010_still_respects_a_real_server_discover_implementation(tmp_path):
     assert ServerDiscoverMissing().check(project) == []
 
 
+def _r010_has_handlers_source() -> str:
+    # Enough to satisfy _has_request_handlers on its own, independent of
+    # whatever the test appends about server/discover.
+    return (
+        "from mcp.server import Server\n"
+        "from mcp.types import Tool\n\n"
+        "app = Server('demo')\n\n"
+        "@app.list_tools()\n"
+        "async def list_tools() -> list[Tool]:\n"
+        "    return []\n\n"
+    )
+
+
+def test_r010_is_not_suppressed_by_a_todo_comment_admitting_the_gap(tmp_path):
+    # A `# TODO: server/discover is not implemented yet` used to satisfy the
+    # raw `project.search` the Python check ran -- the more clearly a project
+    # documented the gap, the more certain R010 was there wasn't one.
+    (tmp_path / "server.py").write_text(
+        _r010_has_handlers_source() + "# TODO: server/discover is not implemented yet\n"
+    )
+    project = load_project(tmp_path)
+    findings = ServerDiscoverMissing().check(project)
+    assert findings, "a TODO admitting the gap must not suppress R010"
+
+
+def test_r010_is_not_suppressed_by_a_docstring_mentioning_the_gap(tmp_path):
+    (tmp_path / "server.py").write_text(
+        _r010_has_handlers_source()
+        + '"""We do not implement server/discover."""\n'
+    )
+    project = load_project(tmp_path)
+    findings = ServerDiscoverMissing().check(project)
+    assert findings, "a docstring mentioning the gap must not suppress R010"
+
+
+def test_r010_still_suppressed_by_a_real_wire_string_literal(tmp_path):
+    # The fix must not overcorrect: a genuine string literal use of the
+    # wire name (e.g. a route table, not a comment about it) still counts
+    # as evidence the method is implemented.
+    (tmp_path / "server.py").write_text(
+        _r010_has_handlers_source() + 'ROUTES = {"server/discover": handle_discover}\n'
+    )
+    project = load_project(tmp_path)
+    assert ServerDiscoverMissing().check(project) == []
+
+
 # --- 7. R015/R016 must not demand fields the framework owns ----------------
 #
 # The official SDK (mcp 2.0.0) sets `resultType` on every result it
