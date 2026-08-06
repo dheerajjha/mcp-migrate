@@ -17,6 +17,18 @@ from six recipes to eighteen.** Every line of it was contributed by
   ([#42](https://github.com/dheerajjha/mcp-migrate/issues/42),
   [#43](https://github.com/dheerajjha/mcp-migrate/issues/43),
   [#50](https://github.com/dheerajjha/mcp-migrate/issues/50), @waterlemonnn)
+- **Three new fixers**, taking the set from ten to thirteen: **R013**
+  (`resources/subscribe` removal), **R008** (trace context) and **R018**
+  (Multi Round-Trip Requests), all `review` confidence.
+  ([#23](https://github.com/dheerajjha/mcp-migrate/issues/23),
+  [#18](https://github.com/dheerajjha/mcp-migrate/issues/18),
+  [#26](https://github.com/dheerajjha/mcp-migrate/issues/26), @waterlemonnn)
+
+  R008 and R018 **annotate without commenting out**, which is the right
+  split: the code they flag is not wrong, it is incomplete. Commenting out
+  a span or a `list_roots()` call would break a working server to point at
+  a migration step. R013 does comment out, because a `SubscribeRequest`
+  handler is dead once the method is gone.
 - **The cookbook is finished.** Twelve recipes written: ping removed,
   `logging/setLevel` removed, SSE resumability, resource-not-found error
   code, Multi Round-Trip Requests, tasks polling, Dynamic Client
@@ -24,6 +36,26 @@ from six recipes to eighteen.** Every line of it was contributed by
   the `extensions` map, trace context propagation, and Roots/Sampling/
   Logging deprecation. All eighteen slots are now written; there are no
   stubs left. (@waterlemonnn)
+
+### Changed
+
+- **`check --json` drops the `location` key. This breaks scripts.** A
+  finding used to carry `"location": "server.py:12"`; it now carries
+  `"path": "server.py"` and `"line": 12` separately. The combined string
+  forced every consumer to re-parse something we already had structured,
+  and it was ambiguous the moment a path contained a colon. Findings also
+  gain `fix` (the rule's remediation text), and the document gains `tool`,
+  `version` and a `counts` object.
+
+  `location` shipped in 0.1.0 through 0.1.4. **If you parse `--json`, this
+  is the one thing in this release that will break you** — nothing in this
+  repository still reads it, but external scripts are not visible from
+  here. ([#85](https://github.com/dheerajjha/mcp-migrate/issues/85),
+  @waterlemonnn)
+
+  For the record, #85 as filed claimed there was no machine-readable
+  output at all. That was wrong — `--json` has existed since the first
+  commit. The PR corrected the premise and improved the schema instead.
 
 ### Fixed
 
