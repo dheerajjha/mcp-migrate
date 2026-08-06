@@ -1,6 +1,3 @@
-<!-- STUB: rule/spec filled in, before/after/gotchas still needed. See
-     .github/GOOD_FIRST_ISSUES.md for the ready-to-file issue for this one. -->
-
 # JSON Schema 2020-12 required for `inputSchema`/`outputSchema`
 
 - **Rule:** [R021](../src/mcp_migrate/rules/r021_json_schema_2020_12_required.py)
@@ -20,20 +17,50 @@ support for.
 
 ## Before
 
-TODO: a tool `inputSchema` with an explicit `"$schema":
-"http://json-schema.org/draft-07/schema#"` (or a validator configured to
-require draft-07/2019-09).
+```python
+TOOL_SCHEMA = {
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "type": "object",
+    "properties": {"query": {"type": "string"}},
+    "required": ["query"],
+}
+```
 
 ## After
 
-TODO: the same schema on 2020-12, or the explicit pin dropped entirely so a
-modern validator's default applies.
+```python
+TOOL_SCHEMA = {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "properties": {"query": {"type": "string"}},
+    "required": ["query"],
+}
+```
+
+Or just drop the `$schema` key entirely and let whatever validator you use
+apply its own current default -- for most projects that's the simpler fix,
+since the pin usually wasn't load-bearing in the first place.
 
 ## Gotchas
 
-TODO: are there real validator libraries where dropping the `$schema` pin
-changes behavior in a way worth calling out (stricter/looser validation
-between drafts)?
+- **Don't add a `$schema` pin where there wasn't one, just to "fix" this.**
+  The rule is positive-evidence only: an unpinned schema never fires,
+  because the overwhelming majority of MCP servers don't pin a dialect at
+  all and that's fine. Adding `"$schema": "https://json-schema.org/draft/2020-12/schema"`
+  to a schema that never had one doesn't improve compliance, it just adds a
+  line.
+- **draft-07 and 2020-12 aren't purely additive -- some keyword behavior
+  changed.** `items` as an array (tuple validation) moved to `prefixItems`
+  in 2019-09+; if your schema uses the older array-`items` form and you
+  bump the `$schema` pin without touching the schema body, a strict
+  2020-12 validator may interpret it differently than a draft-07 one did.
+  Bumping the pin and re-validating a representative payload is worth doing
+  together, not as two separate steps.
+- **This only checks the pin, not actual validator behavior.** A project
+  can genuinely validate against 2020-12 semantics while never writing the
+  literal string `"2020-12"` anywhere (again, the common case) -- R021
+  can't detect that either way, which is exactly why it only flags the
+  rarer, unambiguous case of an explicit older-draft reference.
 
 ## Spec link
 
