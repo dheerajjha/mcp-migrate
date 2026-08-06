@@ -59,6 +59,8 @@ SOURCE_EXTENSIONS = {
     ".py": "python",
     ".ts": "typescript", ".mts": "typescript", ".cts": "typescript",
     ".tsx": "typescript",
+    ".js": "javascript", ".jsx": "javascript",
+    ".mjs": "javascript", ".cjs": "javascript",
 }
 
 
