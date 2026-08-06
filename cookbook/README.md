@@ -45,6 +45,7 @@ Every recipe follows [`_TEMPLATE.md`](_TEMPLATE.md):
 | 13 | [JSON Schema 2020-12 required](13-json-schema-2020-12.md) | R021 | none |
 | 15 | [Deterministic tools/list ordering](15-deterministic-tool-ordering.md) | R004 | R004 (safe, list-literal shape only) |
 | 17 | [Trace context propagation from _meta](17-trace-context-propagation.md) | R008 | none |
+| 18 | [Roots / Sampling / Logging deprecated as core capabilities](18-roots-sampling-logging-deprecated.md) | R007 | none |
 
 ## Stubs -- open slots
 
@@ -67,6 +68,7 @@ ready-to-file issue for each.
 | 15 | [Deterministic tools/list ordering](15-deterministic-tool-ordering.md) | R004 |
 | 16 | [extensions map on ServerCapabilities](16-extensions-map.md) | R005 |
 | 18 | [Roots / Sampling / Logging deprecated as core capabilities](18-roots-sampling-logging-deprecated.md) | R007 |
+| 17 | [Trace context propagation from _meta](17-trace-context-propagation.md) | R008 |
 
 ## Adding one
 
