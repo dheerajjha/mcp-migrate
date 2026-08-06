@@ -40,6 +40,7 @@ from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissin
 from mcp_migrate.rules.r016_cacheable_result_required import (
     CacheableResultMetadataMissing,
 )
+from mcp_migrate.rules.r013_subscriptions_replaced import ResourceSubscriptionsReplaced
 from mcp_migrate.rules.r017_resource_not_found_code_changed import (
     ResourceNotFoundCodeChanged,
 )
@@ -1018,6 +1019,47 @@ server.setRequestHandler("tools/list", async () => {
     findings = CacheableResultMetadataMissing().check(project)
     assert len(findings) == 1
     assert findings[0].line == 5
+
+
+# --- R013: resources/subscribe & resources/unsubscribe removed ------------
+
+def test_r013_finds_subscribe_schema_and_wire_method_in_typescript(tmp_path):
+    code = """\
+import { SubscribeRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+server.setRequestHandler(SubscribeRequestSchema, async () => ({}));
+export const legacyMethod = "resources/unsubscribe";
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = ResourceSubscriptionsReplaced().check(project)
+    assert [finding.line for finding in findings] == [1, 3, 4]
+
+
+def test_r013_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export const legacyMethod = "subscriptions/listen";
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert ResourceSubscriptionsReplaced().check(project) == []
+
+
+def test_r013_ignores_typescript_comment_only_mentions(tmp_path):
+    code = """\
+// SubscribeRequestSchema and resources/subscribe were replaced by subscriptions/listen.
+export const protocolVersion = "2026-07-28";
+"""
+    project = load_project(_write(tmp_path, "notes.ts", code)).for_language("typescript")
+    assert ResourceSubscriptionsReplaced().check(project) == []
+
+
+def test_r013_stays_silent_on_requester_style_identifier_in_typescript(tmp_path):
+    code = """\
+class SubscribeRequester {
+  send() {}
+}
+"""
+    project = load_project(_write(tmp_path, "requester.ts", code)).for_language("typescript")
+    assert ResourceSubscriptionsReplaced().check(project) == []
 
 
 # --- R017: the old -32002 resource-not-found error code -------------------
