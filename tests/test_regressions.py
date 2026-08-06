@@ -477,6 +477,25 @@ def test_r015_still_fires_on_a_hand_rolled_jsonrpc_envelope(tmp_path):
     assert not _sdk_owns_serialization(project)
 
 
+def test_r015_stays_silent_on_a_request_without_a_result_key(tmp_path):
+    # `id` + `method` with no `result`/`error` key is a request, not a
+    # result -- `resultType` is a result-only field and has nowhere to go
+    # on this shape.
+    (tmp_path / "client.py").write_text(
+        "import json\n\n"
+        "def build_request(request_id):\n"
+        "    return json.dumps({\n"
+        "        'jsonrpc': '2.0',\n"
+        "        'method': 'tools/list',\n"
+        "        'id': request_id,\n"
+        "    })\n"
+    )
+    project = load_project(tmp_path)
+    assert RequiredResultTypeMissing().check(project) == [], (
+        "a request has no result field to add resultType to"
+    )
+
+
 def test_r016_is_satisfied_by_cache_hints_configured_on_the_server(tmp_path):
     # `Server(cache_hints={...})` is how the SDK documents this. It is set
     # once at construction, not written into each handler's file.
