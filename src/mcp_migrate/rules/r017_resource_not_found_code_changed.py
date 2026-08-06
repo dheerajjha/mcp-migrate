@@ -22,8 +22,15 @@ class ResourceNotFoundCodeChanged(Rule):
         "The resource-not-found error code changed from -32002 to -32602 (Invalid "
         "params). Update whatever raises or checks for -32002 in this context."
     )
+    languages = ("python", "typescript")
 
     def check(self, project: Project) -> list[Finding]:
+        # No language branch needed: the qualifying context is plain text
+        # (a numeric literal plus nearby English words), not a
+        # language-specific identifier or wire name, so the same
+        # search_wire pass is correct for both Python and TypeScript --
+        # see r001/r006 for rules where the two languages genuinely need
+        # different patterns, which this one doesn't.
         out: list[Finding] = []
         # Raw text, not search_code: the qualifying context is as likely
         # to be a trailing comment ("# resource not found") as it is to be
