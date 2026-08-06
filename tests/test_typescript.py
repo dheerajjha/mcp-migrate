@@ -173,6 +173,56 @@ export const protocolVersion = "2026-07-28";
     assert MultiRoundTripReplacesServerInitiated().check(project) == []
 
 
+def test_r018_finds_elicitation_id_in_typescript(tmp_path):
+    code = """\
+export async function onReply(params: { elicitationId: string }) {
+  return store.resolve(params.elicitationId);
+}
+"""
+    project = load_project(_write(tmp_path, "elicit.ts", code)).for_language(
+        "typescript"
+    )
+    findings = MultiRoundTripReplacesServerInitiated().check(project)
+    assert [finding.line for finding in findings] == [1, 2]
+
+
+def test_r019_finds_task_schema_names_in_typescript(tmp_path):
+    code = """\
+import { ListTasksRequestSchema, GetTaskPayloadRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+server.setRequestHandler(ListTasksRequestSchema, async () => ({ tasks: [] }));
+"""
+    project = load_project(_write(tmp_path, "tasks_schema.ts", code)).for_language(
+        "typescript"
+    )
+    findings = TasksPollingReplacesBlockingResult().check(project)
+    assert [finding.line for finding in findings] == [1, 3]
+
+
+def test_r019_reports_dispatcher_line_once(tmp_path):
+    code = """\
+case "tasks/list": return this.handleListTasks(ListTasksRequestSchema);
+"""
+    project = load_project(_write(tmp_path, "dispatch.ts", code)).for_language(
+        "typescript"
+    )
+    findings = TasksPollingReplacesBlockingResult().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 1
+
+
+def test_r019_stays_silent_on_requester_style_identifier_in_typescript(tmp_path):
+    code = """\
+class ListTasksRequester {
+  send() {}
+}
+"""
+    project = load_project(_write(tmp_path, "requester.ts", code)).for_language(
+        "typescript"
+    )
+    assert TasksPollingReplacesBlockingResult().check(project) == []
+
+
 def test_r015_finds_missing_result_type_in_typescript(tmp_path):
     code = """\
 export function handle(request: { method: string; id: string | number }) {

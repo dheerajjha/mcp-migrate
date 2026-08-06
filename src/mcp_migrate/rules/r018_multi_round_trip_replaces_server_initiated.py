@@ -34,10 +34,17 @@ FEATURES_LITERAL = {
 # The TypeScript SDK exports Zod schemas for request handling. These names
 # are specific to the removed MCP server-initiated requests, unlike generic
 # callback names such as `createMessage` or `listRoots`.
+#
+# `elicitationId` is the odd one out here: it isn't a request/schema class,
+# it's a field name a handler reads off an incoming payload
+# (`params.elicitationId`), the same shape in both languages -- see
+# `elicitationId` in FEATURES_CODE above. It has no `Schema` counterpart to
+# miss, so it's just the bare identifier, same as the Python side.
 TS_FEATURES_CODE = {
     r"\bListRootsRequestSchema\b": "Server-initiated roots/list",
     r"\bCreateMessageRequestSchema\b": "Server-initiated sampling/createMessage",
     r"\bElicitRequestSchema\b": "Server-initiated elicitation/create",
+    r"\belicitationId\b": "elicitationId",
 }
 
 
