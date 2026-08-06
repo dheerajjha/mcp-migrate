@@ -42,6 +42,7 @@ Every recipe follows [`_TEMPLATE.md`](_TEMPLATE.md):
 | 10 | [Multi Round-Trip Requests replace server-initiated calls](10-multi-round-trip-requests.md) | R018 | none |
 | 11 | [Tasks moved to an extension, polling replaces blocking result](11-tasks-polling.md) | R019 | none |
 | 12 | [Dynamic Client Registration deprecated](12-dynamic-client-registration-deprecated.md) | R020 | none |
+| 13 | [JSON Schema 2020-12 required](13-json-schema-2020-12.md) | R021 | none |
 
 ## Stubs -- open slots
 
@@ -60,6 +61,7 @@ ready-to-file issue for each.
 | 09 | [resource-not-found error code changed](09-resource-not-found-error-code.md) | R017 |
 | 11 | [Tasks moved to an extension, polling replaces blocking result](11-tasks-polling.md) | R019 |
 | 13 | [JSON Schema 2020-12 required](13-json-schema-2020-12.md) | R021 |
+| 12 | [Dynamic Client Registration deprecated](12-dynamic-client-registration-deprecated.md) | R020 |
 | 15 | [Deterministic tools/list ordering](15-deterministic-tool-ordering.md) | R004 |
 | 16 | [extensions map on ServerCapabilities](16-extensions-map.md) | R005 |
 | 17 | [Trace context propagation from _meta](17-trace-context-propagation.md) | R008 |
