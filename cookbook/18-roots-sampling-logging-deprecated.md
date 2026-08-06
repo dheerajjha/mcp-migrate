@@ -1,6 +1,3 @@
-<!-- STUB: rule/spec filled in, before/after/gotchas still needed. See
-     .github/GOOD_FIRST_ISSUES.md for the ready-to-file issue for this one. -->
-
 # Roots, Sampling and Logging deprecated as core capabilities
 
 - **Rule:** [R007](../src/mcp_migrate/rules/r007_deprecated_features.py)
@@ -22,20 +19,51 @@ half of this same change); Logging is moving to an extension entirely.
 
 ## Before
 
-TODO: a server declaring/using `RootsCapability` and reading `roots/list`,
-to show the "still works today, deprecated" framing distinct from R018's
-"this exact call shape is also breaking" framing.
+```python
+server = Server("my-server", capabilities=ServerCapabilities(roots=RootsCapability()))
+
+async def read_config():
+    roots = await session.list_roots()
+    return open(roots[0].uri).read()
+```
 
 ## After
 
-TODO: the same functionality via resource URIs instead of Roots.
+```python
+server = Server("my-server")  # roots capability dropped
+
+async def read_config(config_uri: str):
+    return await read_resource(config_uri)
+```
+
+The client passes a resource URI directly instead of the server asking it
+to enumerate roots -- the same shift from "server asks, client answers
+inline" to "client supplies what it already has" that shows up across this
+whole spec revision.
 
 ## Gotchas
 
-TODO: this recipe is the natural place to explain the R007/R018
-relationship in full -- when a reader sees both fire on the same file, what
-should they actually do first (the breaking one, obviously, but worth
-saying so plainly with an example).
+- **R007 and R018 both fire on `session.create_message(...)` calls, and
+  that's intentional, not double-counting.** R007 reports Sampling as
+  `deprecated` -- it's on the slow clock, still works today. R018 reports
+  the exact same server-initiated call as `breaking` under Multi
+  Round-Trip Requests -- it's a different, faster-moving consequence of the
+  same underlying change. When both show up on one line, act on the
+  `breaking` one first (R018's fix, restructuring around
+  `InputRequiredResult`); R007's `deprecated` finding for the same line
+  resolves as a side effect once R018's fix lands, since the deprecated
+  call is gone either way.
+- **Roots and Logging don't have an R018 counterpart -- only Sampling
+  does.** `roots/list` and Logging's `notifications/message` are purely
+  `deprecated` here, with no matching `breaking` rule elsewhere, because
+  neither is a server-initiated-request pattern the way Sampling is.
+- **The Python match is anchored on `session.create_message` specifically,
+  not a bare `create_message`.** A bare match collided with the Anthropic
+  Messages API's own `create_message` wrapper in real servers scanned
+  against this project's registry -- anchoring on the MCP session object
+  keeps the true positives (`ctx.session.create_message(...)`,
+  `server.request_context.session.create_message(...)`) while dropping
+  unrelated LLM client code that happens to share the method name.
 
 ## Spec link
 
