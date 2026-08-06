@@ -69,7 +69,8 @@ decision about what the server actually supports, not a mechanical edit.
 [R019's fixer](../src/mcp_migrate/fixers/r019_tasks_polling.py) reflects
 the same limit from the other direction: it comments out the removed
 `tasks/list`/blocking `tasks/result` call sites and leaves a TODO pointing
-at this recipe, at `review` confidence, rather than guessing at the
+at [recipe 11](11-tasks-polling.md), at `review` confidence, rather than
+guessing at the
 `extensions={"io.modelcontextprotocol/tasks": {}}` declaration itself --
 that part still needs a human.
 
