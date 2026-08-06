@@ -759,6 +759,45 @@ def test_r008_annotates_typescript_start_active_span():
 def test_r008_leaves_comments_alone():
     before = "# tracer.start_span(\"call_tool\") used to be called here\n"
     result = fix("TraceContextFixer", before)
+# R018 -- server-initiated roots/sampling/elicitation -> Multi Round-Trip Requests
+# ---------------------------------------------------------------------------
+
+def test_r018_annotates_create_message_call():
+    before = "    sample = await ctx.create_message(messages=[])\n"
+    result = fix("MultiRoundTripFixer", before)
+    assert result.changed
+    assert "# TODO(mcp-migrate): server-initiated request replaced by Multi Round-Trip" in result.text
+    # the call itself must survive untouched -- it's what needs the rewrite, not dead code
+    assert "    sample = await ctx.create_message(messages=[])\n" in result.text
+
+
+def test_r018_annotates_list_roots_call():
+    before = "roots = await ctx.list_roots()\n"
+    result = fix("MultiRoundTripFixer", before)
+    assert result.changed
+    assert "TODO(mcp-migrate)" in result.text
+
+
+def test_r018_annotates_elicit_request_construction():
+    before = "req = ElicitRequest(message=\"pick one\")\n"
+    result = fix("MultiRoundTripFixer", before)
+    assert result.changed
+    assert "TODO(mcp-migrate)" in result.text
+
+
+def test_r018_annotates_typescript_schema_handler():
+    before = 'server.setRequestHandler(CreateMessageRequestSchema, handler);\n'
+    result = fix("MultiRoundTripFixer", before, path="server.ts")
+    assert result.changed
+    assert "// TODO(mcp-migrate)" in result.text
+    assert FIXERS["MultiRoundTripFixer"].confidence == "review"
+
+
+def test_r018_leaves_bare_identifier_without_call_alone():
+    # `list_roots` mentioned with no call -- e.g. a def/import line -- isn't
+    # a call site to annotate.
+    before = "from mcp.client import list_roots\n"
+    result = fix("MultiRoundTripFixer", before)
     assert result.changed is False
     assert result.text == before
 
@@ -766,6 +805,9 @@ def test_r008_leaves_comments_alone():
 def test_r008_leaves_unrelated_code_alone():
     before = "def handle_call_tool(request):\n    return dispatch(request)\n"
     result = fix("TraceContextFixer", before)
+def test_r018_leaves_comments_alone():
+    before = "# ctx.create_message(...) used to be called here\n"
+    result = fix("MultiRoundTripFixer", before)
     assert result.changed is False
     assert result.text == before
 
@@ -774,6 +816,10 @@ def test_r008_idempotent():
     before = "span = tracer.start_span(\"call_tool\")\n"
     once = fix("TraceContextFixer", before)
     twice = fix("TraceContextFixer", once.text)
+def test_r018_idempotent():
+    before = "roots = await ctx.list_roots()\n"
+    once = fix("MultiRoundTripFixer", before)
+    twice = fix("MultiRoundTripFixer", once.text)
     assert twice.changed is False
     assert twice.text == once.text
 
