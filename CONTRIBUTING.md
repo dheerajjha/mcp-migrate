@@ -83,10 +83,13 @@ almost certainly neither (and no shipped rule uses raw `search`).
   `src/mcp_migrate/rules/base.py`.
 - `project.search(pattern, *, flags=0)` -- yields `(SourceFile, lineno, stripped_line)`
   for every line matching a regex, including matches inside comments and
-  strings. **No shipped rule uses this.** Reach for it only if you have a
-  reason neither `search_code` nor `search_wire` fits (for example, matching
-  free-form prose you intentionally want). Prefer `search_wire` for method
-  names and other string-literal wire content.
+  strings. **Exactly one shipped rule uses it** --
+  `r010_server_discover_missing.py`, as a suppression check -- and that use is
+  itself a bug (#113), because a comment saying `server/discover` is missing
+  convinces the rule that it isn't. Reach for it only if you have a reason
+  neither `search_code` nor `search_wire` fits (for example, matching free-form
+  prose you intentionally want). Prefer `search_wire` for method names and
+  other string-literal wire content.
 - `project.imports()` -- returns the flat `set[str]` of every module name
   imported anywhere in the project (from `ast.Import` / `ast.ImportFrom`).
   Use this to gate a rule on a library actually being in use, the way
