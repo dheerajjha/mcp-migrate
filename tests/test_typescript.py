@@ -291,6 +291,18 @@ export const NOTE = 1;
     assert RequiredResultTypeMissing().check(project) == []
 
 
+def test_r015_stays_silent_on_a_request_without_a_result_key(tmp_path):
+    # A request carries `id` and `method` but no `result`/`error` --
+    # `resultType` is a result-only field, so there is nothing here to add
+    # it to. Firing here asks for a field that must not exist on this shape.
+    code = """\
+const request = { jsonrpc: "2.0", method: "tools/list", id: 1 };
+send(request);
+"""
+    project = load_project(_write(tmp_path, "client.ts", code)).for_language("typescript")
+    assert RequiredResultTypeMissing().check(project) == []
+
+
 def test_r015_stays_silent_when_sdk_owns_serialization(tmp_path):
     code = """\
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";

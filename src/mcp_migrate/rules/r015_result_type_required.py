@@ -54,6 +54,13 @@ MCP_METHOD_NAME_RX = re.compile(
     r"resources/templates/list|prompts/list|prompts/get)[\"']"
 )
 
+# `resultType` is a result-only field: a request carries `id` and `method`
+# but no `result`/`error`, and asking for the field there is asking for
+# something that must not exist on it. Only a `result`/`error` key is
+# evidence this envelope is a response rather than a request.
+RESULT_OR_ERROR_KEY_RX = re.compile(r"[\"'](?:result|error)[\"']\s*:")
+TS_RESULT_OR_ERROR_KEY_RX = re.compile(r"\b(?:result|error)\s*:")
+
 
 def _sdk_owns_serialization(project) -> bool:
     for mod in project.imports():
@@ -123,6 +130,8 @@ class RequiredResultTypeMissing(Rule):
                 continue
             if not JSONRPC_ENVELOPE_RX.search(f.text):
                 continue
+            if not RESULT_OR_ERROR_KEY_RX.search(f.text):
+                continue
             m = MCP_METHOD_NAME_RX.search(f.text)
             if not m:
                 continue
@@ -147,6 +156,9 @@ class RequiredResultTypeMissing(Rule):
         jsonrpc_paths.update(
             f.path for f, _line, _text in project.search_wire(JSONRPC_ENVELOPE_RX.pattern)
         )
+        result_paths = {
+            f.path for f, _line, _text in project.search_wire(TS_RESULT_OR_ERROR_KEY_RX.pattern)
+        }
         method_hits: dict[object, tuple[int, str]] = {}
         for f, line, text in project.search_wire(MCP_METHOD_NAME_RX.pattern):
             method_hits.setdefault(f.path, (line, text))
@@ -156,6 +168,8 @@ class RequiredResultTypeMissing(Rule):
             if RESULT_TYPE_MENTION_RX.search(f.text):
                 continue
             if f.path not in jsonrpc_paths:
+                continue
+            if f.path not in result_paths:
                 continue
             method_hit = method_hits.get(f.path)
             if method_hit is None:
