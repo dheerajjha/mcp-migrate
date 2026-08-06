@@ -422,6 +422,98 @@ def test_r014_idempotent():
 
 
 # ---------------------------------------------------------------------------
+# R013 -- resources/subscribe and resources/unsubscribe removed
+# ---------------------------------------------------------------------------
+
+R013_TODO = (
+    "# TODO(mcp-migrate): resources/subscribe and resources/unsubscribe are "
+    "removed, replaced by the single long-lived subscriptions/listen call "
+    "-- see https://modelcontextprotocol.io/specification/2026-07-28/changelog "
+    "and cookbook/04-subscribe-to-subscriptions-listen.md"
+)
+
+R013_BEFORE = (
+    'from mcp.types import SubscribeRequest, UnsubscribeRequest\n'
+    '\n'
+    'async def handle_subscribe(request: SubscribeRequest):\n'
+    '    return {}\n'
+    '\n'
+    'METHODS = {"resources/subscribe": handle_subscribe}\n'
+)
+R013_AFTER = (
+    f'{R013_TODO}\n'
+    '# from mcp.types import SubscribeRequest, UnsubscribeRequest\n'
+    '\n'
+    'async def handle_subscribe(request: SubscribeRequest):\n'
+    '    return {}\n'
+    '\n'
+    f'{R013_TODO}\n'
+    '# METHODS = {"resources/subscribe": handle_subscribe}\n'
+)
+
+
+def test_r013_comments_out_subscribe_references_and_dispatch():
+    result = fix("SubscriptionsReplacedFixer", R013_BEFORE)
+    assert result.changed
+    assert result.text == R013_AFTER
+    assert FIXERS["SubscriptionsReplacedFixer"].confidence == "review"
+    ast.parse(result.text)
+
+
+def test_r013_never_comments_out_a_block_opener():
+    result = fix("SubscriptionsReplacedFixer", R013_BEFORE)
+    assert 'async def handle_subscribe(request: SubscribeRequest):' in result.text
+    assert '    return {}' in result.text
+
+
+def test_r013_declines_a_method_equality_check_on_a_block_opener():
+    before = (
+        'def dispatch(method):\n'
+        '    if method == "resources/unsubscribe":\n'
+        '        return {}\n'
+    )
+    result = fix("SubscriptionsReplacedFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r013_comments_out_dict_shaped_dispatch():
+    before = 'const METHODS = { "resources/unsubscribe": unsubscribeHandler };\n'
+    result = fix("SubscriptionsReplacedFixer", before)
+    assert result.changed
+    assert (
+        f'{R013_TODO}\n# const METHODS = {{ "resources/unsubscribe": unsubscribeHandler }};\n'
+        in result.text
+    )
+
+
+def test_r013_does_not_flag_subscribe_requester():
+    # A name that merely starts with SubscribeRequest is not the SDK's
+    # SubscribeRequest type -- see #87 on the rule for the same guard.
+    before = 'class SubscribeRequester:\n    pass\n'
+    result = fix("SubscriptionsReplacedFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r013_leaves_comment_only_mentions_alone():
+    before = (
+        '# resources/subscribe used to register interest in a resource\n'
+        'METHODS = {"tools/list": list_tools}\n'
+    )
+    result = fix("SubscriptionsReplacedFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r013_idempotent():
+    once = fix("SubscriptionsReplacedFixer", R013_BEFORE)
+    twice = fix("SubscriptionsReplacedFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+# ---------------------------------------------------------------------------
 # R019 -- tasks/list and blocking tasks/result removed
 # ---------------------------------------------------------------------------
 
@@ -799,6 +891,7 @@ TS_TRIGGERS = {
     "R001": 'const sessionId = req.headers["Mcp-Session-Id"];\n',
     "R006": 'const transport = "sse";\n',
     "R007": 'const roots = await session.create_message(params);\n',
+    "R013": 'const METHODS = { "resources/subscribe": subscribeHandler };\n',
     "R014": 'const lastEventId = req.headers["Last-Event-ID"];\n',
     "R019": 'const m = "tasks/list";\n',
     "R020": 'export async function registerClient(url, metadata) { return fetch(url); }\n',
