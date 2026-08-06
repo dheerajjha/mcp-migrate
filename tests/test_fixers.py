@@ -682,6 +682,32 @@ def test_r011_leaves_comment_only_mentions_alone():
     assert result.text == before
 
 
+def test_r011_uses_slash_comments_in_typescript():
+    """R011 reads TypeScript, and `#` is not a comment there -- writing one
+    turns a valid file into a syntax error while the tool reports success.
+    That was #117."""
+    result = fix("PingRemovedFixer", 'const METHODS = { "ping": h };\n', path="server.ts")
+    assert result.changed
+    assert "// TODO(mcp-migrate)" in result.text
+    assert '// const METHODS = { "ping": h };' in result.text
+    assert "#" not in result.text
+
+
+def test_r011_does_not_touch_a_requester_style_identifier():
+    """`\\bPingRequest\\w*` also matches `PingRequester`, which has nothing to
+    do with the removed ping request. See #87."""
+    before = 'class PingRequester { send() {} }\n'
+    result = fix("PingRemovedFixer", before, path="a.ts")
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r011_still_catches_the_sdk_schema_name():
+    """Bounding the suffix must not cost the shape it was added for."""
+    result = fix("PingRemovedFixer", "x = PingRequestSchema\n", path="s.ts")
+    assert result.changed
+
+
 def test_r011_idempotent():
     once = fix("PingRemovedFixer", R011_BEFORE)
     twice = fix("PingRemovedFixer", once.text)

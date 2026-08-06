@@ -13,16 +13,22 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .base import Fixer, FixResult
+from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://modelcontextprotocol.io/specification/2026-07-28/changelog"
 COOKBOOK = "cookbook/06-ping-removed.md"
-TODO = (
-    "# TODO(mcp-migrate): ping is removed from the protocol; liveness now rides "
+# No comment marker baked in -- R011 reads TypeScript, and a `#` written into
+# a `.ts` file is a syntax error, not a comment. That was #117.
+TODO_BODY = (
+    "TODO(mcp-migrate): ping is removed from the protocol; liveness now rides "
     f"on the transport itself -- see {SPEC_URL} and {COOKBOOK}"
 )
 
-PING_CODE_RX = re.compile(r"\bPingRequest\w*")
+# Bounded, not `\w*`: the suffix exists for the TS SDK's Zod schema names
+# (`PingRequestSchema`), but `\w*` also swallows `PingRequester`. The R011
+# rule still has `\w*` -- that is #87. A fixer narrower than its rule is the
+# safe direction; the reverse means `--write` edits what `check` calls clean.
+PING_CODE_RX = re.compile(r"\bPingRequest(?:Params|Schema)?\b")
 PING_DISPATCH_RX = re.compile(
     r"""method\s*===?\s*["']ping["']|case\s*["']ping["']|[{,]\s*["']ping["']\s*:"""
 )
@@ -55,10 +61,12 @@ class PingRemovedFixer(Fixer):
         lines = source.splitlines(keepends=True)
         out: list[str] = []
         changes: list[str] = []
+        prefix = comment_prefix(path)
+        todo = f"{prefix}{TODO_BODY}"
 
         for i, raw_line in enumerate(lines, start=1):
             stripped = raw_line.lstrip(" \t")
-            already_commented = stripped.startswith(("#", "//"))
+            already_commented = is_commented(raw_line)
             ends_as_block_opener = raw_line.rstrip("\n").rstrip().endswith(":")
             hit = (
                 None
@@ -72,11 +80,11 @@ class PingRemovedFixer(Fixer):
                 body = stripped.rstrip("\n")
                 todo_added = False
 
-                if not (out and out[-1].strip(" \t\n") == TODO):
-                    out.append(f"{indent}{TODO}{newline}")
+                if not (out and out[-1].strip(" \t\n") == todo):
+                    out.append(f"{indent}{todo}{newline}")
                     todo_added = True
                 if _safe_to_comment_out(raw_line):
-                    out.append(f"{indent}# {body}{newline}")
+                    out.append(f"{indent}{prefix}{body}{newline}")
                     changes.append(f"line {i}: commented out {hit}, added TODO")
                 elif todo_added:
                     out.append(raw_line)
