@@ -114,6 +114,26 @@ def _print_language_hint(console, counts) -> None:
         )
 
 
+def _exit_for(findings, rules) -> int:
+    """Exit code from findings alone: 1 if anything breaking, else 0."""
+    return EXIT_FINDINGS if any(
+        rules[f.rule_id].severity == "breaking" for f in findings
+    ) else EXIT_OK
+
+
+def _checked_something(project) -> bool:
+    """Did we actually read source, or is this an empty/unreadable tree?
+
+    The discriminator between "partial coverage" and "could not check".
+    A TypeScript project is `PARTIAL` -- we withhold the *grade*, which is
+    correct and deliberate, but we did open files and run rules against
+    them, so the exit code has real information to carry. An empty
+    directory or a tree in a language with no backend read nothing, and
+    EXIT_UNSCANNABLE is the honest answer there.
+    """
+    return bool(project.files)
+
+
 def cmd_check(args) -> int:
     console = Console()
     root = Path(args.path).resolve()
@@ -169,7 +189,8 @@ def cmd_check(args) -> int:
                     "location": f.location(),
                 } for f in findings],
             }, indent=2))
-            return EXIT_UNSCANNABLE
+            return _exit_for(findings, rules) if _checked_something(project) \
+                else EXIT_UNSCANNABLE
         print(json.dumps({
             "spec": SPEC,
             "path": str(root),
@@ -185,9 +206,7 @@ def cmd_check(args) -> int:
                 "location": f.location(),
             } for f in findings],
         }, indent=2))
-        return EXIT_FINDINGS if any(
-            rules[f.rule_id].severity == "breaking" for f in findings
-        ) else EXIT_OK
+        return _exit_for(findings, rules)
 
     console.print()
     console.print(f"[bold]mcp-migrate[/bold] [dim]v{__version__}[/dim]  ->  {root.name}")
@@ -235,7 +254,14 @@ def cmd_check(args) -> int:
         console.print()
         # Not .capitalize() -- that lowercases the rest, turning "24
         # TypeScript" into "24 typescript".
-        headline = "No grade for this one." if findings else "Nothing scannable here."
+        # "Nothing scannable" is only true when we opened nothing. A clean
+        # TypeScript tree now exits 0, and pairing that with "nothing
+        # scannable" would contradict it -- we did read those files and run
+        # every rule that covers them; what we withheld is the grade.
+        headline = (
+            "Nothing scannable here." if not _checked_something(project)
+            else "No grade for this one."
+        )
         console.print(
             f"[bold yellow]{headline}[/bold yellow] {reason[0].upper()}{reason[1:]}."
         )
@@ -258,7 +284,8 @@ def cmd_check(args) -> int:
             "not read.[/dim]"
         )
         console.print()
-        return EXIT_UNSCANNABLE
+        return _exit_for(findings, rules) if _checked_something(project) \
+            else EXIT_UNSCANNABLE
 
     n_python = sum(1 for f in project.files if f.language == "python")
     console.print(f"[dim]{n_python} Python files, {len(rules)} rules, spec {SPEC}[/dim]")

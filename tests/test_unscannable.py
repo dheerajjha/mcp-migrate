@@ -67,16 +67,28 @@ def python_tree(tmp_path: Path) -> Path:
 
 # --- check refuses ------------------------------------------------------
 
-@pytest.mark.parametrize("fixture", ["empty_tree", "ts_tree"])
-def test_check_refuses_and_offers_no_grade(fixture, request, capsys):
+# The exit code differs between these two and the grade does not: an empty
+# tree was never read (2, "could not check"), while a clean TypeScript tree
+# was read by every rule that covers it and simply cannot carry a letter
+# (0, nothing breaking found). Withholding the grade is the same decision
+# in both cases; the exit code is not. See #98.
+@pytest.mark.parametrize("fixture,expected_exit", [
+    ("empty_tree", 2),
+    ("ts_tree", 0),
+])
+def test_check_offers_no_grade(fixture, expected_exit, request, capsys):
     root = request.getfixturevalue(fixture)
     exit_code = main(["check", str(root)])
     out = capsys.readouterr().out
 
-    assert exit_code == 2, "an unreadable tree is neither a pass (0) nor findings (1)"
-    assert "Nothing scannable" in out
-    assert "Grade" not in out, f"refused to scan but still emitted a grade: {out}"
-    assert "img.shields.io" not in out, "refused to scan but still offered a badge"
+    assert exit_code == expected_exit
+    assert "Grade" not in out, f"refused to grade but still emitted a grade: {out}"
+    assert "img.shields.io" not in out, "refused to grade but still offered a badge"
+
+
+def test_an_empty_tree_says_nothing_was_scannable(empty_tree, capsys):
+    main(["check", str(empty_tree)])
+    assert "Nothing scannable" in capsys.readouterr().out
 
 
 def test_check_names_the_language_it_found_but_cannot_read(ts_tree, capsys):
@@ -85,13 +97,16 @@ def test_check_names_the_language_it_found_but_cannot_read(ts_tree, capsys):
     assert "TypeScript" in out, "should say what it found, not just that it gave up"
 
 
-@pytest.mark.parametrize("fixture", ["empty_tree", "ts_tree"])
-def test_check_json_reports_no_grade(fixture, request, capsys):
+@pytest.mark.parametrize("fixture,expected_exit", [
+    ("empty_tree", 2),
+    ("ts_tree", 0),
+])
+def test_check_json_reports_no_grade(fixture, expected_exit, request, capsys):
     root = request.getfixturevalue(fixture)
     exit_code = main(["check", str(root), "--json"])
     data = json.loads(capsys.readouterr().out)
 
-    assert exit_code == 2
+    assert exit_code == expected_exit
     assert data["scannable"] is False
     assert data["grade"] is None, "a null grade is the only honest machine answer here"
     assert data["score"] is None

@@ -1268,7 +1268,9 @@ def test_typescript_only_tree_reports_findings_without_a_grade(tmp_path, capsys)
     exit_code = main(["check", str(_write(tmp_path, "transport.ts", LEGACY_TS)), "--json"])
     data = json.loads(capsys.readouterr().out)
 
-    assert exit_code == 2
+    # 1, not 2: R001 is `breaking`, and a breaking finding has to be able
+    # to fail a build even where the grade is withheld (#98).
+    assert exit_code == 1
     assert data["scannable"] is False
     assert data["grade"] is None
     assert data["score"] is None
@@ -1472,3 +1474,59 @@ def test_production_typescript_that_merely_contains_test_in_the_name_is_kept(tmp
     (tmp_path / "latest.ts").write_text(LEGACY_TS)
     names = sorted(f.path.name for f in load_project(tmp_path).files)
     assert names == ["latest.ts", "testUtils.ts"]
+
+
+# --- exit codes on a partially-covered language (#98) --------------------
+#
+# Withholding the *grade* on partial coverage is deliberate and stays.
+# But findings are findings whether or not we'll stand behind a letter,
+# and before this the ungraded branch returned EXIT_UNSCANNABLE
+# unconditionally -- so a TypeScript server with a real `breaking`
+# finding was indistinguishable, to a shell, from a typo'd path. Most MCP
+# servers are TypeScript, so no TypeScript user could fail a build on a
+# breaking change.
+
+def test_typescript_with_a_breaking_finding_exits_one(tmp_path, capsys):
+    exit_code = main(["check", str(_write(tmp_path, "transport.ts", LEGACY_TS))])
+    capsys.readouterr()
+    assert exit_code == 1, "a breaking finding must fail a build"
+
+
+def test_clean_typescript_exits_zero(tmp_path, capsys):
+    exit_code = main(["check", str(_write(tmp_path, "transport.ts", CLEAN_TS))])
+    capsys.readouterr()
+    assert exit_code == 0
+
+
+def test_an_empty_tree_still_exits_unscannable(tmp_path, capsys):
+    # Nothing was read, so there is nothing to report -- 2 stays 2 here.
+    exit_code = main(["check", str(tmp_path)])
+    capsys.readouterr()
+    assert exit_code == 2
+
+
+def test_a_language_with_no_backend_still_exits_unscannable(tmp_path, capsys):
+    (tmp_path / "main.go").write_text("package main\n")
+    exit_code = main(["check", str(tmp_path)])
+    capsys.readouterr()
+    assert exit_code == 2
+
+
+def test_the_grade_is_still_withheld_for_typescript(tmp_path, capsys):
+    # The exit code changing must not be read as the grade changing.
+    main(["check", str(_write(tmp_path, "transport.ts", LEGACY_TS)), "--json"])
+    data = json.loads(capsys.readouterr().out)
+    assert data["scannable"] is False
+    assert data["grade"] is None
+    assert data["score"] is None
+
+
+def test_json_and_console_exit_codes_agree(tmp_path, capsys):
+    # Two return paths, one contract. They drifted apart once already.
+    for source in (LEGACY_TS, CLEAN_TS):
+        root = _write(tmp_path, "transport.ts", source)
+        console = main(["check", str(root)])
+        capsys.readouterr()
+        as_json = main(["check", str(root), "--json"])
+        capsys.readouterr()
+        assert console == as_json, f"exit codes disagree for {source[:20]!r}"
