@@ -1,6 +1,3 @@
-<!-- STUB: rule/spec filled in, before/after/gotchas still needed. See
-     .github/GOOD_FIRST_ISSUES.md for the ready-to-file issue for this one. -->
-
 # SSE resumability (`Last-Event-ID`) removed
 
 - **Rule:** [R014](../src/mcp_migrate/rules/r014_sse_resumability_removed.py)
@@ -21,20 +18,47 @@ a client behavior that no longer exists.
 
 ## Before
 
-TODO: an event store keyed by event ID, and logic that replays from
-`Last-Event-ID` on reconnect.
+```python
+_events: dict[str, list[tuple[str, dict]]] = {}
+
+async def stream(request):
+    last_id = request.headers.get("Last-Event-ID")
+    if last_id and last_id in _events:
+        for event_id, payload in _replay_from(last_id):
+            yield sse_event(event_id, payload)
+    async for event_id, payload in generate_events():
+        _events.setdefault(session_id, []).append((event_id, payload))
+        yield sse_event(event_id, payload)
+```
 
 ## After
 
-TODO: the event store and replay logic removed. What (if anything) needs to
-change on the client side of the same server to stop sending
-`Last-Event-ID` and instead just retry the original request.
+```python
+async def stream(request):
+    async for event_id, payload in generate_events():
+        yield sse_event(event_id, payload)
+```
+
+If the client's connection drops, it makes a new request from scratch. There
+is no `Last-Event-ID` to read and nothing to replay.
 
 ## Gotchas
 
-TODO: if the event store also served a purpose beyond resumability (e.g.
-audit logging, debugging), what's the safe way to retire the resumability
-half without losing that other purpose?
+- **Don't delete the event store outright if it also serves audit logging or
+  debugging.** Split the two purposes: keep persisting events for whatever
+  else reads them, drop only the replay-on-reconnect code path and the
+  `Last-Event-ID` request-header handling.
+- **This rule matches the header name in any casing** (`Last-Event-ID`,
+  `last_event_id`, `LAST_EVENT_ID`) via `search_code`, so a comment
+  mentioning it in passing ("we used to support Last-Event-ID here") won't
+  fire, but a variable or dict key still named `last_event_id` that's
+  genuinely dead code will -- worth deleting the dead code rather than
+  leaving it stubbed out.
+- **Client-side code needs the matching change.** If the same codebase (or a
+  paired client SDK) sends `Last-Event-ID` on reconnect, that call site has
+  to go too -- the rule only scans for server-side implementation, it
+  doesn't check whether a client elsewhere in the project still tries to
+  resume.
 
 ## Spec link
 

@@ -37,6 +37,7 @@ Every recipe follows [`_TEMPLATE.md`](_TEMPLATE.md):
 | 14 | [Required Mcp-Method / Mcp-Name routing headers](14-routing-headers.md) | R003 | none |
 | 06 | [ping removed](06-ping-removed.md) | R011 | none yet |
 | 07 | [logging/setLevel removed](07-logging-set-level-removed.md) | R012 | none yet |
+| 08 | [SSE resumability removed](08-sse-resumability-removed.md) | R014 | none |
 
 ## Stubs -- open slots
 
