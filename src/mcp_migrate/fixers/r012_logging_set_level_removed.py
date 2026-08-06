@@ -13,17 +13,23 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .base import Fixer, FixResult
+from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://modelcontextprotocol.io/specification/2026-07-28/changelog"
 COOKBOOK = "cookbook/07-logging-set-level-removed.md"
-TODO = (
-    "# TODO(mcp-migrate): logging/setLevel is removed; read the log level off "
+# No comment marker baked in -- R012 reads TypeScript, and a `#` written into
+# a `.ts` file is a syntax error, not a comment. That was #117.
+TODO_BODY = (
+    "TODO(mcp-migrate): logging/setLevel is removed; read the log level off "
     f'_meta["io.modelcontextprotocol/logLevel"] on each request instead -- see '
     f"{SPEC_URL} and {COOKBOOK}"
 )
 
-SET_LEVEL_CODE_RX = re.compile(r"\bSetLevelRequest\w*")
+# Bounded, not `\w*`. This one matters more than most: `SetLevelRequester...`
+# is not a block opener, so nothing downstream stops the line from being
+# commented out entirely -- a working call site disappears rather than merely
+# picking up a wrong TODO. The R012 rule still has `\w*`; that is #87.
+SET_LEVEL_CODE_RX = re.compile(r"\bSetLevelRequest(?:Params|Schema)?\b")
 SET_LEVEL_DISPATCH_RX = re.compile(
     r"""method\s*===?\s*["']logging/setLevel["']"""
     r"""|case\s*["']logging/setLevel["']"""
@@ -58,10 +64,12 @@ class LoggingSetLevelRemovedFixer(Fixer):
         lines = source.splitlines(keepends=True)
         out: list[str] = []
         changes: list[str] = []
+        prefix = comment_prefix(path)
+        todo = f"{prefix}{TODO_BODY}"
 
         for i, raw_line in enumerate(lines, start=1):
             stripped = raw_line.lstrip(" \t")
-            already_commented = stripped.startswith(("#", "//"))
+            already_commented = is_commented(raw_line)
             ends_as_block_opener = raw_line.rstrip("\n").rstrip().endswith(":")
             hit = (
                 None
@@ -75,11 +83,11 @@ class LoggingSetLevelRemovedFixer(Fixer):
                 body = stripped.rstrip("\n")
                 todo_added = False
 
-                if not (out and out[-1].strip(" \t\n") == TODO):
-                    out.append(f"{indent}{TODO}{newline}")
+                if not (out and out[-1].strip(" \t\n") == todo):
+                    out.append(f"{indent}{todo}{newline}")
                     todo_added = True
                 if _safe_to_comment_out(raw_line):
-                    out.append(f"{indent}# {body}{newline}")
+                    out.append(f"{indent}{prefix}{body}{newline}")
                     changes.append(f"line {i}: commented out {hit}, added TODO")
                 elif todo_added:
                     out.append(raw_line)

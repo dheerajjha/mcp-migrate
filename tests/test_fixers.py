@@ -866,6 +866,35 @@ def test_r011_still_catches_the_sdk_schema_name():
 def test_r011_idempotent():
     once = fix("PingRemovedFixer", R011_BEFORE)
     twice = fix("PingRemovedFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+def test_r012_uses_slash_comments_in_typescript():
+    """R012 reads TypeScript; `#` there is a syntax error, not a comment (#117)."""
+    result = fix("LoggingSetLevelRemovedFixer",
+                 'const h = { "logging/setLevel": setLevel };\n', path="server.ts")
+    assert result.changed
+    assert "// TODO(mcp-migrate)" in result.text
+    assert "#" not in result.text
+
+
+def test_r012_does_not_comment_out_a_requester_style_identifier():
+    """`\\bSetLevelRequest\\w*` matches `SetLevelRequesterFactory`, which is
+    unrelated to logging/setLevel. It is also not a block opener, so nothing
+    stops the line being commented out entirely -- a live call site would
+    disappear. See #87."""
+    before = 'const x = SetLevelRequesterFactory();\n'
+    result = fix("LoggingSetLevelRemovedFixer", before, path="a.ts")
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r012_still_catches_the_sdk_schema_name():
+    result = fix("LoggingSetLevelRemovedFixer", "x = SetLevelRequestSchema\n", path="s.ts")
+    assert result.changed
+
+
 def test_r012_idempotent():
     once = fix("LoggingSetLevelRemovedFixer", R012_BEFORE)
     twice = fix("LoggingSetLevelRemovedFixer", once.text)
