@@ -160,6 +160,15 @@ class MissingRoutingHeaders(Rule):
         return out
 
     def _check_ts(self, project: Project) -> list[Finding]:
+        # Hoisted out of the per-file loop below. `search_wire` walks every
+        # file in the project on each call, so issuing it once per file --
+        # and then discarding all but the current file's matches -- is
+        # O(files**2). That is the #67 shape; see tests/test_scan_complexity.py,
+        # which now fails if it comes back here or anywhere else.
+        calls_by_path: dict = {}
+        for file_obj, line, text in project.search_wire(TS_HTTP_CALL):
+            calls_by_path.setdefault(file_obj.path, []).append((line, text))
+
         out: list[Finding] = []
         for f in project.files:
             if not TS_MCP_SURFACE_RX.search(f.text):
@@ -171,11 +180,7 @@ class MissingRoutingHeaders(Rule):
             if not missing_method and not missing_name:
                 continue
 
-            calls = [
-                (line, text)
-                for file_obj, line, text in project.search_wire(TS_HTTP_CALL)
-                if file_obj.path == f.path
-            ]
+            calls = calls_by_path.get(f.path)
             if not calls:
                 continue
 
