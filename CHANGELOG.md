@@ -4,9 +4,9 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
-**TypeScript coverage went from 17 of 21 rules to 20, and the cookbook went
-from six recipes to eighteen.** Every line of it was contributed by
-@waterlemonnn, across a single day.
+**TypeScript coverage went from 17 of 21 rules to 20, the fixer set from ten
+to sixteen, and the cookbook from six recipes to eighteen.** All of it was
+contributed.
 
 ### Added
 
@@ -106,11 +106,6 @@ from six recipes to eighteen.** Every line of it was contributed by
 
 ### Known issues
 
-- **R014's TypeScript path is case-sensitive**, so `lastEventID` and
-  `LastEventId` are missed while `lastEventId` is caught. Same shape as
-  #123 — a flag that never reaches the search.
-  ([#143](https://github.com/dheerajjha/mcp-migrate/issues/143), found by
-  @PuvaanRaaj's independent port in #60)
 - **The three false-positive classes from 0.1.4 are still open**:
   [#87](https://github.com/dheerajjha/mcp-migrate/issues/87) (unbounded
   `\w*` suffixes), [#88](https://github.com/dheerajjha/mcp-migrate/issues/88)
