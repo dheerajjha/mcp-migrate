@@ -116,7 +116,13 @@ def _has_request_handlers(project: Project) -> bool:
 def _has_discover(project: Project) -> bool:
     if any(project.search_code(DISCOVER_CODE_RX.pattern)):
         return True
-    if any(project.search(r"server/discover")):
+    # search_wire rather than raw search: the wire name is a string
+    # literal, but a comment or docstring saying "server/discover is not
+    # implemented yet" is prose, and letting prose satisfy the check would
+    # suppress the finding for the whole project -- the worst failure mode
+    # available here, since nobody ever sees a finding that was silently
+    # withheld. See _ts_has_discover below, which already gets this right.
+    if any(project.search_wire(r"server/discover")):
         return True
     return False
 
