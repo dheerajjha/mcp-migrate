@@ -781,3 +781,119 @@ def test_fix_write_then_check_improves_the_grade(roundtrip_copy, capsys):
     # And overall (not just the rules we fix), the project has strictly
     # fewer findings after the fix than before.
     assert len(findings_after) < len(findings_before)
+
+
+# --- comment syntax follows the file, not the fixer (#117) ---------------
+#
+# `#` does not open a comment in TypeScript. A fixer that hardcodes it
+# writes a syntax error into the user's source and then reports success --
+# strictly worse than the finding it was repairing, because every other
+# failure mode in this project produces a wrong *report* a human reads and
+# discards, while this one edits their code and leaves it broken.
+
+TS_SUFFIXES = (".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs")
+
+# One source per comment-emitting fixer, shaped to trip it. Written in
+# TypeScript syntax, since that is the language whose comments differ.
+TS_TRIGGERS = {
+    "R001": 'const sessionId = req.headers["Mcp-Session-Id"];\n',
+    "R006": 'const transport = "sse";\n',
+    "R007": 'const roots = await session.create_message(params);\n',
+    "R014": 'const lastEventId = req.headers["Last-Event-ID"];\n',
+    "R019": 'const m = "tasks/list";\n',
+    "R020": 'export async function registerClient(url, metadata) { return fetch(url); }\n',
+}
+
+
+def test_no_fixer_writes_a_python_comment_into_typescript():
+    # The regression guard for #117, across every fixer at once: a new
+    # fixer that hardcodes `# ` fails here without anyone remembering to
+    # add it to a list.
+    for fixer in all_fixers():
+        source = TS_TRIGGERS.get(fixer.rule_id)
+        if source is None:
+            continue
+        result = fixer.fix(source, Path("server.ts"))
+        if not result.changed:
+            continue
+        added = [
+            line for line in result.text.splitlines()
+            if line.lstrip().startswith("#")
+        ]
+        assert not added, (
+            f"{type(fixer).__name__} wrote a Python `#` comment into a .ts "
+            f"file, which does not parse: {added}"
+        )
+
+
+def test_typescript_fixes_use_slash_comments():
+    from mcp_migrate.fixers.r001_session_id import SessionIdHeaderFixer
+
+    source = 'const sessionId = req.headers["Mcp-Session-Id"];\n'
+    result = SessionIdHeaderFixer().fix(source, Path("server.ts"))
+
+    assert result.changed
+    assert "// TODO(mcp-migrate)" in result.text
+    assert '// const sessionId' in result.text
+    assert "#" not in result.text
+
+
+def test_python_fixes_still_use_hash_comments():
+    from mcp_migrate.fixers.r001_session_id import SessionIdHeaderFixer
+
+    source = 'session_id = request.headers.get("Mcp-Session-Id")\n'
+    result = SessionIdHeaderFixer().fix(source, Path("server.py"))
+
+    assert result.changed
+    assert "# TODO(mcp-migrate)" in result.text
+    # Checked per line, not as a substring: the TODO carries a spec URL,
+    # and `https://` contains a `//` that is not a comment marker.
+    assert not [ln for ln in result.text.splitlines() if ln.lstrip().startswith("//")]
+
+
+@pytest.mark.parametrize("suffix", TS_SUFFIXES)
+def test_every_c_family_suffix_gets_slash_comments(suffix):
+    # .mts/.cts/.mjs/.cjs are read by the scanner and were missing from the
+    # one hardcoded suffix list that did exist, so they corrupted silently.
+    from mcp_migrate.fixers.base import comment_prefix
+
+    assert comment_prefix(Path(f"server{suffix}")) == "// "
+
+
+def test_unknown_suffix_falls_back_to_hash():
+    from mcp_migrate.fixers.base import comment_prefix
+
+    assert comment_prefix(Path("server.py")) == "# "
+    assert comment_prefix(Path("Makefile")) == "# "
+
+
+def test_typescript_fix_output_has_no_stray_hash_lines():
+    # End-to-end on the issue's own repro: the whole point is that the
+    # file still parses as TypeScript afterwards.
+    from mcp_migrate.fixers.r001_session_id import SessionIdHeaderFixer
+    from mcp_migrate.fixers.r019_tasks_polling import TasksPollingFixer
+
+    source = (
+        "export function register(server: Server) {\n"
+        '  const sessionId = req.headers["Mcp-Session-Id"];\n'
+        '  const m = "tasks/list";\n'
+        "  return { sessionId, m };\n"
+        "}\n"
+    )
+    text = SessionIdHeaderFixer().fix(source, Path("server.ts")).text
+    text = TasksPollingFixer().fix(text, Path("server.ts")).text
+
+    assert not [ln for ln in text.splitlines() if ln.lstrip().startswith("#")]
+    assert text.count("// TODO(mcp-migrate)") == 2
+
+
+def test_typescript_fixes_stay_idempotent():
+    # The `already_commented` check has to recognise `//`, or a second run
+    # comments the comment.
+    from mcp_migrate.fixers.r001_session_id import SessionIdHeaderFixer
+
+    fixer = SessionIdHeaderFixer()
+    once = fixer.fix('const s = req.headers["Mcp-Session-Id"];\n', Path("server.ts")).text
+    twice = fixer.fix(once, Path("server.ts"))
+
+    assert not twice.changed, "second run must be a no-op"

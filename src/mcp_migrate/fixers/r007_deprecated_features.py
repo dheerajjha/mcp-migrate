@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .base import Fixer, FixResult
+from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://modelcontextprotocol.io/specification/draft/changelog"
 COOKBOOK = "cookbook/18-roots-sampling-logging-deprecated.md"
@@ -28,9 +28,9 @@ FEATURES: dict[str, str] = {
 FEATURE_RX = tuple((re.compile(p), name) for p, name in FEATURES.items())
 
 
-def _todo(feature: str) -> str:
+def _todo(feature: str, prefix: str) -> str:
     return (
-        f"# TODO(mcp-migrate): {feature} is deprecated as a core capability; "
+        f"{prefix}TODO(mcp-migrate): {feature} is deprecated as a core capability; "
         f"see {SPEC_URL} and {COOKBOOK}"
     )
 
@@ -62,21 +62,23 @@ class DeprecatedCoreFeaturesFixer(Fixer):
         out: list[str] = []
         changes: list[str] = []
 
+        prefix = comment_prefix(path)
+
         for i, raw_line in enumerate(lines, start=1):
             stripped = raw_line.lstrip(" \t")
-            already_commented = stripped.startswith("#")
+            already_commented = is_commented(raw_line)
             feature = None if already_commented else _feature_on_line(raw_line)
 
             if feature:
                 indent = raw_line[: len(raw_line) - len(stripped)]
                 newline = "\n" if raw_line.endswith("\n") else ""
-                todo = _todo(feature)
+                todo = _todo(feature, prefix)
                 body = stripped.rstrip("\n")
 
                 if not (out and out[-1].strip(" \t\n") == todo):
                     out.append(f"{indent}{todo}{newline}")
                 if _safe_to_comment_out(raw_line):
-                    out.append(f"{indent}# {body}{newline}")
+                    out.append(f"{indent}{prefix}{body}{newline}")
                     changes.append(
                         f"line {i}: commented out deprecated {feature} usage, added TODO"
                     )

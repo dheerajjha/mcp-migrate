@@ -13,12 +13,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .base import Fixer, FixResult
+from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://modelcontextprotocol.io/specification/2026-07-28/changelog"
 COOKBOOK = "cookbook/11-tasks-polling.md"
 TODO = (
-    "# TODO(mcp-migrate): tasks/list and blocking tasks/result are removed; "
+    "TODO(mcp-migrate): tasks/list and blocking tasks/result are removed; "
     f"poll with tasks/get + tasks/update and declare io.modelcontextprotocol/tasks "
     f"under extensions — see {SPEC_URL} and {COOKBOOK}"
 )
@@ -55,9 +55,12 @@ class TasksPollingFixer(Fixer):
         out: list[str] = []
         changes: list[str] = []
 
+        prefix = comment_prefix(path)
+        todo = f"{prefix}{TODO}"
+
         for i, raw_line in enumerate(lines, start=1):
             stripped = raw_line.lstrip(" \t")
-            already_commented = stripped.startswith("#")
+            already_commented = is_commented(raw_line)
             ends_as_block_opener = raw_line.rstrip("\n").rstrip().endswith(":")
             hit = (
                 None
@@ -71,11 +74,11 @@ class TasksPollingFixer(Fixer):
                 body = stripped.rstrip("\n")
                 todo_added = False
 
-                if not (out and out[-1].strip(" \t\n") == TODO):
-                    out.append(f"{indent}{TODO}{newline}")
+                if not (out and out[-1].strip(" \t\n") == todo):
+                    out.append(f"{indent}{todo}{newline}")
                     todo_added = True
                 if _safe_to_comment_out(raw_line):
-                    out.append(f"{indent}# {body}{newline}")
+                    out.append(f"{indent}{prefix}{body}{newline}")
                     changes.append(f"line {i}: commented out {hit}, added TODO")
                 elif todo_added:
                     out.append(raw_line)
