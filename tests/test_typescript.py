@@ -40,6 +40,9 @@ from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissin
 from mcp_migrate.rules.r016_cacheable_result_required import (
     CacheableResultMetadataMissing,
 )
+from mcp_migrate.rules.r017_resource_not_found_code_changed import (
+    ResourceNotFoundCodeChanged,
+)
 from mcp_migrate.rules.r018_multi_round_trip_replaces_server_initiated import (
     MultiRoundTripReplacesServerInitiated,
 )
@@ -965,6 +968,43 @@ server.setRequestHandler("tools/list", async () => {
     findings = CacheableResultMetadataMissing().check(project)
     assert len(findings) == 1
     assert findings[0].line == 5
+
+
+# --- R017: the old -32002 resource-not-found error code -------------------
+
+def test_r017_finds_the_old_error_code_in_typescript(tmp_path):
+    code = """\
+export function handleReadResource(uri: string) {
+  if (!exists(uri)) {
+    return { code: -32002, message: "resource not found" };
+  }
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = ResourceNotFoundCodeChanged().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 3
+
+
+def test_r017_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export function handleReadResource(uri: string) {
+  if (!exists(uri)) {
+    return { code: -32602, message: "resource not found" };
+  }
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert ResourceNotFoundCodeChanged().check(project) == []
+
+
+def test_r017_ignores_typescript_comment_only_mentions(tmp_path):
+    code = """\
+// The old -32002 resource not found code is replaced by -32602.
+export const protocolVersion = "2026-07-28";
+"""
+    project = load_project(_write(tmp_path, "notes.ts", code)).for_language("typescript")
+    assert ResourceNotFoundCodeChanged().check(project) == []
 
 
 # --- R010: server/discover missing ---------------------------------------
