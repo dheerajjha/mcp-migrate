@@ -1,6 +1,3 @@
-<!-- STUB: rule/spec filled in, before/after/gotchas still needed. See
-     .github/GOOD_FIRST_ISSUES.md for the ready-to-file issue for this one. -->
-
 # Tasks moved to an extension; polling replaces blocking `tasks/result`
 
 - **Rule:** [R019](../src/mcp_migrate/rules/r019_tasks_polling_replaces_blocking_result.py)
@@ -20,21 +17,57 @@ mechanics) rather than assuming it's always available.
 
 ## Before
 
-TODO: a handler for `GetTaskPayloadRequest`/blocking `tasks/result`, plus any
-`tasks/list` implementation.
+```python
+async def handle_request(method: str, params: dict) -> dict:
+    if method == "tasks/result":
+        task_id = params["taskId"]
+        while not _tasks[task_id].done:
+            await asyncio.sleep(1)
+        return {"result": _tasks[task_id].result}
+    if method == "tasks/list":
+        return {"tasks": [t.summary() for t in _tasks.values()]}
+```
 
 ## After
 
-TODO: the same functionality via `tasks/get` + `tasks/update` polling, with
-`io.modelcontextprotocol/tasks` declared under `extensions`.
+```python
+async def handle_request(method: str, params: dict) -> dict:
+    if method == "tasks/get":
+        task_id = params["taskId"]
+        task = _tasks[task_id]
+        return {"status": task.status, "result": task.result if task.done else None}
+    if method == "tasks/update":
+        task_id, action = params["taskId"], params["action"]
+        return await _apply_task_update(task_id, action)
+```
+
+```python
+def declare_extensions() -> dict:
+    return {"io.modelcontextprotocol/tasks": {}}
+```
 
 ## Gotchas
 
-TODO: what does a client-side polling loop look like against this, and what
-polling interval/backoff is reasonable? This is also a good spot to note
-the double-reporting relationship, if any, with R018's Multi Round-Trip
-Requests -- both concern long-running/deferred work, but via different
-mechanisms.
+- **`tasks/list` has no replacement -- it's just gone.** If your client
+  relied on enumerating tasks, that has to be tracked client-side (e.g. by
+  remembering the task ids it created) rather than asked of the server.
+- **A blocking `while ... await asyncio.sleep(1)` loop server-side stops
+  being the pattern; the client polls instead.** Don't reimplement the old
+  blocking wait behind the new method names -- `tasks/get` should return
+  immediately with current status, not block until done, or you've just
+  moved the same problem one layer down.
+- **Overlaps conceptually with R018's Multi Round-Trip Requests, but
+  they're different mechanisms for different problems.** R018 is about a
+  server needing *more input* mid-call (roots, sampling, elicitation);
+  tasks are about work that's *long-running* and doesn't need more input,
+  just time. A handler can use both in the same server without either rule
+  double-reporting the other, since they match on different identifiers
+  entirely.
+- **Declaring the extension isn't optional busywork.** A 2026-07-28 client
+  checks `extensions` before assuming task support exists at all -- without
+  the `io.modelcontextprotocol/tasks` entry, a compliant client won't call
+  `tasks/get`/`tasks/update` on your server regardless of whether you
+  implement them.
 
 ## Spec link
 
