@@ -1,6 +1,3 @@
-<!-- STUB: rule/spec filled in, before/after/gotchas still needed. See
-     .github/GOOD_FIRST_ISSUES.md for the ready-to-file issue for this one. -->
-
 # Resource-not-found error code changed: `-32002` to `-32602`
 
 - **Rule:** [R017](../src/mcp_migrate/rules/r017_resource_not_found_code_changed.py)
@@ -27,22 +24,52 @@ mention of "resource" or "not found" on the same line) doesn't catch.
 
 ## Before
 
-TODO: a real error-raising call site using `-32002` for a resource lookup
-failure -- ideally one shaped realistically enough to show what the fixer's
-context requirement (`-32002` plus "resource"/"not found" on the same line)
-does and doesn't catch.
+```python
+def read_resource(uri: str) -> bytes:
+    if uri not in _resources:
+        raise JSONRPCError(code=-32002, message=f"resource not found: {uri}")
+    return _resources[uri]
+```
 
 ## After
 
-TODO: the same call site with `-32602`.
+```python
+def read_resource(uri: str) -> bytes:
+    if uri not in _resources:
+        raise JSONRPCError(code=-32602, message=f"resource not found: {uri}")
+    return _resources[uri]
+```
+
+`mcp-migrate fix --write` produces exactly this -- the `-32002` line has
+both the code and the word "resource" on it, which is all the fixer's
+context check requires before doing the numeric rename.
 
 ## Gotchas
 
-TODO: what happens when the code and the qualifying context ("resource",
-"not found") are on different lines (e.g. a multi-line `raise
-JSONRPCError(\n    code=-32002,\n    message="resource not found",\n)`)? The
-fixer's rule-mirrored heuristic requires both on one line -- this is a real
-limitation worth documenting with an example.
+- **The code and the qualifying context need to be on the same line.** A
+  multi-line raise splits them apart:
+
+  ```python
+  raise JSONRPCError(
+      code=-32002,
+      message="not found",
+  )
+  ```
+
+  Here the fixer (and the rule) never sees `-32002` and `not found` on one
+  line, so neither fires -- this has to be caught and fixed by hand, or
+  reformatted onto one line first.
+- **`-32002` used for something other than resource-not-found is correctly
+  left alone.** If your server (unusually) repurposes `-32002` for a
+  different condition, a line like `raise JSONRPCError(code=-32002,
+  message="rate limited")` has no "resource"/"not found" context, so
+  neither the rule nor the fixer touches it -- that's intentional, not a
+  gap.
+- **This is one of the few `safe`-confidence fixers in the project.**
+  Unlike most fixers here, which comment out code and leave a `TODO`
+  because there's no mechanical replacement, this one is a pure numeric
+  literal swap once the context check passes, so it applies the change
+  directly rather than flagging it for review.
 
 ## Spec link
 
