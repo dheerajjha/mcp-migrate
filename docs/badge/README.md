@@ -30,8 +30,16 @@ someone else's README.
 ## Usage
 
 ```markdown
-![MCP 2026-07-28](https://img.shields.io/endpoint?url=https://<pages-host>/badge/sooperset/mcp-atlassian.json)
+![MCP 2026-07-28](https://img.shields.io/endpoint?url=https://dheerajjha.github.io/mcp-migrate/badge/sooperset/mcp-atlassian.json)
 ```
 
-Publishing the directory to GitHub Pages is the remaining step; until then the
-files are generated and committed but not yet served.
+**These are live.** GitHub Pages serves this directory from `main`, so the
+URL above works today and shields.io renders it:
+
+```
+$ curl -s https://dheerajjha.github.io/mcp-migrate/badge/sooperset/mcp-atlassian.json
+{ "schemaVersion": 1, "label": "MCP 2026-07-28 (0.1.1)", "message": "C", "color": "yellow" }
+```
+
+The grade updates when the Board workflow regenerates this directory — the
+badge image itself never has to change.

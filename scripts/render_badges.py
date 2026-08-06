@@ -13,7 +13,7 @@ document we publish, and shields renders whatever it says at request time.
 Regenerate the JSON when the registry changes and every badge in every
 README updates itself.
 
-    https://img.shields.io/endpoint?url=https://<pages-host>/badge/sooperset/mcp-atlassian.json
+    https://img.shields.io/endpoint?url=https://dheerajjha.github.io/mcp-migrate/badge/sooperset/mcp-atlassian.json
 
 This is a transform over data we already have -- `registry/servers/*.yaml`
 carries a grade per listed server -- not new analysis. No server, no

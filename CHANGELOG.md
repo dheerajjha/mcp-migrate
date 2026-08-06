@@ -85,8 +85,10 @@ Still real, still shipping, listed because they are.
   ([#123](https://github.com/dheerajjha/mcp-migrate/issues/123)), so it finds
   `"resource not found"` but misses `"Resource Not Found"`. A false negative,
   not a false positive.
-- **The badge endpoints are generated but not yet served** until GitHub Pages
-  is publishing `docs/`.
+- **Badge endpoints report the grade from the last registry scan**, not from a
+  fresh scan of your repo. They update when the Board workflow regenerates
+  them, which is what makes them live relative to the old baked-in image —
+  but a grade there can still lag your `main`.
 
 ### Contributors
 
