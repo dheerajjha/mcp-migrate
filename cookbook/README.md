@@ -44,6 +44,7 @@ Every recipe follows [`_TEMPLATE.md`](_TEMPLATE.md):
 | 12 | [Dynamic Client Registration deprecated](12-dynamic-client-registration-deprecated.md) | R020 | none |
 | 13 | [JSON Schema 2020-12 required](13-json-schema-2020-12.md) | R021 | none |
 | 15 | [Deterministic tools/list ordering](15-deterministic-tool-ordering.md) | R004 | R004 (safe, list-literal shape only) |
+| 17 | [Trace context propagation from _meta](17-trace-context-propagation.md) | R008 | none |
 
 ## Stubs -- open slots
 
@@ -65,7 +66,6 @@ ready-to-file issue for each.
 | 12 | [Dynamic Client Registration deprecated](12-dynamic-client-registration-deprecated.md) | R020 |
 | 15 | [Deterministic tools/list ordering](15-deterministic-tool-ordering.md) | R004 |
 | 16 | [extensions map on ServerCapabilities](16-extensions-map.md) | R005 |
-| 17 | [Trace context propagation from _meta](17-trace-context-propagation.md) | R008 |
 | 18 | [Roots / Sampling / Logging deprecated as core capabilities](18-roots-sampling-logging-deprecated.md) | R007 |
 
 ## Adding one

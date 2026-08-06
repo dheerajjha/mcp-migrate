@@ -1,6 +1,3 @@
-<!-- STUB: rule/spec filled in, before/after/gotchas still needed. See
-     .github/GOOD_FIRST_ISSUES.md for the ready-to-file issue for this one. -->
-
 # Trace context now travels in `_meta`
 
 - **Rule:** [R008](../src/mcp_migrate/rules/r008_trace_context.py)
@@ -25,19 +22,62 @@ flagged.
 
 ## Before
 
-TODO: a handler that creates/continues an OpenTelemetry span without
-reading `traceparent`/`tracestate`/`baggage` from `_meta`.
+```python
+from opentelemetry import trace
+
+tracer = trace.get_tracer(__name__)
+
+async def handle_tool_call(name: str, args: dict) -> dict:
+    with tracer.start_as_current_span(f"tool.{name}"):
+        return await dispatch(name, args)
+```
+
+The span above is a brand new root span every time -- it never learns about
+the trace the client started, so it shows up disconnected in whatever
+backend collects these traces.
 
 ## After
 
-TODO: the same handler extracting trace context from `_meta` and handing it
-to the tracer (e.g. via `opentelemetry.propagate.extract`).
+```python
+from opentelemetry import trace
+from opentelemetry.propagate import extract
+
+tracer = trace.get_tracer(__name__)
+
+async def handle_tool_call(name: str, args: dict, meta: dict) -> dict:
+    ctx = extract(meta)
+    with tracer.start_as_current_span(f"tool.{name}", context=ctx):
+        return await dispatch(name, args)
+```
+
+`opentelemetry.propagate.extract` is the standard entry point --
+`TraceContextTextMapPropagator` is registered as the default propagator in
+most OTel SDK setups, so `extract()` reads `traceparent`/`tracestate` out of
+`meta` (a dict-like carrier) the same way it would read HTTP headers in a
+web framework integration, and hands back a `Context` that
+`start_as_current_span` continues instead of starting fresh.
 
 ## Gotchas
 
-TODO: what does this look like concretely with the OpenTelemetry Python
-SDK's `TraceContextTextMapPropagator`? A real worked example using that
-API is the single highest-value thing this recipe is missing.
+- **`extract()` expects a plain mapping of header-name to string value.**
+  If `_meta` is a nested structure or your MCP SDK exposes it as something
+  other than a flat dict, you may need to project `traceparent`/`tracestate`
+  (and `baggage`, if you use it) out into a plain dict before calling
+  `extract()` -- passing the raw `_meta` object through unchanged only
+  works if it already looks like that.
+- **This rule can't see propagation done through the OTel API instead of by
+  name.** The TypeScript side of R008 explicitly treats a
+  `propagation.extract(...)` call as evidence tracing is wired up
+  correctly, even if `traceparent` never appears as a literal string
+  anywhere -- the Python side doesn't have that same allowance yet, so a
+  Python server calling `extract()` on a variable instead of a dict keyed
+  by the literal string `traceparent` could still show up as a false
+  positive. Worth checking manually before assuming the finding means
+  nothing is wired up.
+- **No fixer exists because this needs the tracer variable in scope.** The
+  fix isn't a rename or a deletion, it's threading `meta`/`_meta` through
+  to wherever the span starts -- something a mechanical fixer can't do
+  without risking passing the wrong object.
 
 ## Spec link
 
