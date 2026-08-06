@@ -1088,6 +1088,41 @@ export async function resume(req: Request) {
     assert [finding.line for finding in findings] == [2, 3]
 
 
+@pytest.mark.parametrize(
+    "identifier",
+    ["lastEventId", "lastEventID", "LastEventId", "LastEventID", "LAST_EVENT_ID"],
+)
+def test_r014_finds_every_casing_of_the_identifier_in_typescript(tmp_path, identifier):
+    code = f"""\
+export async function resume(req: Request) {{
+  const {identifier} = req.headers.get("x-resume");
+  return replay({identifier});
+}}
+"""
+    project = load_project(
+        _write(tmp_path, "server.ts", code)
+    ).for_language("typescript")
+    findings = SSEResumabilityRemoved().check(project)
+    assert [finding.line for finding in findings] == [2, 3]
+
+
+@pytest.mark.parametrize(
+    "identifier",
+    ["lastEventIdentifier", "lastEventIds", "eventIdCache"],
+)
+def test_r014_leaves_unrelated_identifiers_alone_in_typescript(tmp_path, identifier):
+    code = f"""\
+export function build() {{
+  const {identifier} = new Map();
+  return {identifier};
+}}
+"""
+    project = load_project(
+        _write(tmp_path, "server.ts", code)
+    ).for_language("typescript")
+    assert SSEResumabilityRemoved().check(project) == []
+
+
 def test_r014_stays_silent_on_migrated_typescript_server(tmp_path):
     code = """\
 export async function handle(req: Request) {
