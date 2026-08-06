@@ -168,6 +168,26 @@ def test_r009_leaves_unrelated_code_alone():
     assert result.text == before
 
 
+def test_r009_does_not_comment_out_a_requester_style_identifier():
+    """An unbounded `InitializeRequest\\w*` matches `InitializeRequesterHelper`,
+    which R009's Python rule does not flag -- `check` grades this file A. A
+    fixer that edits it anyway comments out the assignment and leaves the
+    next line holding an undefined name: the tool breaks code it just
+    called clean. See #87."""
+    before = 'helper = InitializeRequesterHelper()\nresult = helper.run()\n'
+    result = fix("InitializeHandshakeFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r009_still_catches_the_sdk_names_the_suffix_exists_for():
+    """Bounding the suffix must not cost the shape it was added for."""
+    for name in ("InitializeRequestSchema", "InitializeResultSchema",
+                 "InitializedNotificationSchema"):
+        result = fix("InitializeHandshakeFixer", f"x = {name}\n")
+        assert result.changed, f"{name} should still be caught"
+
+
 def test_r009_idempotent():
     once = fix("InitializeHandshakeFixer", R009_BEFORE)
     twice = fix("InitializeHandshakeFixer", once.text)

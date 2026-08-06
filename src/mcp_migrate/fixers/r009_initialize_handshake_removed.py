@@ -27,12 +27,22 @@ TODO = (
     f"and {COOKBOOK}"
 )
 
-# `\w*` suffix so this also catches the TypeScript SDK's Zod schema names
-# (`InitializeRequestSchema`, ...), the same treatment `r011_ping_removed.py`
-# and the R009 rule itself give this shape -- see that rule's comments for
-# why a bare `\b...\b` match would miss the one shape it most needs to catch.
+# A bounded suffix, not `\w*`. The suffix has to be here at all because the
+# TypeScript SDK exports Zod schema names (`InitializeRequestSchema`) and a
+# bare `\b...\b` cannot match inside one -- but the enumerated set is what
+# the SDK actually exports, and `\w*` would additionally swallow anything
+# that merely starts the same way.
+#
+# The R009 rule's TS branch still uses `\w*` (that is #87, open). A fixer
+# being narrower than its rule is the safe direction: `check` may report a
+# line `fix` declines to touch. The reverse -- what `\w*` gives you here --
+# means `fix --write` edits a line `check` graded clean, which for this
+# fixer meant commenting out `helper = InitializeRequesterHelper()` and
+# leaving the next line holding an undefined name.
 HANDSHAKE_CODE_RX = re.compile(
-    r"\bInitializeRequest\w*|\bInitializeResult\w*|\bInitializedNotification\w*"
+    r"\bInitializeRequest(?:Params|Schema)?\b"
+    r"|\bInitializeResult(?:Params|Schema)?\b"
+    r"|\bInitializedNotification(?:Params|Schema)?\b"
 )
 # Only ever valid as a JSON-RPC method-name string, so it always starts
 # inside a STRING token -- matched directly, same as the rule's search_wire.
