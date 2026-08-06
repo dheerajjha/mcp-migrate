@@ -279,6 +279,22 @@ def test_r017_does_not_fire_on_an_unrelated_negative_number(tmp_path):
     assert ResourceNotFoundCodeChanged().check(project) == []
 
 
+def test_r017_fires_on_title_case_resource_not_found(tmp_path):
+    # "Resource Not Found" is at least as common a spelling as the
+    # lowercase form -- the rule's re.IGNORECASE flag must actually reach
+    # search_wire(), not just sit on the compiled pattern unused.
+    (tmp_path / "lower.py").write_text(
+        "def err():\n    return {\"code\": -32002, \"message\": \"resource not found\"}\n"
+    )
+    (tmp_path / "upper.py").write_text(
+        "def err():\n    return {\"code\": -32002, \"message\": \"Resource Not Found\"}\n"
+    )
+    project = load_project(tmp_path)
+    findings = ResourceNotFoundCodeChanged().check(project)
+    hit_files = {f.path.name for f in findings}
+    assert hit_files == {"lower.py", "upper.py"}
+
+
 def test_r020_does_not_fire_on_an_unrelated_register_method(tmp_path):
     # A generic "register a client" method in, say, a CRM or billing
     # system has nothing to do with OAuth Dynamic Client Registration --
