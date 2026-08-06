@@ -735,6 +735,57 @@ def test_r011_declines_a_method_equality_check_on_a_block_opener():
         '        return {}\n'
     )
     result = fix("PingRemovedFixer", before)
+# R012 -- logging/setLevel removed
+# ---------------------------------------------------------------------------
+
+R012_TODO = (
+    "# TODO(mcp-migrate): logging/setLevel is removed; read the log level off "
+    '_meta["io.modelcontextprotocol/logLevel"] on each request instead -- see '
+    "https://modelcontextprotocol.io/specification/2026-07-28/changelog "
+    "and cookbook/07-logging-set-level-removed.md"
+)
+
+R012_BEFORE = (
+    'from mcp.types import SetLevelRequest\n'
+    '\n'
+    'async def handle_set_level(request: SetLevelRequest):\n'
+    '    return {}\n'
+    '\n'
+    'METHODS = {"logging/setLevel": handle_set_level}\n'
+)
+R012_AFTER = (
+    f'{R012_TODO}\n'
+    '# from mcp.types import SetLevelRequest\n'
+    '\n'
+    'async def handle_set_level(request: SetLevelRequest):\n'
+    '    return {}\n'
+    '\n'
+    f'{R012_TODO}\n'
+    '# METHODS = {"logging/setLevel": handle_set_level}\n'
+)
+
+
+def test_r012_comments_out_set_level_references_and_dispatch():
+    result = fix("LoggingSetLevelRemovedFixer", R012_BEFORE)
+    assert result.changed
+    assert result.text == R012_AFTER
+    assert FIXERS["LoggingSetLevelRemovedFixer"].confidence == "review"
+    ast.parse(result.text)
+
+
+def test_r012_never_comments_out_a_block_opener():
+    result = fix("LoggingSetLevelRemovedFixer", R012_BEFORE)
+    assert 'async def handle_set_level(request: SetLevelRequest):' in result.text
+    assert '    return {}' in result.text
+
+
+def test_r012_declines_a_method_equality_check_on_a_block_opener():
+    before = (
+        'def dispatch(method):\n'
+        '    if method == "logging/setLevel":\n'
+        '        return {}\n'
+    )
+    result = fix("LoggingSetLevelRemovedFixer", before)
     assert result.changed is False
     assert result.text == before
 
@@ -766,6 +817,22 @@ def test_r011_leaves_comment_only_mentions_alone():
         'METHODS = {"tools/list": list_tools}\n'
     )
     result = fix("PingRemovedFixer", before)
+def test_r012_comments_out_dict_shaped_dispatch():
+    before = 'const METHODS = { "logging/setLevel": setLevelHandler };\n'
+    result = fix("LoggingSetLevelRemovedFixer", before)
+    assert result.changed
+    assert (
+        f'{R012_TODO}\n# const METHODS = {{ "logging/setLevel": setLevelHandler }};\n'
+        in result.text
+    )
+
+
+def test_r012_leaves_comment_only_mentions_alone():
+    before = (
+        '# logging/setLevel used to set a process-wide log level\n'
+        'METHODS = {"tools/list": list_tools}\n'
+    )
+    result = fix("LoggingSetLevelRemovedFixer", before)
     assert result.changed is False
     assert result.text == before
 
@@ -799,6 +866,38 @@ def test_r011_still_catches_the_sdk_schema_name():
 def test_r011_idempotent():
     once = fix("PingRemovedFixer", R011_BEFORE)
     twice = fix("PingRemovedFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+def test_r012_uses_slash_comments_in_typescript():
+    """R012 reads TypeScript; `#` there is a syntax error, not a comment (#117)."""
+    result = fix("LoggingSetLevelRemovedFixer",
+                 'const h = { "logging/setLevel": setLevel };\n', path="server.ts")
+    assert result.changed
+    assert "// TODO(mcp-migrate)" in result.text
+    assert "#" not in result.text
+
+
+def test_r012_does_not_comment_out_a_requester_style_identifier():
+    """`\\bSetLevelRequest\\w*` matches `SetLevelRequesterFactory`, which is
+    unrelated to logging/setLevel. It is also not a block opener, so nothing
+    stops the line being commented out entirely -- a live call site would
+    disappear. See #87."""
+    before = 'const x = SetLevelRequesterFactory();\n'
+    result = fix("LoggingSetLevelRemovedFixer", before, path="a.ts")
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r012_still_catches_the_sdk_schema_name():
+    result = fix("LoggingSetLevelRemovedFixer", "x = SetLevelRequestSchema\n", path="s.ts")
+    assert result.changed
+
+
+def test_r012_idempotent():
+    once = fix("LoggingSetLevelRemovedFixer", R012_BEFORE)
+    twice = fix("LoggingSetLevelRemovedFixer", once.text)
     assert twice.changed is False
     assert twice.text == once.text
 
