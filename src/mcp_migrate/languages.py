@@ -1,12 +1,12 @@
 """What languages is this tree written in, and can we read any of them?
 
-`mcp-migrate` only reads Python. That is a fine limitation to have; it is
-not a fine thing to hide. Before this module existed, `check` derived a
-grade from an empty finding set without ever asking whether it had read
-anything at all -- so a TypeScript server (and most MCP servers are
-TypeScript) scored a confident A/100, and `entry` would happily emit a
-registry entry claiming `language: python` for a repo containing no
-Python whatsoever.
+`mcp-migrate` reads Python and TypeScript. It does not read the other
+nine languages it can name, and it must never pretend otherwise. Before
+this module existed, `check` derived a grade from an empty finding set
+without ever asking whether it had read anything at all -- so a
+TypeScript server (and most MCP servers are TypeScript) scored a
+confident A/100, and `entry` would happily emit a registry entry claiming
+`language: python` for a repo containing no Python whatsoever.
 
 The standing rule this enforces: never report a grade for something you
 could not read. Silence is an acceptable output; a confident A about a
@@ -26,8 +26,10 @@ SUPPORTED = frozenset({"python"})
 
 # Languages some rules can read, but not yet enough of them to put a letter
 # on. TypeScript findings are real and worth printing; a *grade* derived
-# from them would be a claim about the 19 rules that didn't run, which is
-# the same false-A this tool refuses to hand out for an empty directory.
+# from them would be a claim about the rules that didn't run, which is the
+# same false-A this tool refuses to hand out for an empty directory.
+# (Deliberately not a count -- the last one sat here saying "19" long after
+# it was 1.)
 # Move a language from here to SUPPORTED when coverage is broad enough to
 # mean something.
 PARTIAL = frozenset({"typescript"})

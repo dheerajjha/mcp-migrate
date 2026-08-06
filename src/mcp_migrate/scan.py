@@ -62,8 +62,17 @@ SOURCE_EXTENSIONS = {
 }
 
 
+# Generated type declarations, never an implementation. One ending per
+# module form in SOURCE_EXTENSIONS -- a project on "type": "module" emits
+# `.d.mts` beside its `.mts` sources, and those files are dense with SDK
+# type re-exports, which is exactly the shape several rules match on. So
+# missing one here does not merely add noise, it adds findings that feed
+# the score.
+DECLARATION_SUFFIXES = (".d.ts", ".d.mts", ".d.cts")
+
+
 def _language_of(path: Path) -> str | None:
-    if path.name.endswith(".d.ts"):
+    if path.name.endswith(DECLARATION_SUFFIXES):
         return None
     return SOURCE_EXTENSIONS.get(path.suffix.lower())
 
