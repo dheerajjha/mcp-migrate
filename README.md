@@ -198,7 +198,7 @@ Every change is tagged `safe` or `review` in the diff output:
 
 Pass `--safe-only` to apply only `safe` fixers, `--rule R006` to restrict to
 one rule, `--include-tests` to also fix test/fixture paths (skipped by
-default, same rule as `check`). Only 13 of the 21 rules ship a fixer at all --
+default, same rule as `check`). Only 16 of the 21 rules ship a fixer at all --
 see the table below and [`mcp-migrate fixers`](#other-commands). Fixers are
 deliberately conservative: when a fixer can't be sure a transformation is
 correct, it leaves the source untouched rather than guess. A wrong fix that

@@ -17,6 +17,19 @@ from six recipes to eighteen.** Every line of it was contributed by
   ([#42](https://github.com/dheerajjha/mcp-migrate/issues/42),
   [#43](https://github.com/dheerajjha/mcp-migrate/issues/43),
   [#50](https://github.com/dheerajjha/mcp-migrate/issues/50), @waterlemonnn)
+- **Three more fixers** — **R009** (initialize handshake), **R011** (ping) and
+  **R012** (`logging/setLevel`) — taking the set to **16 of 21**. Only R002,
+  R003, R010, R015 and R016 now lack one.
+  ([#19](https://github.com/dheerajjha/mcp-migrate/issues/19),
+  [#21](https://github.com/dheerajjha/mcp-migrate/issues/21),
+  [#22](https://github.com/dheerajjha/mcp-migrate/issues/22), @waterlemonnn)
+
+  All three bound their identifier suffix rather than using `\w*`, so
+  `PingRequester` and `SetLevelRequesterFactory` are left alone. **The rules
+  still match those** — that is [#87](https://github.com/dheerajjha/mcp-migrate/issues/87),
+  still open — so `check` reports a line `fix` declines to touch. That
+  asymmetry is deliberate: a wrong finding costs a reader ten seconds, a
+  wrong `--write` costs them working code.
 - **Three new fixers**, taking the set from ten to thirteen: **R013**
   (`resources/subscribe` removal), **R008** (trace context) and **R018**
   (Multi Round-Trip Requests), all `review` confidence.
@@ -59,6 +72,22 @@ from six recipes to eighteen.** Every line of it was contributed by
 
 ### Fixed
 
+- **R014 missed most spellings of its own identifier.** The TypeScript path
+  matched case-sensitively, so `lastEventId` was found and `lastEventID`,
+  `LAST_EVENT_ID` and `last_event_id` were not. Now one bounded pattern,
+  `\blast_?event_?id\b`, matched case-insensitively — the `_?` covers the
+  SCREAMING_SNAKE form, which the flag alone would still have missed.
+  `lastEventIdentifier` and `lastEventIds` stay silent.
+  ([#143](https://github.com/dheerajjha/mcp-migrate/issues/143),
+  @ujjwalprakash17 — found by @PuvaanRaaj's independent port in #60)
+- **Generated `.d.mts` and `.d.cts` were scanned and graded.** Only `.d.ts`
+  was excluded, so a project on `"type": "module"` had its emitted
+  declarations read. Those files are dense with SDK type re-exports, which
+  is the shape several rules match on — so this added findings that fed the
+  score, not merely noise.
+- **`languages.py` claimed the tool only reads Python** (untrue since 0.1.3)
+  and described a grade as a claim about "the 19 rules that didn't run"
+  when it is now one. The replacement carries no count deliberately.
 - **R017 discarded its own `re.IGNORECASE`**, so it found
   `"resource not found"` and missed `"Resource Not Found"`. The flag sat on
   the compiled object while only `.pattern` was passed to `search_wire`,
@@ -91,10 +120,12 @@ from six recipes to eighteen.** Every line of it was contributed by
 
 ### Contributors
 
-@waterlemonnn wrote everything above. @PuvaanRaaj's #56/#58/#60 were an
-independent take on the same three TypeScript ports; #60 was measurably
-right about case-insensitivity and that half became
-[#143](https://github.com/dheerajjha/mcp-migrate/issues/143).
+@waterlemonnn wrote most of the above. @ujjwalprakash17's first PR fixed
+R014's case handling; @PuvaanRaaj's #56/#58/#60 were an independent take on
+the same three TypeScript ports, and #60 was measurably right about
+case-insensitivity -- that half became
+[#143](https://github.com/dheerajjha/mcp-migrate/issues/143), which
+@ujjwalprakash17 then closed.
 
 ## [0.1.4] - 2026-08-06
 
