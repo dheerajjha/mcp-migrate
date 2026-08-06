@@ -56,6 +56,28 @@ Zero findings prints `Grade A` and a ready-to-paste badge instead. Add
 rule at 5 rows with a "+N more" line so it stays readable; JSON always has
 every finding).
 
+### `check --json` contract
+
+`--json` emits one JSON object with these always-present top-level keys:
+`tool`, `version`, `spec`, `path`, `scannable`, `languages`, `grade`,
+`score`, `files_scanned`, `counts`, and `findings`.
+
+Conditional keys:
+
+- `is_sdk` and `sdk_reason` only when the tree is a protocol SDK. In that case `grade` and `score` are `null`.
+- `reason` only when `scannable` is `false`. In that case `grade` and `score` are `null`.
+- `grade` and `score` are also `null` when a tree was read but is not gradable, for example TypeScript-only trees.
+
+Each finding always has `rule`, `severity`, `path`, `line`, and `message`.
+`path` and `line` may be `null` for project-level findings. `fix` is present
+only when the rule has remediation text; it is omitted, never `null`.
+
+The executable contract is
+[`schemas/check-json.schema.json`](schemas/check-json.schema.json). Pre-1.0,
+this shape may change in a breaking way; such changes are documented under
+Changed in [CHANGELOG.md](CHANGELOG.md), so consumers should pin a version
+and watch that section.
+
 Exit codes, so it drops straight into CI:
 
 | code | meaning |

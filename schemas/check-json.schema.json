@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/dheerajjha/mcp-migrate/schemas/check-json.schema.json",
+  "title": "mcp-migrate check --json output",
+  "type": "object",
+  "required": [
+    "tool",
+    "version",
+    "spec",
+    "path",
+    "scannable",
+    "languages",
+    "grade",
+    "score",
+    "files_scanned",
+    "counts",
+    "findings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "tool": {
+      "const": "mcp-migrate"
+    },
+    "version": {
+      "type": "string"
+    },
+    "spec": {
+      "const": "2026-07-28"
+    },
+    "path": {
+      "type": "string"
+    },
+    "scannable": {
+      "type": "boolean"
+    },
+    "is_sdk": {
+      "type": "boolean"
+    },
+    "sdk_reason": {
+      "type": "string"
+    },
+    "reason": {
+      "type": "string"
+    },
+    "languages": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "grade": {
+      "type": ["string", "null"],
+      "pattern": "^[A-F]$"
+    },
+    "score": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "maximum": 100
+    },
+    "files_scanned": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "counts": {
+      "type": "object",
+      "required": ["breaking", "deprecated", "advisory"],
+      "additionalProperties": false,
+      "properties": {
+        "breaking": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deprecated": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "advisory": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rule", "severity", "path", "line", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "rule": {
+            "type": "string",
+            "pattern": "^R[0-9]{3}$"
+          },
+          "severity": {
+            "enum": ["breaking", "deprecated", "advisory"]
+          },
+          "path": {
+            "type": ["string", "null"]
+          },
+          "line": {
+            "type": ["integer", "null"]
+          },
+          "message": {
+            "type": "string"
+          },
+          "fix": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scannable": {
+            "const": false
+          }
+        },
+        "required": ["scannable"]
+      },
+      "then": {
+        "required": ["reason"],
+        "properties": {
+          "grade": {
+            "const": null
+          },
+          "score": {
+            "const": null
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "is_sdk": {
+            "const": true
+          }
+        },
+        "required": ["is_sdk"]
+      },
+      "then": {
+        "required": ["sdk_reason"],
+        "properties": {
+          "grade": {
+            "const": null
+          },
+          "score": {
+            "const": null
+          }
+        }
+      }
+    }
+  ]
+}
