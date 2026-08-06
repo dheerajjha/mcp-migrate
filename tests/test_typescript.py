@@ -36,6 +36,7 @@ from mcp_migrate.rules.r019_tasks_polling_replaces_blocking_result import (
 from mcp_migrate.rules.r010_server_discover_missing import ServerDiscoverMissing
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
 from mcp_migrate.rules.r012_logging_set_level_removed import LoggingSetLevelRemoved
+from mcp_migrate.rules.r014_sse_resumability_removed import SSEResumabilityRemoved
 from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
 from mcp_migrate.rules.r016_cacheable_result_required import (
     CacheableResultMetadataMissing,
@@ -1061,6 +1062,37 @@ class SubscribeRequester {
 """
     project = load_project(_write(tmp_path, "requester.ts", code)).for_language("typescript")
     assert ResourceSubscriptionsReplaced().check(project) == []
+# --- R014: SSE resumability (Last-Event-ID) removed ------------------------
+
+def test_r014_finds_last_event_id_identifier_and_header_in_typescript(tmp_path):
+    code = """\
+export async function resume(req: Request) {
+  const lastEventId = req.headers.get("last-event-id");
+  return replayEventsAfter(lastEventId);
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    findings = SSEResumabilityRemoved().check(project)
+    assert [finding.line for finding in findings] == [2, 3]
+
+
+def test_r014_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export async function handle(req: Request) {
+  return process(req);
+}
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert SSEResumabilityRemoved().check(project) == []
+
+
+def test_r014_ignores_typescript_comment_only_mentions(tmp_path):
+    code = """\
+// We dropped lastEventId / Last-Event-ID resumability support.
+export const protocolVersion = "2026-07-28";
+"""
+    project = load_project(_write(tmp_path, "notes.ts", code)).for_language("typescript")
+    assert SSEResumabilityRemoved().check(project) == []
 
 
 # --- R017: the old -32002 resource-not-found error code -------------------
