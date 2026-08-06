@@ -38,6 +38,7 @@ Every recipe follows [`_TEMPLATE.md`](_TEMPLATE.md):
 | 06 | [ping removed](06-ping-removed.md) | R011 | none yet |
 | 07 | [logging/setLevel removed](07-logging-set-level-removed.md) | R012 | none yet |
 | 08 | [SSE resumability removed](08-sse-resumability-removed.md) | R014 | none |
+| 09 | [resource-not-found error code changed](09-resource-not-found-error-code.md) | R017 | R017 (safe) |
 
 ## Stubs -- open slots
 
@@ -52,7 +53,6 @@ ready-to-file issue for each.
 | 07 | [logging/setLevel removed](07-logging-set-level-removed.md) | R012 |
 | 06 | [ping removed](06-ping-removed.md) | R011 |
 | 08 | [SSE resumability removed](08-sse-resumability-removed.md) | R014 |
-| 09 | [resource-not-found error code changed](09-resource-not-found-error-code.md) | R017 |
 | 10 | [Multi Round-Trip Requests replace server-initiated calls](10-multi-round-trip-requests.md) | R018 |
 | 11 | [Tasks moved to an extension, polling replaces blocking result](11-tasks-polling.md) | R019 |
 | 12 | [Dynamic Client Registration deprecated](12-dynamic-client-registration-deprecated.md) | R020 |
