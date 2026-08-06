@@ -61,7 +61,11 @@ class Rule:
     def finding(self, message, f=None, line=None, snippet=None) -> Finding: ...
 ```
 
-`Project` gives you the whole scanned tree:
+`Project` gives you the whole scanned tree.
+
+**Quick pick:** identifier or class name → `search_code` · JSON-RPC method
+name (or other string-literal wire text) → `search_wire` · prose / comments →
+almost certainly neither (and no shipped rule uses raw `search`).
 
 - `project.search_code(pattern, *, flags=0)` -- like `search` below, but
   ignores matches that start inside a comment or a string/docstring
@@ -69,14 +73,23 @@ class Rule:
   class name, or code construct -- a docstring or `--help` string that
   merely *mentions* `Mcp-Session-Id` isn't a real usage of it. See
   `r001_session_id.py`, `r006_sse_transport.py`, `r007_deprecated_features.py`.
+- `project.search_wire(pattern, *, flags=0)` -- skips comments and
+  triple-quoted strings, but **keeps ordinary string literals**. Use this for
+  JSON-RPC method names and other wire text that only appears inside strings
+  (e.g. `tools/list`, `resources/subscribe`). Raw `search` over-matches prose
+  such as module docstrings describing the handshake; that produced real
+  false-positive `breaking` findings. See any of the ~16 rules that call
+  `search_wire`, and the docstring on `Project.search_wire` in
+  `src/mcp_migrate/rules/base.py`.
 - `project.search(pattern, *, flags=0)` -- yields `(SourceFile, lineno, stripped_line)`
   for every line matching a regex, including matches inside comments and
-  strings. Only use this when the rule genuinely wants string *content* --
-  e.g. `r003_routing_headers.py` checking whether the literal header name
-  `Mcp-Method` appears anywhere in the file, or any JSON-RPC method name
-  with a slash in it (`tools/list`, `resources/subscribe`, ...), which can
-  only ever appear inside a string token and so `search_code` would never
-  find it -- see the note in `r009_initialize_handshake_removed.py`.
+  strings. **Exactly one shipped rule uses it** --
+  `r010_server_discover_missing.py`, as a suppression check -- and that use is
+  itself a bug (#113), because a comment saying `server/discover` is missing
+  convinces the rule that it isn't. Reach for it only if you have a reason
+  neither `search_code` nor `search_wire` fits (for example, matching free-form
+  prose you intentionally want). Prefer `search_wire` for method names and
+  other string-literal wire content.
 - `project.imports()` -- returns the flat `set[str]` of every module name
   imported anywhere in the project (from `ast.Import` / `ast.ImportFrom`).
   Use this to gate a rule on a library actually being in use, the way
@@ -114,7 +127,7 @@ class LegacyExperimentalCapability(Rule):
 
     def check(self, project: Project) -> list[Finding]:
         out: list[Finding] = []
-        for f, line, text in project.search(r"[\"']experimental[\"']\s*:"):
+        for f, line, text in project.search_code(r"[\"']experimental[\"']\s*:"):
             out.append(self.finding(
                 "`experimental` capabilities key found; 2026-07-28 clients "
                 "look for `extensions` instead.",
@@ -129,8 +142,9 @@ Put one file that should trigger the rule and, ideally, one that shouldn't
 under `tests/fixtures/<rule-id>/`, lowercase:
 
 ```
-tests/fixtures/r022/bad.py     # contains "experimental": {...}
-tests/fixtures/r022/good.py    # contains "extensions": {...}, no "experimental"
+tests/fixtures/r022/bad.py      # contains "experimental": {...} as real code
+tests/fixtures/r022/good.py     # contains "extensions": {...}, no "experimental"
+tests/fixtures/r022/comment.py  # mentions "experimental": only in a comment/docstring — must not match
 ```
 
 Then a test under `tests/` that loads that fixture directory as a project and
