@@ -173,7 +173,7 @@ def scan(work: Path, slugs: list[str], binary: str) -> dict[str, dict]:
                 "score": data.get("score"),
                 "files": data.get("files_scanned"),
                 "findings": [{"rule": f["rule"], "severity": f["severity"],
-                              "location": f["location"]}
+                              "path": f["path"], "line": f["line"]}
                              for f in data.get("findings", [])],
             }
         except subprocess.TimeoutExpired:

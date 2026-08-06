@@ -86,8 +86,10 @@ def test_cli_check_json_shape_clean(capsys):
     assert data["grade"] == "A"
     assert data["score"] == 100
     assert data["findings"] == []
+    assert data["counts"] == {"breaking": 0, "deprecated": 0, "advisory": 0}
     assert data["files_scanned"] == 2
     assert data["spec"] == "2026-07-28"
+    assert data["tool"] == "mcp-migrate"
     assert exit_code == 0, "no breaking findings -> exit code should be 0"
 
 
@@ -96,9 +98,12 @@ def test_cli_check_json_shape_legacy(capsys):
     data = json.loads(capsys.readouterr().out)
     assert data["grade"] in ("D", "F")
     assert data["findings"], "expected findings for legacy_server"
+    assert sum(data["counts"].values()) == len(data["findings"])
     for finding in data["findings"]:
-        assert set(finding) == {"rule", "severity", "message", "location"}
+        assert {"rule", "severity", "path", "line", "message"} <= set(finding)
         assert finding["severity"] in ("breaking", "deprecated", "advisory")
+        # A finding with no fix text omits the key rather than emitting null.
+        assert "fix" not in finding or finding["fix"]
     assert any(f["rule"] == rid for rid in ALL_RULE_IDS for f in data["findings"])
     assert exit_code == 1, "breaking findings present -> exit code should be 1"
 

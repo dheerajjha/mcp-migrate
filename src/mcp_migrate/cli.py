@@ -114,6 +114,27 @@ def _print_language_hint(console, counts) -> None:
         )
 
 
+def _finding_dict(f, rules) -> dict:
+    d = {
+        "rule": f.rule_id,
+        "severity": rules[f.rule_id].severity,
+        "path": str(f.path) if f.path else None,
+        "line": f.line,
+        "message": f.message,
+    }
+    fix = rules[f.rule_id].fix
+    if fix:
+        d["fix"] = fix
+    return d
+
+
+def _severity_counts(findings, rules) -> dict:
+    counts = {"breaking": 0, "deprecated": 0, "advisory": 0}
+    for f in findings:
+        counts[rules[f.rule_id].severity] += 1
+    return counts
+
+
 def _exit_for(findings, rules) -> int:
     """Exit code from findings alone: 1 if anything breaking, else 0."""
     return EXIT_FINDINGS if any(
@@ -152,6 +173,8 @@ def cmd_check(args) -> int:
     if args.json:
         if sdk_info.is_sdk:
             print(json.dumps({
+                "tool": "mcp-migrate",
+                "version": __version__,
                 "spec": SPEC,
                 "path": str(root),
                 "scannable": True,
@@ -161,16 +184,14 @@ def cmd_check(args) -> int:
                 "grade": None,
                 "score": None,
                 "files_scanned": len(project.files),
-                "findings": [{
-                    "rule": f.rule_id,
-                    "severity": rules[f.rule_id].severity,
-                    "message": f.message,
-                    "location": f.location(),
-                } for f in findings],
+                "counts": _severity_counts(findings, rules),
+                "findings": [_finding_dict(f, rules) for f in findings],
             }, indent=2))
             return EXIT_OK
         if reason:
             print(json.dumps({
+                "tool": "mcp-migrate",
+                "version": __version__,
                 "spec": SPEC,
                 "path": str(root),
                 "scannable": False,
@@ -182,16 +203,14 @@ def cmd_check(args) -> int:
                 # Findings can be non-empty here: a partially-supported
                 # language gets read by the rules that cover it. What it
                 # doesn't get is a grade.
-                "findings": [{
-                    "rule": f.rule_id,
-                    "severity": rules[f.rule_id].severity,
-                    "message": f.message,
-                    "location": f.location(),
-                } for f in findings],
+                "counts": _severity_counts(findings, rules),
+                "findings": [_finding_dict(f, rules) for f in findings],
             }, indent=2))
             return _exit_for(findings, rules) if _checked_something(project) \
                 else EXIT_UNSCANNABLE
         print(json.dumps({
+            "tool": "mcp-migrate",
+            "version": __version__,
             "spec": SPEC,
             "path": str(root),
             "scannable": True,
@@ -199,12 +218,8 @@ def cmd_check(args) -> int:
             "grade": grade,
             "score": value,
             "files_scanned": len(project.files),
-            "findings": [{
-                "rule": f.rule_id,
-                "severity": rules[f.rule_id].severity,
-                "message": f.message,
-                "location": f.location(),
-            } for f in findings],
+            "counts": _severity_counts(findings, rules),
+            "findings": [_finding_dict(f, rules) for f in findings],
         }, indent=2))
         return _exit_for(findings, rules)
 
