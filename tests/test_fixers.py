@@ -108,6 +108,74 @@ def test_r001_idempotent():
 
 
 # ---------------------------------------------------------------------------
+# R009 -- initialize / notifications/initialized handshake removed
+# ---------------------------------------------------------------------------
+
+R009_TODO_MSG = (
+    'TODO(mcp-migrate): the initialize/notifications/initialized handshake is '
+    'removed; advertise capabilities via server/discover instead, see '
+    'https://modelcontextprotocol.io/specification/2026-07-28/changelog and '
+    'cookbook/02-initialize-to-server-discover.md'
+)
+R009_BEFORE = (
+    '@server.set_request_handler(InitializeRequest)\n'
+    'def handle_initialize(request: InitializeRequest) -> InitializeResult:\n'
+    '    print("handshake")\n'
+    '    return InitializeResult(protocolVersion="2025-06-18")\n'
+    '\n'
+    'METHODS = {"notifications/initialized": handle_initialized}\n'
+)
+R009_AFTER = (
+    f'# {R009_TODO_MSG}\n'
+    '# @server.set_request_handler(InitializeRequest)\n'
+    'def handle_initialize(request: InitializeRequest) -> InitializeResult:\n'
+    '    print("handshake")\n'
+    f'    # {R009_TODO_MSG}\n'
+    '    # return InitializeResult(protocolVersion="2025-06-18")\n'
+    '\n'
+    f'# {R009_TODO_MSG}\n'
+    '# METHODS = {"notifications/initialized": handle_initialized}\n'
+)
+
+
+def test_r009_comments_out_handshake_registration_and_wire_reference():
+    result = fix("InitializeHandshakeFixer", R009_BEFORE)
+    assert result.changed
+    assert result.text == R009_AFTER
+    assert FIXERS["InitializeHandshakeFixer"].confidence == "review"
+    ast.parse(result.text)
+
+
+def test_r009_skips_block_opener_lines():
+    before = 'def handle_initialize(request: InitializeRequest) -> InitializeResult:\n    pass\n'
+    result = fix("InitializeHandshakeFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r009_catches_typescript_schema_suffix():
+    before = 'server.setRequestHandler(InitializeRequestSchema, handleInitialize);\n'
+    result = fix("InitializeHandshakeFixer", before, path="server.ts")
+    assert result.changed
+    assert '// TODO(mcp-migrate)' in result.text
+    assert '// server.setRequestHandler(InitializeRequestSchema, handleInitialize);' in result.text
+
+
+def test_r009_leaves_unrelated_code_alone():
+    before = 'def initialize_db(path: str) -> None:\n    open(path, "a").close()\n'
+    result = fix("InitializeHandshakeFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r009_idempotent():
+    once = fix("InitializeHandshakeFixer", R009_BEFORE)
+    twice = fix("InitializeHandshakeFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+# ---------------------------------------------------------------------------
 # R004 -- tools/list ordering
 # ---------------------------------------------------------------------------
 
