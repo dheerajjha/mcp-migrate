@@ -26,8 +26,13 @@ class OldJSONSchemaDialect(Rule):
         "outputSchema. If you pin an older draft explicitly, move it to 2020-12 (or "
         "drop the pin and let a modern validator pick the default)."
     )
+    languages = ("python", "typescript")
 
     def check(self, project: Project) -> list[Finding]:
+        # No language branch needed: a `$schema` dialect pin is always a
+        # URL/date string, not a language-specific identifier or wire
+        # name, so the same search_wire pass is correct for both Python
+        # and TypeScript -- same shape as R017's port.
         out: list[Finding] = []
         # Raw text, not search_code: a `$schema` dialect pin is always a
         # URL/date string (`"http://json-schema.org/draft-07/schema#"`,

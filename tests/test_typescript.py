@@ -50,6 +50,7 @@ from mcp_migrate.rules.r018_multi_round_trip_replaces_server_initiated import (
 from mcp_migrate.rules.r020_dynamic_client_registration_deprecated import (
     DynamicClientRegistrationDeprecated,
 )
+from mcp_migrate.rules.r021_json_schema_2020_12_required import OldJSONSchemaDialect
 from mcp_migrate.scan import load_project
 
 LEGACY_TS = """\
@@ -1097,6 +1098,41 @@ export const protocolVersion = "2026-07-28";
 """
     project = load_project(_write(tmp_path, "notes.ts", code)).for_language("typescript")
     assert ResourceNotFoundCodeChanged().check(project) == []
+
+
+# --- R021: older JSON Schema dialect than 2020-12 --------------------------
+
+def test_r021_finds_old_dialect_pin_in_typescript(tmp_path):
+    code = """\
+export const inputSchema = {
+  $schema: "http://json-schema.org/draft-07/schema#",
+  type: "object",
+};
+"""
+    project = load_project(_write(tmp_path, "schema.ts", code)).for_language("typescript")
+    findings = OldJSONSchemaDialect().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 2
+
+
+def test_r021_stays_silent_on_migrated_typescript_server(tmp_path):
+    code = """\
+export const inputSchema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  type: "object",
+};
+"""
+    project = load_project(_write(tmp_path, "schema.ts", code)).for_language("typescript")
+    assert OldJSONSchemaDialect().check(project) == []
+
+
+def test_r021_ignores_typescript_comment_only_mentions(tmp_path):
+    code = """\
+// We used to pin draft-07, now on 2020-12.
+export const protocolVersion = "2026-07-28";
+"""
+    project = load_project(_write(tmp_path, "notes.ts", code)).for_language("typescript")
+    assert OldJSONSchemaDialect().check(project) == []
 
 
 # --- R010: server/discover missing ---------------------------------------
