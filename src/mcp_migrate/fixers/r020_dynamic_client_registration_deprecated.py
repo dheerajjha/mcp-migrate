@@ -17,7 +17,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .base import Fixer, FixResult
+from .base import Fixer, FixResult, comment_prefix, is_commented
 
 TODO = (
     "TODO(mcp-migrate): RFC 7591 Dynamic Client Registration is deprecated in "
@@ -43,7 +43,7 @@ class DynamicClientRegistrationDeprecatedFixer(Fixer):
 
         for i, raw_line in enumerate(lines, start=1):
             stripped = raw_line.lstrip(" \t")
-            already_commented = stripped.startswith(("#", "//"))
+            already_commented = is_commented(raw_line)
 
             if (
                 not already_commented
@@ -53,8 +53,7 @@ class DynamicClientRegistrationDeprecatedFixer(Fixer):
             ):
                 indent = raw_line[: len(raw_line) - len(stripped)]
                 newline = "\n" if raw_line.endswith("\n") else ""
-                comment_prefix = "// " if path.suffix in (".ts", ".js", ".tsx", ".jsx") else "# "
-                out.append(f"{indent}{comment_prefix}{TODO}{newline}")
+                out.append(f"{indent}{comment_prefix(path)}{TODO}{newline}")
                 changes.append(f"line {i}: annotated deprecated DCR usage with TODO")
 
             out.append(raw_line)

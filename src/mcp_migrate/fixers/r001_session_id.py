@@ -14,10 +14,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .base import Fixer, FixResult
+from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567"
-TODO = "# TODO(mcp-migrate): replaced by an explicit handle argument, see " + SPEC_URL
+TODO = "TODO(mcp-migrate): replaced by an explicit handle argument, see " + SPEC_URL
 
 # Only the actual header read/write plumbing -- not every downstream use of
 # a variable that happens to be named `mcp_session_id`/`session_id` (an
@@ -41,9 +41,12 @@ class SessionIdHeaderFixer(Fixer):
         out: list[str] = []
         changes: list[str] = []
 
+        prefix = comment_prefix(path)
+        todo = f"{prefix}{TODO}"
+
         for i, raw_line in enumerate(lines, start=1):
             stripped = raw_line.lstrip(" \t")
-            already_commented = stripped.startswith("#")
+            already_commented = is_commented(raw_line)
             # Block-openers (if/while/for/def/...) are never touched: commenting
             # one out would leave its suite dangling with no body, which is a
             # syntax error, not just a semantic one. When in doubt, don't fix.
@@ -55,9 +58,9 @@ class SessionIdHeaderFixer(Fixer):
                 body = stripped.rstrip("\n")
                 # Idempotency: if the line right above is already our TODO
                 # (e.g. a previous fixer run), don't insert a second one.
-                if not (out and out[-1].strip(" \t\n") == TODO):
-                    out.append(f"{indent}{TODO}{newline}")
-                out.append(f"{indent}# {body}{newline}")
+                if not (out and out[-1].strip(" \t\n") == todo):
+                    out.append(f"{indent}{todo}{newline}")
+                out.append(f"{indent}{prefix}{body}{newline}")
                 changes.append(f"line {i}: commented out Mcp-Session-Id header access, added TODO")
             else:
                 out.append(raw_line)

@@ -23,18 +23,14 @@ import re
 from pathlib import Path
 
 from ._textedit import find_matching_close, leading_ws
-from .base import Fixer, FixResult
+from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://modelcontextprotocol.io/specification/draft/changelog"
-TODO = "# TODO(mcp-migrate): verify no constructor args were lost moving off SSE, see " + SPEC_URL
+TODO = "TODO(mcp-migrate): verify no constructor args were lost moving off SSE, see " + SPEC_URL
 
 IMPORT_RX = re.compile(r"from\s+mcp\.server\.sse\s+import\s+SseServerTransport\b")
 CTOR_RX = re.compile(r"\bSseServerTransport\s*(\()")
 TRANSPORT_KW_RX = re.compile(r'transport\s*=\s*(["\'])sse\1')
-
-
-def _is_commented(line: str) -> bool:
-    return line.lstrip().startswith("#")
 
 
 class SseTransportFixer(Fixer):
@@ -45,10 +41,11 @@ class SseTransportFixer(Fixer):
     def fix(self, source: str, path: Path) -> FixResult:
         lines = source.splitlines(keepends=True)
         changes: list[str] = []
+        todo = f"{comment_prefix(path)}{TODO}"
 
         # 1. Import rename -- single-line, in place.
         for i, line in enumerate(lines):
-            if _is_commented(line):
+            if is_commented(line):
                 continue
             new_line, n = IMPORT_RX.subn(
                 "from mcp.server.streamable_http import StreamableHTTPServerTransport",
@@ -66,7 +63,7 @@ class SseTransportFixer(Fixer):
         # rewritten first.
         targets = []
         for i, line in enumerate(lines):
-            if _is_commented(line):
+            if is_commented(line):
                 continue
             m = CTOR_RX.search(line)
             if not m:
@@ -87,14 +84,14 @@ class SseTransportFixer(Fixer):
                 for k in range(open_i + 1, close_i + 1):
                     lines[k] = ""
             lines[open_i] = new_line
-            lines.insert(open_i, f"{indent}{TODO}\n")
+            lines.insert(open_i, f"{indent}{todo}\n")
             changes.append(
                 f"line {open_i + 1}: SseServerTransport(...) -> StreamableHTTPServerTransport(), flagged for review"
             )
 
         # 3. transport="sse" keyword rename -- single-line, in place.
         for i, line in enumerate(lines):
-            if _is_commented(line):
+            if is_commented(line):
                 continue
             new_line, n = TRANSPORT_KW_RX.subn(
                 lambda mm: f'transport={mm.group(1)}streamable-http{mm.group(1)}', line,
