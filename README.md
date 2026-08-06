@@ -69,7 +69,7 @@ finding set otherwise conflates "we read it and it's clean" with "we read
 nothing", and a grade that can't tell those apart is worthless. A tree with
 nothing readable in it gets silence instead of an A.
 
-**Python is graded. TypeScript is scanned but not graded.** 17 of the 21
+**Python is graded. TypeScript is scanned but not graded.** 20 of the 21
 rules read TypeScript, which is enough to report real findings and not
 enough to stand behind a letter grade, so a TypeScript tree gets findings
 and no grade:
@@ -79,14 +79,15 @@ $ mcp-migrate check ./my-ts-server
 
 mcp-migrate v0.1.4  ->  my-ts-server
 
-No grade for this one. Found 24 TypeScript. TypeScript support is partial --
-17 of 21 rules read it so far, which is enough to report findings but not
+No grade for this one. Found 1 TypeScript. TypeScript support is partial --
+20 of 21 rules read it so far, which is enough to report findings but not
 enough to stand behind a grade.
 
-  breaking    R001  server.ts:3  Mcp-Session-Id was removed from the Streamable HTTP transport.
+  breaking    R001  server.ts:4  Mcp-Session-Id was removed from the Streamable HTTP transport.
   deprecated  R006  server.ts:1  HTTP+SSE transport is deprecated.
+  deprecated  R006  server.ts:5  HTTP+SSE transport is deprecated.
 
-2 finding(s) from the rules that do cover this language. Real, and worth
+3 finding(s) from the rules that do cover this language. Real, and worth
 fixing -- but a letter grade would be a claim about the rules that didn't run.
 No grade and no badge: a letter grade would be a claim about the rules that
 didn't run.
@@ -97,9 +98,9 @@ didn't run.
 v0.1.3 it always exited `2`, so CI could not fail on a TypeScript
 regression — that was [#98](https://github.com/dheerajjha/mcp-migrate/issues/98).)
 
-Still Python-only: **R002, R013, R014, R021**. See
+Still Python-only: **R002**, and that is the whole list. See
 [issue #30](https://github.com/dheerajjha/mcp-migrate/issues/30) to help
-close the gap.
+close the gap — one rule from done.
 
 By default, `check` skips test code: anything under a `tests/`, `test/`,
 `testing/`, `fixtures/`, `examples/`, or `docs/` directory, plus `test_*.py`,

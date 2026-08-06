@@ -2,6 +2,68 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+**TypeScript coverage went from 17 of 21 rules to 20, and the cookbook went
+from six recipes to eighteen.** Every line of it was contributed by
+@waterlemonnn, across a single day.
+
+### Added
+
+- **R013, R014 and R021 read TypeScript**, leaving **R002** as the only
+  Python-only rule. R013 uses a bounded `(?:Schema|Params)` suffix rather
+  than `\w*`, so `class SubscribeRequester` no longer reads as a removed
+  subscription handler.
+  ([#42](https://github.com/dheerajjha/mcp-migrate/issues/42),
+  [#43](https://github.com/dheerajjha/mcp-migrate/issues/43),
+  [#50](https://github.com/dheerajjha/mcp-migrate/issues/50), @waterlemonnn)
+- **The cookbook is finished.** Twelve recipes written: ping removed,
+  `logging/setLevel` removed, SSE resumability, resource-not-found error
+  code, Multi Round-Trip Requests, tasks polling, Dynamic Client
+  Registration, JSON Schema 2020-12, deterministic `tools/list` ordering,
+  the `extensions` map, trace context propagation, and Roots/Sampling/
+  Logging deprecation. All eighteen slots are now written; there are no
+  stubs left. (@waterlemonnn)
+
+### Fixed
+
+- **R017 discarded its own `re.IGNORECASE`**, so it found
+  `"resource not found"` and missed `"Resource Not Found"`. The flag sat on
+  the compiled object while only `.pattern` was passed to `search_wire`,
+  which recompiles with `flags=0`.
+  ([#123](https://github.com/dheerajjha/mcp-migrate/issues/123),
+  @waterlemonnn)
+- **R015 fired on JSON-RPC *requests***, telling you to add `resultType` to
+  an object that must not carry it. `id` + `method` with no `result`/`error`
+  key is a request; the rule now requires evidence of a response before
+  firing. ([#91](https://github.com/dheerajjha/mcp-migrate/issues/91),
+  partially — R004 and R016 are still open. @waterlemonnn)
+- **The cookbook index listed recipe 16 as an unwritten stub** while its
+  recipe was complete, showed five recipes as having no fixer when R007,
+  R014, R019, R020 and R021 all ship one, and still said five rules have
+  fixers when ten have since 0.1.3.
+
+### Known issues
+
+- **R014's TypeScript path is case-sensitive**, so `lastEventID` and
+  `LastEventId` are missed while `lastEventId` is caught. Same shape as
+  #123 — a flag that never reaches the search.
+  ([#143](https://github.com/dheerajjha/mcp-migrate/issues/143), found by
+  @PuvaanRaaj's independent port in #60)
+- **The three false-positive classes from 0.1.4 are still open**:
+  [#87](https://github.com/dheerajjha/mcp-migrate/issues/87) (unbounded
+  `\w*` suffixes), [#88](https://github.com/dheerajjha/mcp-migrate/issues/88)
+  (wire patterns without an end boundary),
+  [#89](https://github.com/dheerajjha/mcp-migrate/issues/89) ("is this MCP?"
+  decided too loosely).
+
+### Contributors
+
+@waterlemonnn wrote everything above. @PuvaanRaaj's #56/#58/#60 were an
+independent take on the same three TypeScript ports; #60 was measurably
+right about case-insensitivity and that half became
+[#143](https://github.com/dheerajjha/mcp-migrate/issues/143).
+
 ## [0.1.4] - 2026-08-06
 
 **A correctness release. Two of these are the kind you upgrade for rather
