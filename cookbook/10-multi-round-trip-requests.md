@@ -1,6 +1,3 @@
-<!-- STUB: rule/spec filled in, before/after/gotchas still needed. See
-     .github/GOOD_FIRST_ISSUES.md for the ready-to-file issue for this one. -->
-
 # Multi Round-Trip Requests replace server-initiated roots/sampling/elicitation
 
 - **Rule:** [R018](../src/mcp_migrate/rules/r018_multi_round_trip_replaces_server_initiated.py)
@@ -27,22 +24,49 @@ for. The server never initiates a request of its own.
 
 ## Before
 
-TODO: a tool handler that calls `create_message`/`list_roots` mid-call and
-blocks on the result.
+```python
+async def handle_tool_call(name: str, args: dict) -> dict:
+    if name == "summarize":
+        sample = await ctx.create_message(
+            messages=[{"role": "user", "content": args["text"]}],
+        )
+        return {"summary": sample.content}
+```
 
 ## After
 
-TODO: the same handler restructured to return `InputRequiredResult` and a
-second call path that consumes `inputResponses` on the retried call.
+```python
+async def handle_tool_call(name: str, args: dict, input_responses: dict | None = None) -> dict:
+    if name == "summarize":
+        if input_responses is None:
+            return {
+                "resultType": "input_required",
+                "requests": [{"kind": "sampling/createMessage", "id": "summarize-sample"}],
+            }
+        sample = input_responses["summarize-sample"]
+        return {"summary": sample["content"]}
+```
 
 ## Gotchas
 
-TODO: this is the biggest control-flow change in the whole spec revision --
-a synchronous "ask and block" call becomes two separate request/response
-pairs correlated by the client's retry, and whatever local state the
-handler needed between "asked" and "got the answer" has to survive across
-that boundary somehow (it can't just sit on the stack of a blocked
-coroutine anymore).
+- **This is the biggest control-flow change in the whole spec revision.** A
+  synchronous "ask and block" call becomes two separate request/response
+  pairs correlated by the client's retry. Whatever local state the handler
+  needed between "asked" and "got the answer" can't sit on the stack of a
+  blocked coroutine anymore -- it has to survive across the boundary
+  somehow (a cache keyed on a request/call id, as above, or persisted state
+  if the retry can arrive after a process restart).
+- **R018 and R007 both fire on the same code, and that's intentional.**
+  R007 reports the same `create_message`/`list_roots` usage as `deprecated`
+  (it existed before this change and was already headed for removal); R018
+  reports it as `breaking` under the new SEP. Seeing both on one line isn't
+  a bug in either rule.
+- **Correlating a retry to the original call needs an explicit id.** The
+  request/response pair before this change was implicit (same coroutine,
+  same call stack); after, the client's retry has to carry something the
+  server can use to find the right piece of pending state. Design that id
+  before touching the handler code -- it's the part a mechanical fixer
+  can't invent for you, which is also why there's no fixer for this rule.
 
 ## Spec link
 
