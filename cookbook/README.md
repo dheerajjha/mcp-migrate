@@ -35,6 +35,7 @@ Every recipe follows [`_TEMPLATE.md`](_TEMPLATE.md):
 | 04 | [subscribe/unsubscribe to subscriptions/listen](04-subscribe-to-subscriptions-listen.md) | R013 | none |
 | 05 | [resultType and cache metadata on results](05-result-type-and-cache-metadata.md) | R015, R016 | none |
 | 14 | [Required Mcp-Method / Mcp-Name routing headers](14-routing-headers.md) | R003 | none |
+| 06 | [ping removed](06-ping-removed.md) | R011 | none yet |
 
 ## Stubs -- open slots
 
@@ -46,7 +47,6 @@ ready-to-file issue for each.
 
 | # | Recipe | Rule(s) |
 | - | ------ | ------- |
-| 06 | [ping removed](06-ping-removed.md) | R011 |
 | 07 | [logging/setLevel removed](07-logging-set-level-removed.md) | R012 |
 | 08 | [SSE resumability removed](08-sse-resumability-removed.md) | R014 |
 | 09 | [resource-not-found error code changed](09-resource-not-found-error-code.md) | R017 |
