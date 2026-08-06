@@ -166,6 +166,15 @@ explicitly; it's implied when you pass neither flag) -- it prints the exact
 unified diff for every file that would change and writes nothing. Pass
 `--write` to apply it. `--dry-run` and `--write` are mutually exclusive.
 
+> [!WARNING]
+> **Do not run `fix --write` on TypeScript yet.**
+> ([#117](https://github.com/dheerajjha/mcp-migrate/issues/117)) Five fixers
+> emit Python `#` comments regardless of the file they are editing, so on a
+> `.ts` file they write lines that are a syntax error. The file will no
+> longer parse, and the tool reports success on its way out. This affects
+> v0.1.3. `check` is unaffected -- it only reads. On TypeScript, use `fix`
+> without `--write` and apply the diff yourself.
+
 Every change is tagged `safe` or `review` in the diff output:
 
 - **`safe`** -- the fixer is certain the transformation can't change
@@ -181,7 +190,7 @@ Every change is tagged `safe` or `review` in the diff output:
 
 Pass `--safe-only` to apply only `safe` fixers, `--rule R006` to restrict to
 one rule, `--include-tests` to also fix test/fixture paths (skipped by
-default, same rule as `check`). Only 5 of the 21 rules ship a fixer at all --
+default, same rule as `check`). Only 10 of the 21 rules ship a fixer at all --
 see the table below and [`mcp-migrate fixers`](#other-commands). Fixers are
 deliberately conservative: when a fixer can't be sure a transformation is
 correct, it leaves the source untouched rather than guess. A wrong fix that

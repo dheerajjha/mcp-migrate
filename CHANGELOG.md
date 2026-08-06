@@ -2,6 +2,37 @@
 
 All notable changes to this project are documented here.
 
+## [Unreleased]
+
+### Fixed
+
+- **R010 could be silenced by a comment.** A `# TODO: server/discover is not
+  implemented yet` satisfied the Python "does this project already implement
+  it?" check, so the more clearly a project documented the gap, the more
+  certain R010 was that there wasn't one. Now routed through `search_wire`,
+  which keeps string literals and drops prose. A genuine wire-name literal
+  still suppresses correctly. ([#113](https://github.com/dheerajjha/mcp-migrate/issues/113),
+  @waterlemonnn)
+- **R018 and R019 were blind to the TypeScript SDK schema names**, which is
+  the spelling real servers actually write —
+  `server.setRequestHandler(ListTasksRequestSchema, ...)` never contains the
+  wire string, so a wire-only search saw nothing. Both now run a
+  `search_code` pass alongside the wire pass, bounded to the exact SDK
+  exports so this doesn't reintroduce
+  [#87](https://github.com/dheerajjha/mcp-migrate/issues/87). R018 also picks
+  up `elicitationId` on the TypeScript path, which the Python path already
+  had. ([#99](https://github.com/dheerajjha/mcp-migrate/issues/99), partially
+  — the Python `Params`/`Result` variants are still open. @waterlemonnn)
+
+### Known issues
+
+- **`fix --write` corrupts TypeScript.**
+  ([#117](https://github.com/dheerajjha/mcp-migrate/issues/117)) Five fixers
+  emit Python `#` comments regardless of the file being edited, so on a `.ts`
+  file they produce a syntax error and the tool still reports success. This
+  is present in v0.1.3. `check` is unaffected. Until it's fixed, run `fix`
+  without `--write` on TypeScript and apply the diff by hand.
+
 ## [0.1.3] - 2026-08-05
 
 **TypeScript scanning, which did not exist in 0.1.2.** Sixteen of the
