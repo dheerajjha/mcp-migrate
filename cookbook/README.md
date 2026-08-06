@@ -43,6 +43,7 @@ Every recipe follows [`_TEMPLATE.md`](_TEMPLATE.md):
 | 11 | [Tasks moved to an extension, polling replaces blocking result](11-tasks-polling.md) | R019 | none |
 | 12 | [Dynamic Client Registration deprecated](12-dynamic-client-registration-deprecated.md) | R020 | none |
 | 13 | [JSON Schema 2020-12 required](13-json-schema-2020-12.md) | R021 | none |
+| 15 | [Deterministic tools/list ordering](15-deterministic-tool-ordering.md) | R004 | R004 (safe, list-literal shape only) |
 
 ## Stubs -- open slots
 
