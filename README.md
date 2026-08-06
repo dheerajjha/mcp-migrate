@@ -23,7 +23,7 @@ uvx mcp-migrate fix . --write
 ```
 $ uvx mcp-migrate check tests/fixtures/fixer_roundtrip
 
-mcp-migrate v0.1.3  ->  fixer_roundtrip
+mcp-migrate v0.1.4  ->  fixer_roundtrip
 2 Python files, 21 rules, spec 2026-07-28
 
             rule    where         what
@@ -77,7 +77,7 @@ and no grade:
 ```
 $ mcp-migrate check ./my-ts-server
 
-mcp-migrate v0.1.3  ->  my-ts-server
+mcp-migrate v0.1.4  ->  my-ts-server
 
 No grade for this one. Found 24 TypeScript. TypeScript support is partial --
 17 of 21 rules read it so far, which is enough to report findings but not

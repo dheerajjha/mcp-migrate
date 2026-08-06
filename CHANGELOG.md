@@ -2,7 +2,12 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased]
+## [0.1.4] - 2026-08-06
+
+**A correctness release. Two of these are the kind you upgrade for rather
+than read about:** `fix --write` was corrupting TypeScript source, and no
+TypeScript project could fail a CI build. Both were present in 0.1.3.
+Everything here was contributed.
 
 ### Added
 
@@ -43,7 +48,6 @@ All notable changes to this project are documented here.
 - **R003 re-ran a whole-project scan inside its per-file loop**, the same
   quadratic shape as #67. Found by the new complexity guard on its first run.
   ([#86](https://github.com/dheerajjha/mcp-migrate/issues/86), @s35153)
-
 - **R010 could be silenced by a comment.** A `# TODO: server/discover is not
   implemented yet` satisfied the Python "does this project already implement
   it?" check, so the more clearly a project documented the gap, the more
@@ -64,11 +68,33 @@ All notable changes to this project are documented here.
 
 ### Known issues
 
-- **v0.1.3 on PyPI still has all of the above.** Everything in this section
-  is fixed on `main` and unreleased. In particular, **`fix --write` corrupts
-  TypeScript in v0.1.3** and **TypeScript always exits `2`** there. Until the
-  next release, run `fix` without `--write` on TypeScript and parse `check`
-  output rather than trusting its status.
+Still real, still shipping, listed because they are.
+
+- **TypeScript is scanned but not graded.** 17 of 21 rules read it, which is
+  enough to report findings and fail a build but not enough to stand behind a
+  letter grade. Still Python-only: **R002, R013, R014, R021**.
+- **Three false-positive classes remain**, affecting both languages: unbounded
+  `\w*` suffixes matching unrelated identifiers
+  ([#87](https://github.com/dheerajjha/mcp-migrate/issues/87)), wire patterns
+  without an end boundary so `"roots/listeners"` matches `roots/list`
+  ([#88](https://github.com/dheerajjha/mcp-migrate/issues/88)), and five rules
+  deciding "is this MCP?" too loosely
+  ([#89](https://github.com/dheerajjha/mcp-migrate/issues/89)). Fixes are in
+  flight. Treat a finding as a prompt to look, not as a verdict.
+- **R017 discards its own `re.IGNORECASE`**
+  ([#123](https://github.com/dheerajjha/mcp-migrate/issues/123)), so it finds
+  `"resource not found"` but misses `"Resource Not Found"`. A false negative,
+  not a false positive.
+- **The badge endpoints are generated but not yet served** until GitHub Pages
+  is publishing `docs/`.
+
+### Contributors
+
+@Vicky-Jha, @iphonekumar, @waterlemonnn, @s35153, @djubx — plus
+@li2631026381-alt, whose closed PR surfaced
+[#123](https://github.com/dheerajjha/mcp-migrate/issues/123).
+
+Every fix in this release came from outside the repo.
 
 ## [0.1.3] - 2026-08-05
 
@@ -176,5 +202,6 @@ from outside the repo.
 Python-only. Twenty-one rules, five fixers (R001, R004, R005, R006, R017),
 letter grading and the registry board.
 
+[0.1.4]: https://github.com/dheerajjha/mcp-migrate/releases/tag/v0.1.4
 [0.1.3]: https://github.com/dheerajjha/mcp-migrate/releases/tag/v0.1.3
 [0.1.2]: https://github.com/dheerajjha/mcp-migrate/releases/tag/v0.1.2
