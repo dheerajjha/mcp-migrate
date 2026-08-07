@@ -312,6 +312,18 @@ points -- over 4x what one rule is now allowed to cost.
 | `deprecated` | -8                 | -12          | Still works today, on a 12+ month clock.      |
 | `advisory`   | -3                 | -6           | Best practice, not a compatibility risk.      |
 
+**The letter counts kinds of problem, not amount of work.** Because every
+rule is capped, one `Mcp-Session-Id` read and fourteen of them across four
+files both score 75 and both grade C. The score moves when a *different*
+rule fires, not when the same one fires again.
+
+That is deliberate -- repetition of one systemic issue is one issue -- but it
+means **the grade cannot be used to size a migration.** For that, read
+`counts` and `findings` in `--json`: they carry every occurrence, uncapped.
+Someone reasonably read the letter the other way and estimated two very
+different migrations as the same day of work, which is the failure this
+paragraph exists to prevent.
+
 Score starts at 100 and floors at 0. The letter grade comes from the score:
 
 | Score  | Grade | Badge color   |
