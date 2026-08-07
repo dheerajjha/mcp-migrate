@@ -6,5 +6,6 @@ score: 97
 checked_with: mcp-migrate 0.1.1
 spec: "2026-07-28"
 status: ready
+submitted_by: project
 notes: >-
   Local MCP server connecting AI assistants to DuckDB and MotherDuck for SQL analytics and data engineering.

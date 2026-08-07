@@ -37,7 +37,29 @@ def main() -> int:
     for e in entries:
         tally[e.get("grade")] = tally.get(e.get("grade"), 0) + 1
     summary = ", ".join(f"{tally[g]}x {g}" for g in "ABCDF" if g in tally)
-    table = f"\n**{len(entries)} servers checked** ({summary or 'none yet'})\n\n" + "\n".join(rows) + "\n"
+
+    # "Checked" and "opted in" are different claims and the headline says which
+    # is which. Every entry here was written by this project scanning a public
+    # repo -- that is a survey, not adoption, and a board that blurred the two
+    # would be overclaiming in exactly the way this tool refuses to elsewhere.
+    owned = sum(1 for e in entries if e.get("submitted_by") == "owner")
+    if owned:
+        provenance = (
+            f"**{owned} submitted by the server's own maintainers**, "
+            f"{len(entries) - owned} checked by this project."
+        )
+    else:
+        provenance = (
+            "All of these were checked by this project, not submitted by the "
+            "servers' maintainers -- so read it as a survey, not as adoption. "
+            "If you maintain one of these, "
+            "[submit your own entry](registry/README.md) and it becomes yours."
+        )
+
+    table = (
+        f"\n**{len(entries)} servers checked** ({summary or 'none yet'})\n\n"
+        f"{provenance}\n\n" + "\n".join(rows) + "\n"
+    )
 
     text = README.read_text()
     if START not in text or END not in text:

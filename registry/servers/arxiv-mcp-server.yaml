@@ -6,5 +6,6 @@ score: 91
 checked_with: mcp-migrate 0.1.4
 spec: "2026-07-28"
 status: ready
+submitted_by: project
 notes: >-
   Search, download, and read arXiv papers, with semantic search and citation tools, over MCP.

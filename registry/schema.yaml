@@ -9,3 +9,10 @@ spec:          {required: true,  type: str,  desc: "spec revision checked agains
 status:        {required: true,  type: str,  enum: [ready, migrating, unmaintained]}
 notes:         {required: true,  type: str,  desc: "one sentence, what it does"}
 homepage:      {required: false, type: str}
+# Who put this entry here. "project" means mcp-migrate scanned a public repo
+# and wrote the entry; "owner" means someone who maintains that server
+# submitted it themselves. The distinction is the whole value of the board --
+# a list we compiled is a survey, a list projects opted into is adoption, and
+# conflating the two would be the same kind of overclaiming this tool exists
+# to refuse. Defaults to "project", because that is what an unmarked entry is.
+submitted_by:  {required: false, type: str,  enum: [project, owner]}

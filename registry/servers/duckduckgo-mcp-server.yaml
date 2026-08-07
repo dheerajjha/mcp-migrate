@@ -6,5 +6,6 @@ score: 97
 checked_with: mcp-migrate 0.1.1
 spec: "2026-07-28"
 status: ready
+submitted_by: project
 notes: >-
   MCP server that provides web search through DuckDuckGo, with additional content fetching and parsing features.

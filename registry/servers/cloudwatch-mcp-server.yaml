@@ -6,5 +6,6 @@ score: 97
 checked_with: mcp-migrate 0.1.1
 spec: "2026-07-28"
 status: ready
+submitted_by: project
 notes: >-
   AWS Labs MCP server for CloudWatch that gives troubleshooting agents alarm, metric, and log data for root cause analysis.

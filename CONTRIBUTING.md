@@ -17,6 +17,19 @@ the finding and doing nothing. See `RULE_CAP` in
 false-positive story in [`r003_routing_headers.py`](src/mcp_migrate/rules/r003_routing_headers.py)
 for what this looks like when it's gotten wrong before.
 
+**On AI-assisted contributions.** Some contributions here are AI-assisted,
+including a good deal of the maintainer's own review. That's fine, it's
+common, and you don't need to disclose it. What is not optional is that a
+human has read the change and can stand behind it: **every PR gets a human
+review before merge, and if you opened it you're expected to understand what
+it does and answer questions about it.**
+
+The bar doesn't move either way. A rule that fires wrongly costs a project
+its badge whether a person or a model wrote the regex, so reviews here lean
+on running the thing rather than reading the diff -- claims in a PR
+description get checked against real output before merge. That has caught
+real problems in otherwise excellent PRs, which is the point.
+
 **Review promise:** every PR gets a first review within 48 hours. A rule or
 fixer merges as soon as it has one passing test -- we're not going to
 bikeshed your regex or ask for a second fixture you don't think you need. A

@@ -38,3 +38,11 @@
 - [ ] `name` matches the filename
 
 ## Anything else reviewers should know?
+
+<!--
+AI-assisted contributions are welcome and don't need disclosing -- plenty of
+work here is, review included. The one thing that isn't optional: a human has
+read this and can stand behind it. Expect the review to run the change rather
+than read the diff, and expect questions.
+-->
+

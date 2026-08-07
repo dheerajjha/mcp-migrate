@@ -374,6 +374,8 @@ color using the table above):
 
 **16 servers checked** (6x A, 8x B, 1x C, 1x D)
 
+All of these were checked by this project, not submitted by the servers' maintainers -- so read it as a survey, not as adoption. If you maintain one of these, [submit your own entry](registry/README.md) and it becomes yours.
+
 | server | grade | status | language | what it does |
 | --- | --- | --- | --- | --- |
 | [aws-documentation-mcp-server](https://github.com/awslabs/mcp) | **A** | ready | python | AWS Labs MCP server that fetches, searches, and recommends AWS documentation pages, converted to markdown. |
