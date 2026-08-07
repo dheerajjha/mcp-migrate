@@ -15,7 +15,7 @@ from rich.table import Table
 from . import __version__
 from .fixers import all_fixers
 from .grade import badge_url, letter, score
-from .languages import PARTIAL, SUPPORTED, describe, primary, survey
+from .languages import DISPLAY, PARTIAL, SUPPORTED, describe, primary, survey
 from .rules import all_rules
 from .rules.base import Project, SourceFile
 from .scan import load_project
@@ -40,6 +40,8 @@ LANG_ISSUE_URL = "https://github.com/dheerajjha/mcp-migrate/issues/30"
 # What's left is whether a `PARTIAL` language ever gets graded at all --
 # a decision, not a count -- and that's #172.
 GRADE_ISSUE_URL = "https://github.com/dheerajjha/mcp-migrate/issues/172"
+# JavaScript loads but no rule declares it yet -- step 2 of #149.
+JS_ISSUE_URL = "https://github.com/dheerajjha/mcp-migrate/issues/149"
 
 
 def run_check(root: Path, *, include_tests: bool = False):
@@ -85,9 +87,11 @@ def unscannable_reason(root: Path, project, counts, *, include_tests: bool) -> s
     into a grade has to ask this first.
     """
     # "Did we read anything gradable", not "did we read anything". A
-    # TypeScript tree is scanned by the rules that have been ported to it,
-    # but a letter grade derived from 2 of 21 rules would be a confident
-    # claim about the 19 that never ran.
+    # PARTIAL tree is scanned by the rules ported to it, and a grade
+    # derived from a subset would be a confident claim about the rules that
+    # never ran. (No counts here on purpose -- the last version of this
+    # comment said "2 of 21 ... the 19 that never ran" long after the real
+    # numbers were 21 and 0.)
     if any(f.language in SUPPORTED for f in project.files):
         return None
     if not counts:
@@ -121,18 +125,32 @@ def unscannable_reason(root: Path, project, counts, *, include_tests: bool) -> s
         )
     if python_files:
         return f"found {python_files} Python file(s) but could not read any of them"
-    return (
-        f"found {describe(counts)}, but no Python -- and mcp-migrate only reads "
-        "Python today"
-    )
+    # Reached only when nothing here is in SUPPORTED or PARTIAL. Naming the
+    # languages we do read beats naming one of them: this said "only reads
+    # Python today" for months after TypeScript was being read by every
+    # rule, which is the same stale-claim bug as #171 and #172, printed at
+    # the person instead of buried in a docstring.
+    readable = ", ".join(DISPLAY.get(lang, lang) for lang in sorted(SUPPORTED | PARTIAL))
+    return f"found {describe(counts)}, and mcp-migrate reads {readable}"
 
 
 def _print_language_hint(console, counts) -> None:
-    """Point someone at the issue that would fix their case, if one exists."""
-    if counts.get("typescript") or counts.get("javascript"):
+    """Point someone at the issue that would fix their case, if one exists.
+
+    Keyed off what is actually open. Pointing a JavaScript project at the
+    TypeScript issue was wrong in both directions: TypeScript is read by
+    every rule now, so it is not up for grabs, and the work JavaScript
+    still needs is the rule port in #149, not #30.
+    """
+    if counts.get("javascript"):
         console.print(
-            f"[dim]TypeScript support is the most-wanted thing in this repo and it is "
-            f"up for grabs: {LANG_ISSUE_URL}[/dim]"
+            f"[dim]JavaScript files are read, but no rule reads into them yet -- "
+            f"porting the rules is up for grabs: {JS_ISSUE_URL}[/dim]"
+        )
+    elif counts.get("typescript"):
+        console.print(
+            f"[dim]Every rule reads TypeScript; whether it gets a grade is the "
+            f"open question: {GRADE_ISSUE_URL}[/dim]"
         )
     elif counts:
         console.print(

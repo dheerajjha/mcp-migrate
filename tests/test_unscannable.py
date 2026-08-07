@@ -234,3 +234,34 @@ def test_primary_breaks_ties_toward_a_language_we_can_read(tmp_path):
 def test_describe_uses_the_names_people_write(mixed_tree):
     # "6 typescript" reads like a bug report about the tool.
     assert describe(survey(mixed_tree)) == "6 TypeScript, 1 Python"
+
+
+def test_a_javascript_tree_is_pointed_at_the_javascript_issue(tmp_path, capsys):
+    """JavaScript trees were told "TypeScript support is the most-wanted
+    thing in this repo and it is up for grabs", pointing at #30. Wrong twice
+    over: TypeScript is read by every rule, so it is not up for grabs, and
+    the work a JavaScript project is waiting on is the rule port in #149."""
+    (tmp_path / "server.js").write_text('const s = req.headers["Mcp-Session-Id"];\n')
+    main(["check", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert "issues/149" in out
+    assert "issues/30" not in out
+
+
+def test_a_typescript_tree_is_pointed_at_the_grading_decision(tmp_path, capsys):
+    (tmp_path / "server.ts").write_text('const s = req.headers["Mcp-Session-Id"];\n')
+    main(["check", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert "issues/172" in out
+    assert "up for grabs" not in out
+
+
+def test_the_unreadable_language_message_names_what_we_do_read(tmp_path, capsys):
+    """This said "mcp-migrate only reads Python today" for as long as
+    TypeScript had been readable. Derived from SUPPORTED|PARTIAL so it
+    cannot drift again."""
+    (tmp_path / "main.go").write_text("package main\n")
+    main(["check", str(tmp_path)])
+    out = capsys.readouterr().out.replace("\n", " ")
+    assert "Python" in out and "TypeScript" in out
+    assert "only reads Python" not in out
