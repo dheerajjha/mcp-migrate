@@ -1,7 +1,7 @@
 # Required `Mcp-Method` / `Mcp-Name` routing headers
 
 - **Rule:** [R003](../src/mcp_migrate/rules/r003_routing_headers.py)
-- **Fixer:** none
+- **Fixer:** [`RoutingHeadersFixer`](../src/mcp_migrate/fixers/r003_routing_headers.py) (`review` confidence — adds headers to inline `headers={...}` dicts and leaves TODOs elsewhere)
 - **Severity:** advisory (downgraded from an earlier `breaking` after a real
   false-positive incident -- see the rule source's comment for the
   mcp-atlassian story before reaching for a fixer here)
