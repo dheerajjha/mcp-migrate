@@ -244,7 +244,7 @@ mcp-migrate entry --repo owner/name   # print a registry/servers/*.yaml entry fo
 | Rule | Severity | What breaks | Fixer |
 | ---- | -------- | ------------ | ----- |
 | [R001](src/mcp_migrate/rules/r001_session_id.py) | breaking | `Mcp-Session-Id` is gone from the Streamable HTTP transport ([SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567)). | yes (`review`) |
-| [R002](src/mcp_migrate/rules/r002_connection_state.py) | breaking | Servers are required to be stateless ([SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567)); a module-level dict keyed by connection breaks behind a load balancer or a restart. | no |
+| [R002](src/mcp_migrate/rules/r002_connection_state.py) | breaking | Servers are required to be stateless ([SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567)); a module-level dict keyed by connection breaks behind a load balancer or a restart. | yes (`review`) |
 | [R003](src/mcp_migrate/rules/r003_routing_headers.py) | advisory | Hand-rolled HTTP clients that skip the new required `Mcp-Method`/`Mcp-Name` [routing headers](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http) get rejected by anything enforcing the new transport. | no |
 | [R004](src/mcp_migrate/rules/r004_tool_ordering.py) | advisory | [`tools/list` order](https://modelcontextprotocol.io/specification/draft/changelog) is not guaranteed; non-deterministic ordering defeats caching. | yes (`safe`) |
 | [R005](src/mcp_migrate/rules/r005_extensions.py) | advisory | Optional capabilities negotiate through an [`extensions`](https://modelcontextprotocol.io/specification/draft/changelog) map that isn't declared. | yes (`safe`) |

@@ -75,18 +75,38 @@ def test_cookbook_index_matches_rules_and_fixers():
                 )
             continue
 
-        m = re.match(r"(R\d+)\s+\((\w+)", fixer_cell)
-        assert m, f"row {num}: unparseable fixer cell {fixer_cell!r}"
-        fixer_rule, confidence = m.group(1), m.group(2)
-        assert fixer_rule in row_rules, (
-            f"row {num}: fixer cell names {fixer_rule}, not among {row_rules}"
-        )
-        fixer = fixer_by_rule.get(fixer_rule)
-        assert fixer is not None, f"row {num}: {fixer_rule} has no fixer in all_fixers()"
-        assert fixer.confidence == confidence, (
-            f"row {num}: cookbook says {confidence!r}, fixer confidence is {fixer.confidence!r}"
-        )
-        claimed.append(fixer_rule)
+        # A recipe can cover several rules and more than one of them can
+        # ship a fixer -- recipe 01 covers R001 and R002 and both do. Parsing
+        # only the first entry silently dropped the rest, which showed up as
+        # "R002's fixer is claimed by 0 cookbook rows" rather than as a
+        # parse error.
+        #
+        # Matched rather than split on ",": a cell may carry a parenthetical
+        # that itself contains a comma, e.g. "R004 (safe, list-literal shape
+        # only)". Only the first word inside the parens is the confidence;
+        # the rest is prose about the fixer's scope.
+        entries = re.findall(r"(R\d+)\s+\((\w+)[^)]*\)", fixer_cell)
+        assert entries, f"row {num}: unparseable fixer cell {fixer_cell!r}"
+        for fixer_rule, confidence in entries:
+            assert fixer_rule in row_rules, (
+                f"row {num}: fixer cell names {fixer_rule}, not among {row_rules}"
+            )
+            fixer = fixer_by_rule.get(fixer_rule)
+            assert fixer is not None, f"row {num}: {fixer_rule} has no fixer in all_fixers()"
+            assert fixer.confidence == confidence, (
+                f"row {num}: cookbook says {confidence!r}, fixer confidence is "
+                f"{fixer.confidence!r}"
+            )
+            claimed.append(fixer_rule)
+
+        # Every rule in this row that ships a fixer must be listed, not just
+        # one of them -- otherwise a row reads as "R002 has no fixer" by
+        # omission, which is the drift this test exists to catch.
+        for rid in row_rules:
+            if rid in fixer_by_rule:
+                assert rid in claimed, (
+                    f"row {num}: {rid} ships a fixer but the row does not list it"
+                )
 
     assert numbers == sorted(numbers), "cookbook rows are out of order"
     assert len(numbers) == len(set(numbers)), "a cookbook row number repeats"
