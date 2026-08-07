@@ -135,3 +135,85 @@ def test_cli_entry_command_prints_registry_yaml(capsys):
     assert "name: notes-mcp" in out
     assert "repo: acme/notes-mcp" in out
     assert "grade: A" in out
+
+
+def test_unbounded_suffix_bounded_pattern_issue_87(tmp_path):
+    """Issue #87: Bounded suffix alternation for R007, R009, R011, R012 type names.
+
+    Unrelated identifiers ending in ...Requester (e.g. PingRequester) must stay silent,
+    while valid SDK schema/params names (e.g. PingRequestSchema, PingRequestParams) must fire.
+    """
+    # 1. Requester forms must stay silent
+    silent_code = (
+        "class CreateMessageRequester { send() {} }\n"
+        "class InitializeRequester { run() {} }\n"
+        "class PingRequester { send() {} }\n"
+        "class SetLevelRequester { send() {} }\n"
+    )
+    f_silent = tmp_path / "silent.py"
+    f_silent.write_text(silent_code, encoding="utf-8")
+    _, _, findings_silent, _, _ = run_check(tmp_path)
+    rule_ids_silent = {f.rule_id for f in findings_silent}
+    assert "R007" not in rule_ids_silent
+    assert "R009" not in rule_ids_silent
+    assert "R011" not in rule_ids_silent
+    assert "R012" not in rule_ids_silent
+
+    # 2. Schema and Params forms must fire
+    f_silent.unlink()
+    firing_code = (
+        "server.setRequestHandler(PingRequestSchema, async () => ({}));\n"
+        "const req: CreateMessageRequestSchema = {};\n"
+        "const init: InitializeRequestSchema = {};\n"
+        "const lvl: SetLevelRequestParams = {};\n"
+    )
+    f_fire = tmp_path / "firing.py"
+    f_fire.write_text(firing_code, encoding="utf-8")
+    _, _, findings_fire, _, _ = run_check(tmp_path)
+    rule_ids_fire = {f.rule_id for f in findings_fire}
+    assert "R007" in rule_ids_fire
+    assert "R009" in rule_ids_fire
+    assert "R011" in rule_ids_fire
+    assert "R012" in rule_ids_fire
+
+
+# The four rules carry a TypeScript-only pattern alongside the Python one,
+# and those were a separate set of `\w*` sites that #109 predates. Bounding
+# only the Python half would have left the same false positive live for
+# every TypeScript project, which is most MCP servers.
+FP_87 = [
+    ("R011", "helper = PingRequester()"),
+    ("R011", "x = PingRequesterFactory()"),
+    ("R012", "s = SetLevelRequesterFactory()"),
+    ("R012", "y = SetLevelRequestBuilder()"),
+    ("R009", "helper = InitializeRequesterHelper()"),
+    ("R009", "z = InitializeResultParser()"),
+    ("R007", "b = CreateMessageRequestBuilder()"),
+    ("R007", "c = CreateMessageResultFormatter()"),
+]
+TP_87 = [
+    ("R011", "x = PingRequestSchema"),
+    ("R012", "x = SetLevelRequestParams"),
+    ("R009", "z = InitializedNotificationSchema"),
+    ("R007", "y = CreateMessageResult"),
+]
+
+
+@pytest.mark.parametrize("ext", [".py", ".ts"])
+@pytest.mark.parametrize("rule_id,source", FP_87)
+def test_issue_87_false_positives_are_silent_in_both_languages(rule_id, source, ext, tmp_path):
+    (tmp_path / f"m{ext}").write_text(source + "\n", encoding="utf-8")
+    _, _, findings, _, _ = run_check(tmp_path)
+    assert rule_id not in {f.rule_id for f in findings}, (
+        f"{rule_id} fires on {source!r} in a {ext} file -- that is #87"
+    )
+
+
+@pytest.mark.parametrize("ext", [".py", ".ts"])
+@pytest.mark.parametrize("rule_id,source", TP_87)
+def test_issue_87_bounding_does_not_cost_the_real_sdk_names(rule_id, source, ext, tmp_path):
+    (tmp_path / f"m{ext}").write_text(source + "\n", encoding="utf-8")
+    _, _, findings, _, _ = run_check(tmp_path)
+    assert rule_id in {f.rule_id for f in findings}, (
+        f"{rule_id} no longer catches {source!r} in a {ext} file -- bounding overshot"
+    )

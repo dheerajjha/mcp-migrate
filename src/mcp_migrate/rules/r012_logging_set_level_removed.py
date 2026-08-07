@@ -4,8 +4,8 @@ from .base import Finding, Project, Rule
 
 # `SetLevelRequest`/`SetLevelRequestParams` are the MCP SDK's own model
 # names for this request -- distinctive, no false-positive risk.
-SET_LEVEL_CODE_RX = re.compile(r"\bSetLevelRequest\b|\bSetLevelRequestParams\b")
-TS_SET_LEVEL_CODE_RX = re.compile(r"\bSetLevelRequest\w*")
+SET_LEVEL_CODE_RX = re.compile(r"\bSetLevelRequest(?:Params|Schema|Result|ResultSchema)?\b")
+TS_SET_LEVEL_CODE_RX = re.compile(r"\bSetLevelRequest(?:Params|Schema|Result|ResultSchema)?\b")
 
 
 class LoggingSetLevelRemoved(Rule):
