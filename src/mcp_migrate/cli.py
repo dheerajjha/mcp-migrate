@@ -151,8 +151,15 @@ def _checked_something(project) -> bool:
     them, so the exit code has real information to carry. An empty
     directory or a tree in a language with no backend read nothing, and
     EXIT_UNSCANNABLE is the honest answer there.
+
+    Deliberately not `bool(project.files)`: the scanner can load a file
+    (JavaScript, today) into a language no rule has been ported to yet,
+    which means it sits in `project.files` without a single rule ever
+    having run against it. That is "could not check" wearing "checked
+    it" as a disguise -- exactly the false confidence this function
+    exists to refuse.
     """
-    return bool(project.files)
+    return any(f.language in SUPPORTED or f.language in PARTIAL for f in project.files)
 
 
 def cmd_check(args) -> int:
