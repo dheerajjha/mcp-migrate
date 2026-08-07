@@ -5,7 +5,7 @@ from .base import Finding, Project, Rule
 # `PingRequest` is the MCP SDK's own model name -- distinctive, essentially
 # never appears outside MCP code. In TypeScript the SDK exports
 # `PingRequestSchema` (Zod) and `PingRequest` (inferred type), so we match
-# any identifier starting with PingRequest.
+# specific TypeScript/Python SDK type & schema names.
 PING_CODE_RX = re.compile(r"\bPingRequest(?:Params|Schema|Result|ResultSchema)?\b")
 
 # A bare `"ping"` string is one of the most overloaded tokens in server

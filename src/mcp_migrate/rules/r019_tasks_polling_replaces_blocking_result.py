@@ -2,10 +2,10 @@ import re
 
 from .base import Finding, Project, Rule, wire_method
 
-# `ListTasksRequest`/`GetTaskPayloadRequest` are the MCP SDK's own model
-# names for the two removed shapes (tasks/list, and the blocking
-# tasks/result) -- distinctive, no false-positive risk.
-TASKS_CODE_RX = re.compile(r"\bListTasksRequest\b|\bGetTaskPayloadRequest\b")
+TASKS_CODE_RX = re.compile(
+    r"\bListTasksRequest(?:Params|Schema)?\b|\bListTasksResult(?:Schema)?\b|"
+    r"\bGetTaskPayloadRequest(?:Params|Schema)?\b|\bGetTaskPayloadResult(?:Schema)?\b"
+)
 
 # The TypeScript SDK exports Zod schemas for request handling, and that's
 # the name a server actually references -- `server.setRequestHandler(
