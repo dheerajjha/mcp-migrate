@@ -1,0 +1,10 @@
+name: excel-mcp-server
+repo: haris-musa/excel-mcp-server
+language: python
+grade: B
+score: 89
+checked_with: mcp-migrate 0.1.4
+spec: "2026-07-28"
+status: ready
+notes: >-
+  Read, write, and format Excel workbooks (formulas, charts, pivot tables) over MCP, via SSE or Streamable HTTP.
