@@ -23,7 +23,7 @@ uvx mcp-migrate fix . --write
 ```
 $ uvx mcp-migrate check tests/fixtures/fixer_roundtrip
 
-mcp-migrate v0.1.4  ->  fixer_roundtrip
+mcp-migrate v0.2.0  ->  fixer_roundtrip
 2 Python files, 21 rules, spec 2026-07-28
 
             rule    where         what
@@ -99,7 +99,7 @@ coverage is complete the reason it gives is a decision, not a fraction:
 ```
 $ mcp-migrate check ./my-ts-server
 
-mcp-migrate v0.1.4  ->  my-ts-server
+mcp-migrate v0.2.0  ->  my-ts-server
 
 No grade for this one. Found 1 TypeScript. Every rule reads it now, but
 whether it gets graded is still an open decision, not a coverage gap --

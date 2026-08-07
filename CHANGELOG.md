@@ -4,13 +4,34 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-07
+
 **Every rule now reads TypeScript** (up from 17 of 21), the fixer set went
-from ten to **eighteen**, and the cookbook from six recipes to eighteen.
-**JavaScript files are now read** — though no rule reads into them yet. All
-of it was contributed.
+from ten to **nineteen**, and the cookbook from six recipes to eighteen.
+**JavaScript files are now read** — though no rule reads into them yet.
+There is a **pre-commit hook**. All of it was contributed.
 
 ### Added
 
+- **A pre-commit hook.** `.pre-commit-hooks.yaml` at the repo root, so this
+  drops into a project's `.pre-commit-config.yaml`. `pass_filenames: false`
+  is deliberate and documented in the yaml — several rules are
+  whole-project questions (R010 asks whether `server/discover` exists
+  *anywhere*), and handing them only the staged files would make them
+  answer about a partial tree.
+  ([#184](https://github.com/dheerajjha/mcp-migrate/issues/184), @ankitverma31)
+
+  The hook runs `mcp-migrate-precommit`, a wrapper whose entire job is
+  mapping exit 2 to 0. pre-commit treats any non-zero exit as a failure, so
+  wired directly the hook would block every commit in a repository the tool
+  cannot read — which is every repository until someone adds their first
+  Python or TypeScript file. Exit 1, a breaking finding, still blocks.
+  `check` itself is unchanged. Measured at **0.31–0.34s over 600 files**.
+- **A fixer for R003** (routing headers), taking the set to **19 of 21** —
+  only R010 and R015 lack one now, and R015's absence is a documented
+  decision. It recovers `Mcp-Method`/`Mcp-Name` from the call site where it
+  can and annotates where it cannot; it never invents a value.
+  ([#16](https://github.com/dheerajjha/mcp-migrate/issues/16), @syf2211)
 - **JavaScript source is loaded.** `.js`/`.jsx`/`.mjs`/`.cjs` were counted by
   `survey()` and never opened by `load_project()`, so a plain-JS server was
   reported on with zero findings because nothing was read — not because
@@ -140,6 +161,23 @@ of it was contributed.
 
 ### Fixed
 
+- **`fix --write` could make `check` report a file clean without fixing it.**
+  R003 decided whether a routing header was set with a raw substring test
+  over the whole file, comments included — and R003's fixer writes a TODO
+  that names the header. So running the fixer silenced the rule without
+  setting anything. Compounding it, the fixer wrote a placeholder
+  (`"Mcp-Method": "<set-mcp-method>"`) when it could not recover the real
+  value, producing source that compiles, runs, and sends that literal
+  string as an HTTP header. End to end: `check` found a real advisory,
+  `fix --write` wrote a broken header, and `check` then reported
+  **"Grade A. Nothing to fix."**
+
+  The rule now uses `search_wire`, which keeps ordinary string literals
+  (where a real header lives) and skips comments (where a TODO lives);
+  `search_code` would have been wrong, since it skips string literals and
+  would never see a real header either. The fixer now falls through to its
+  TODO path rather than guessing. Both were found while reviewing two
+  independent R003 fixer PRs — either would have tripped the rule bug.
 - **Four rules fired on identifiers that merely started with an SDK name.**
   `\bPingRequest\w*` matched `PingRequester`; `SetLevelRequesterFactory`,
   `InitializeRequesterHelper` and `CreateMessageRequestBuilder` were the
@@ -232,7 +270,8 @@ of it was contributed.
 
 ### Contributors
 
-@waterlemonnn wrote most of the above. @IronLad123 ported the last rule
+@ankitverma31's first PR added the pre-commit hook; @syf2211's added the
+R003 fixer. @waterlemonnn wrote most of the rest. @IronLad123 ported the last rule
 (R002) and bounded the four `\w*` patterns behind #87; @ujjwalprakash17's first PR fixed R014's case handling;
 @slegarraga's first PR added the `check --json` schema contract;
 @aryansk's first PR made the scanner read JavaScript -- and got the half
