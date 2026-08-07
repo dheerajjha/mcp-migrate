@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, wire_method
 
 # `ListTasksRequest`/`GetTaskPayloadRequest` are the MCP SDK's own model
 # names for the two removed shapes (tasks/list, and the blocking
@@ -17,7 +17,7 @@ TS_TASKS_CODE_RX = re.compile(
     r"\b(?:ListTasks|GetTaskPayload)Request(?:Params|Schema)?\b"
 )
 
-WIRE_RX = r"tasks/list|tasks/result"
+WIRE_RX = wire_method("tasks/list", "tasks/result")
 MESSAGE_CODE = (
     "References the removed ListTasksRequest (tasks/list) or the removed "
     "blocking GetTaskPayloadRequest (tasks/result)."

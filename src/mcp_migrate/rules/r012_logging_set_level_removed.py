@@ -1,11 +1,12 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, wire_method
 
 # `SetLevelRequest`/`SetLevelRequestParams` are the MCP SDK's own model
 # names for this request -- distinctive, no false-positive risk.
 SET_LEVEL_CODE_RX = re.compile(r"\bSetLevelRequest(?:Params|Schema|Result|ResultSchema)?\b")
 TS_SET_LEVEL_CODE_RX = re.compile(r"\bSetLevelRequest(?:Params|Schema|Result|ResultSchema)?\b")
+SET_LEVEL_WIRE_RX = wire_method("logging/setLevel")
 
 
 class LoggingSetLevelRemoved(Rule):
@@ -28,7 +29,7 @@ class LoggingSetLevelRemoved(Rule):
             out: list[Finding] = []
             for f, line, text in project.search_code(TS_SET_LEVEL_CODE_RX.pattern):
                 out.append(self.finding(self.CODE_MESSAGE, f, line, text))
-            for f, line, text in project.search_wire(r"logging/setLevel"):
+            for f, line, text in project.search_wire(SET_LEVEL_WIRE_RX):
                 out.append(self.finding(self.WIRE_MESSAGE, f, line, text))
             return out
 
@@ -39,6 +40,6 @@ class LoggingSetLevelRemoved(Rule):
         # identifier -- like notifications/initialized in r009, it can only
         # ever appear inside a STRING token, so search_code would never
         # find it. Scan the raw text for the literal instead.
-        for f, line, text in project.search_wire(r"logging/setLevel"):
+        for f, line, text in project.search_wire(SET_LEVEL_WIRE_RX):
             out.append(self.finding(self.WIRE_MESSAGE, f, line, text))
         return out

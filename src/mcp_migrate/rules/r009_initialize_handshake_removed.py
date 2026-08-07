@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, wire_method
 
 # `InitializeRequest`, `InitializeResult` and `InitializedNotification` are
 # the MCP SDK's own pydantic model names for the initialize handshake --
@@ -32,7 +32,7 @@ TS_HANDSHAKE_CODE_RX = (
 # The wire name is spelled the same in both languages, and needs
 # `search_wire` in both for the same reason -- see the note in
 # `_check_python`.
-WIRE_RX = r"notifications/initialized"
+WIRE_RX = wire_method("notifications/initialized")
 
 MESSAGE_CODE = (
     "References the removed initialize handshake (InitializeRequest/"

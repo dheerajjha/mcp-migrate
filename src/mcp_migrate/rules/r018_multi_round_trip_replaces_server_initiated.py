@@ -1,6 +1,4 @@
-import re
-
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, wire_method
 
 # Code-shaped identifiers -- SDK model/class names or plain Python names,
 # matched with search_code so a docstring/comment mention doesn't count.
@@ -25,10 +23,12 @@ FEATURES_CODE = {
 # only ever appear inside a STRING token, so search_code would never find
 # them (see the notifications/initialized note in r009). Raw scan instead.
 FEATURES_LITERAL = {
-    r"roots/list": "Server-initiated roots/list",
-    r"sampling/createMessage": "Server-initiated sampling/createMessage",
-    r"elicitation/create": "Server-initiated elicitation/create",
-    r"notifications/elicitation/complete": "notifications/elicitation/complete",
+    wire_method("roots/list"): "Server-initiated roots/list",
+    wire_method("sampling/createMessage"): "Server-initiated sampling/createMessage",
+    wire_method("elicitation/create"): "Server-initiated elicitation/create",
+    wire_method("notifications/elicitation/complete"): (
+        "notifications/elicitation/complete"
+    ),
 }
 
 # The TypeScript SDK exports Zod schemas for request handling. These names
@@ -96,6 +96,10 @@ class MultiRoundTripReplacesServerInitiated(Rule):
                     f, line, text,
                 ))
         for pattern, name in FEATURES_LITERAL.items():
+            # Already bounded at the definition, so both this path and the
+            # TypeScript one above get the end boundary from the same place.
+            # Wrapping again here would escape the pattern's own metacharacters
+            # and match nothing.
             for f, line, text in project.search_wire(pattern):
                 out.append(self.finding(
                     f"{name} was replaced by Multi Round-Trip Requests (InputRequiredResult "

@@ -385,3 +385,16 @@ class Rule:
             line=line,
             snippet=snippet,
         )
+
+
+def wire_method(*names: str) -> str:
+    r"""Build a regex pattern for JSON-RPC wire method names bounded by (?![\w/-]).
+
+    Prevents false positives on longer, unrelated strings like 'roots/listeners'
+    or 'tasks/listeners'.
+    """
+    if len(names) == 1:
+        return rf"\b{re.escape(names[0])}(?![\w/-])"
+    joined = "|".join(re.escape(n) for n in names)
+    return rf"\b(?:{joined})(?![\w/-])"
+

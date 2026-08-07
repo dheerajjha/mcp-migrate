@@ -279,3 +279,79 @@ def test_r017_still_fires_on_an_unmarked_old_code(tmp_path):
     )
     _, _, findings, _, _ = run_check(tmp_path)
     assert "R017" in {f.rule_id for f in findings}
+def test_wire_method_bounds_prevent_false_positives_on_longer_strings(tmp_path):
+    r"""Issue #88: Wire method patterns bounded by (?![\w/-]) must stay silent
+    when encountering longer, unrelated string names like roots/listeners or
+    tasks/listeners."""
+    code = (
+        'const r = "roots/listeners";\n'
+        'const t = "notifications/initializedElsewhere";\n'
+        'const m = "logging/setLevelLatency";\n'
+        'const e = "tasks/listeners";\n'
+    )
+    target = tmp_path / "app.py"
+    target.write_text(code, encoding="utf-8")
+    _, _, findings, _, _ = run_check(tmp_path)
+    rule_ids = {f.rule_id for f in findings}
+    assert "R007" not in rule_ids
+    assert "R009" not in rule_ids
+    assert "R012" not in rule_ids
+    assert "R018" not in rule_ids
+    assert "R019" not in rule_ids
+
+
+def test_wire_method_bounds_still_catch_exact_wire_method_names(tmp_path):
+    """Exact wire method strings must still be detected by search_wire."""
+    code = (
+        'const r = "roots/list";\n'
+        'const t = "notifications/initialized";\n'
+        'const m = "logging/setLevel";\n'
+        'const e = "tasks/list";\n'
+    )
+    target = tmp_path / "app.py"
+    target.write_text(code, encoding="utf-8")
+    _, _, findings, _, _ = run_check(tmp_path)
+    rule_ids = {f.rule_id for f in findings}
+    assert "R007" in rule_ids or "R018" in rule_ids
+    assert "R009" in rule_ids
+    assert "R012" in rule_ids
+    assert "R019" in rule_ids
+
+
+
+
+def test_wire_method_bounds_apply_to_the_typescript_paths_too(tmp_path):
+    r"""#88, the half the original fix missed.
+
+    `wire_method()` was applied at the Python call sites, but R007's TS
+    literal and R018's `FEATURES_LITERAL` are read by the TypeScript paths
+    as well, and those kept the unbounded patterns -- so the same file
+    scanned as TypeScript still produced the false positives the fix was
+    written to remove. Bounding at the definition rather than the call site
+    is what makes both languages agree.
+    """
+    (tmp_path / "s.ts").write_text(
+        "const registry = {\n"
+        '  "roots/listeners": [],\n'
+        '  "notifications/initializedAt": null,\n'
+        '  "logging/setLevelPolicy": "warn",\n'
+        '  "tasks/listeners": [],\n'
+        "};\n",
+        encoding="utf-8",
+    )
+    _, _, findings, _, _ = run_check(tmp_path)
+    assert findings == [], [(f.rule_id, f.line) for f in findings]
+
+
+def test_wire_method_bounds_still_catch_exact_names_in_typescript(tmp_path):
+    """The companion: bounding must not cost the true positives in TS."""
+    (tmp_path / "s.ts").write_text(
+        'const r = "roots/list";\n'
+        'const t = "notifications/initialized";\n'
+        'const m = "logging/setLevel";\n'
+        'const e = "tasks/list";\n',
+        encoding="utf-8",
+    )
+    _, _, findings, _, _ = run_check(tmp_path)
+    rule_ids = {f.rule_id for f in findings}
+    assert {"R009", "R012", "R018", "R019"} <= rule_ids, sorted(rule_ids)
