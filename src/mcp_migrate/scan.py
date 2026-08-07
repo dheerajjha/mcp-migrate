@@ -55,6 +55,15 @@ def _is_test_path(rel_path: Path) -> bool:
 # Extension -> language, for everything the rules can read. `.d.ts` is
 # excluded below: it is generated type declarations, never an
 # implementation, and grading someone on their build output is noise.
+#
+# JavaScript shares its extensions with TypeScript's `_ts_spans` scanner
+# in rules/base.py (comments and the three string forms are spelled the
+# same in both), so `.js`/`.jsx`/`.mjs`/`.cjs` route through the same
+# branch as `.ts` there -- see the `f.language in {"typescript",
+# "javascript"}` checks in `_spans_for`/`_prose_spans_for`. Adding an
+# extension here without adding the language there is the failure mode:
+# the file loads, the Python tokenizer fails on it, and every rule
+# silently falls back to matching inside comments.
 SOURCE_EXTENSIONS = {
     ".py": "python",
     ".ts": "typescript", ".mts": "typescript", ".cts": "typescript",
