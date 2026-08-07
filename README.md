@@ -60,7 +60,8 @@ every finding).
 
 `--json` emits one JSON object with these always-present top-level keys:
 `tool`, `version`, `spec`, `path`, `scannable`, `languages`, `grade`,
-`score`, `files_scanned`, `counts`, `findings`, and `suppressed`.
+`score`, `files_scanned`, `counts`, `findings`, `suppressed`, and
+`unused_suppressions`.
 
 Conditional keys:
 
@@ -71,6 +72,12 @@ Conditional keys:
 `suppressed` holds findings silenced by an inline `mcp-migrate: ignore[R0NN]`
 comment; they are excluded from `findings`, from `counts`, and from the grade,
 and each carries the `reason` from its comment.
+
+`unused_suppressions` holds directives that matched no finding — either it was
+fixed or the code moved. Each entry has `rule`, `path`, `line`, and `reason`,
+one per rule id. It is always present, empty array included: stale suppressions
+accumulate in CI, and CI is the consumer that reads `--json` and never sees a
+console line.
 
 Each finding always has `rule`, `severity`, `path`, `line`, and `message`.
 `path` and `line` may be `null` for project-level findings. `fix` is present
@@ -110,7 +117,18 @@ things keep it auditable:
 - `check` reports suppressions that matched nothing, so stale ones don't
   quietly accumulate
 
-`--json` carries them under `suppressed`, each with its `reason`.
+`--json` carries them under `suppressed`, each with its `reason`, and the stale
+ones under `unused_suppressions`.
+
+**One caveat, because "line-scoped" promises slightly less than it delivers for
+three rules.** `R005`, `R015` and `R016` ask a question about a *file* — does
+this file declare capabilities without `extensions`, does it build a JSON-RPC
+result without `resultType`, does it implement a list/read handler without cache
+metadata — so each reports at most one finding per file, on the first line that
+matches. Suppressing that line therefore silences the rule **for the whole
+file**, not just that line. Every other rule reports each occurrence
+separately, and there suppression really is per line. If you suppress one of
+these three, you are accepting the rule's verdict on that file.
 
 Exit codes, so it drops straight into CI:
 

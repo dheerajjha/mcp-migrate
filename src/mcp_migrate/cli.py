@@ -215,6 +215,32 @@ def _suppressed_dict(f, rules, result) -> dict:
     return d
 
 
+def _unused_suppression_dicts(result) -> list[dict]:
+    """Suppressions that matched nothing, one entry per rule id.
+
+    The text output already reports these, but stale suppressions
+    accumulate in CI, and CI is precisely the consumer that reads `--json`
+    and never sees a console line. Leaving them text-only inverts the
+    design: a team could carry a dozen suppressions that stopped matching
+    months ago with nothing in their pipeline able to notice.
+
+    One entry per rule id, rather than one entry with a `rules` array, so
+    the shape matches `suppressed` and a consumer can read both with the
+    same code path. A directive that matched nothing has every rule id in
+    it stale, so expanding them loses no information.
+    """
+    return [
+        {
+            "rule": rule_id,
+            "path": str(s.path),
+            "line": s.line,
+            "reason": s.reason,
+        }
+        for s in suppress_mod.unused(result.suppressions)
+        for rule_id in s.rule_ids
+    ]
+
+
 def _finding_dict(f, rules) -> dict:
     d = {
         "rule": f.rule_id,
@@ -338,6 +364,7 @@ def cmd_check(args) -> int:
                 "counts": _severity_counts(findings, rules),
                 "findings": [_finding_dict(f, rules) for f in findings],
                 "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
+                "unused_suppressions": _unused_suppression_dicts(result),
             }, indent=2))
             return EXIT_OK
         if reason:
@@ -358,6 +385,7 @@ def cmd_check(args) -> int:
                 "counts": _severity_counts(findings, rules),
                 "findings": [_finding_dict(f, rules) for f in findings],
                 "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
+                "unused_suppressions": _unused_suppression_dicts(result),
             }, indent=2))
             return _exit_for(findings, rules) if _checked_something(project) \
                 else EXIT_UNSCANNABLE
@@ -374,6 +402,7 @@ def cmd_check(args) -> int:
             "counts": _severity_counts(findings, rules),
             "findings": [_finding_dict(f, rules) for f in findings],
             "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
+            "unused_suppressions": _unused_suppression_dicts(result),
         }, indent=2))
         return _exit_for(findings, rules)
 

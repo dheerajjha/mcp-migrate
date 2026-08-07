@@ -212,6 +212,50 @@ def test_suppressed_findings_are_not_in_findings_or_counts(tmp_path, capsys):
     assert sum(payload["counts"].values()) == len(payload["findings"])
 
 
+def test_unused_suppressions_reach_json_not_just_the_console(tmp_path, capsys):
+    # The audit story has to work for the consumer that cannot read the
+    # console. Stale suppressions accumulate in CI, and CI reads --json.
+    body = "import httpx\nx = 1  # mcp-migrate: ignore[R001] -- stale\n"
+    main(["check", str(project(tmp_path, "server.py", body)), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert len(payload["unused_suppressions"]) == 1
+    entry = payload["unused_suppressions"][0]
+    assert entry["rule"] == "R001"
+    assert entry["line"] == 2
+    assert entry["reason"] == "stale"
+    assert entry["path"].endswith("server.py")
+
+
+def test_unused_suppressions_is_always_present_even_when_empty(tmp_path, capsys):
+    # Required, like `suppressed`. An empty array is the common case, which
+    # is exactly the one worth making visible -- a key that appears only
+    # when non-empty forces every consumer to write the same `.get()`.
+    main(["check", str(project(tmp_path, "server.py", "import httpx\n")), "--json"])
+    assert json.loads(capsys.readouterr().out)["unused_suppressions"] == []
+
+
+def test_a_suppression_that_matched_is_not_reported_as_unused(tmp_path, capsys):
+    body = "import httpx\n" + f"{PY_TRIGGER}  # mcp-migrate: ignore[R001] -- deliberate\n"
+    main(["check", str(project(tmp_path, "server.py", body)), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["suppressed"], "it did match"
+    assert payload["unused_suppressions"] == []
+
+
+def test_a_stale_directive_naming_two_rules_reports_both(tmp_path, capsys):
+    # One entry per rule id, so the shape matches `suppressed`. Nothing is
+    # lost by expanding: if the directive matched nothing, every rule in it
+    # is stale.
+    body = "import httpx\nx = 1  # mcp-migrate: ignore[R001, R006] -- stale\n"
+    main(["check", str(project(tmp_path, "server.py", body)), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+
+    assert sorted(e["rule"] for e in payload["unused_suppressions"]) == ["R001", "R006"]
+    assert {e["line"] for e in payload["unused_suppressions"]} == {2}
+
+
 def test_a_suppressed_breaking_finding_changes_the_exit_code(tmp_path, capsys):
     # The consequence of the grade decision, stated as a test: this is
     # what makes the feature usable in CI, and also what makes the

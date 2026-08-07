@@ -4,6 +4,48 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Inline suppression: `# mcp-migrate: ignore[R001] -- reason`.** Silence a
+  single wrong finding without switching a rule off for the whole project.
+  Both comment syntaxes, so it reads naturally in Python and TypeScript.
+  ([#180](https://github.com/dheerajjha/mcp-migrate/issues/180))
+
+  A suppressed finding does not count against the grade. A suppression that
+  still costs you the grade is not a suppression — the only move left would
+  be to stop running the tool. That makes the grade partly self-reported, so
+  it is auditable by construction rather than by convention:
+
+  - the rule id is required; a blanket `ignore` would also silence rules that
+    do not exist yet, and nobody revisits it
+  - a reason is expected, and directives without one are reported
+  - the suppression count prints on every run, never behind a flag
+  - `--show-suppressions` lists each one with its file, rule and reason
+  - directives that matched nothing are reported, so stale ones cannot
+    quietly accumulate
+
+  Malformed directives are reported rather than dropped: someone wrote it
+  believing it worked, and the finding it was meant to silence is about to
+  appear anyway.
+
+  `R005`, `R015` and `R016` report at most one finding per file, so
+  suppressing their line silences those rules for that whole file. Documented
+  in the README; every other rule is genuinely per-line.
+
+### Changed
+
+- **`check --json` gained two required keys, `suppressed` and
+  `unused_suppressions`.** Both are always present, empty array included. A
+  consumer validating against the 0.2.0 schema will reject 0.3.0 output until
+  it is updated; `schemas/check-json.schema.json` is the executable contract.
+  Findings that were suppressed are absent from `findings` and from `counts`,
+  so a consumer that sums `counts` still gets a total matching `findings`.
+
+  `unused_suppressions` carries one entry per rule id (`rule`, `path`, `line`,
+  `reason`). It is in the JSON and not only on the console because stale
+  suppressions accumulate in CI, and CI is exactly the consumer that reads
+  `--json` and never sees a console line.
+
 ### Fixed
 
 - **R004 no longer fires on a wire method name that returns no tools.**
