@@ -86,11 +86,12 @@ of it was contributed.
   [#22](https://github.com/dheerajjha/mcp-migrate/issues/22), @waterlemonnn)
 
   All three bound their identifier suffix rather than using `\w*`, so
-  `PingRequester` and `SetLevelRequesterFactory` are left alone. **The rules
-  still match those** — that is [#87](https://github.com/dheerajjha/mcp-migrate/issues/87),
-  still open — so `check` reports a line `fix` declines to touch. That
-  asymmetry is deliberate: a wrong finding costs a reader ten seconds, a
-  wrong `--write` costs them working code.
+  `PingRequester` and `SetLevelRequesterFactory` are left alone. For a
+  while the *rules* still matched those, so `check` reported a line `fix`
+  declined to touch — an asymmetry taken deliberately, because a wrong
+  finding costs a reader ten seconds and a wrong `--write` costs them
+  working code. **The rules are now bounded too** and the two agree; see
+  [#87](https://github.com/dheerajjha/mcp-migrate/issues/87) below.
 - **Three new fixers**, taking the set from ten to thirteen: **R013**
   (`resources/subscribe` removal), **R008** (trace context) and **R018**
   (Multi Round-Trip Requests), all `review` confidence.
@@ -139,6 +140,20 @@ of it was contributed.
 
 ### Fixed
 
+- **Four rules fired on identifiers that merely started with an SDK name.**
+  `\bPingRequest\w*` matched `PingRequester`; `SetLevelRequesterFactory`,
+  `InitializeRequesterHelper` and `CreateMessageRequestBuilder` were the
+  same shape in R012, R009 and R007. Replaced with bounded alternation over
+  the suffixes the SDKs actually export, on both the Python *and*
+  TypeScript patterns — the latter were a second set of `\w*` sites, and
+  leaving them would have kept the false positive alive for most MCP
+  servers. Verified over 18 false-positive and 18 true-positive cases in
+  both languages: every FP silent, every real SDK name still caught.
+  ([#87](https://github.com/dheerajjha/mcp-migrate/issues/87), @IronLad123)
+
+  This also closes the rule/fixer asymmetry noted above: R009, R011 and
+  R012's fixers had bounded their patterns while the rules had not, so
+  three fixers shipped working *around* this bug. They now agree.
 - **A JavaScript project could be reported as clean.** Loading `.js` files
   put them in `project.files` for the first time, and `_checked_something()`
   was `bool(project.files)` — so a pure-JavaScript server with a live
@@ -218,7 +233,7 @@ of it was contributed.
 ### Contributors
 
 @waterlemonnn wrote most of the above. @IronLad123 ported the last rule
-(R002); @ujjwalprakash17's first PR fixed R014's case handling;
+(R002) and bounded the four `\w*` patterns behind #87; @ujjwalprakash17's first PR fixed R014's case handling;
 @slegarraga's first PR added the `check --json` schema contract;
 @aryansk's first PR made the scanner read JavaScript -- and got the half
 that is easy to miss, routing it to the TypeScript span scanner rather
