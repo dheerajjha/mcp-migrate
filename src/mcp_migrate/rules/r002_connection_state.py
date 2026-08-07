@@ -2,8 +2,28 @@ import ast
 
 from .base import Finding, Project, Rule
 
-SUSPECT = ("sessions", "session_store", "_sessions", "connections", "session_state",
-           "SESSIONS", "client_state", "per_session")
+SUSPECT = (
+    "sessions",
+    "session_store",
+    "_sessions",
+    "connections",
+    "session_state",
+    "SESSIONS",
+    "client_state",
+    "per_session",
+)
+
+TS_SUSPECT_NAMES = (
+    r"sessions|sessionStore|session_store|_sessions|connections|sessionState|session_state|"
+    r"SESSIONS|clientState|client_state|perSession|per_session"
+)
+
+# TypeScript pattern: declarations of suspect connection state stores
+# (e.g. `const sessions = new Map()`, `const sessionStore = {}`, `let connections: Map<string, State> = new Map()`)
+TS_RX = (
+    rf"\b(?:const|let|var)\s+(?:{TS_SUSPECT_NAMES})\b"
+    r"\s*(?::\s*[^=]+)?\s*=\s*(?:new\s+(?:Map|Set|Object)|\{)"
+)
 
 # Assignments inside these scopes are request-local, not shared process
 # state, so they shouldn't count as "per-connection state" even if a
@@ -36,8 +56,17 @@ class PerConnectionState(Rule):
         "A stateless server can sit behind a round-robin load balancer. Move this "
         "into a store keyed by an explicit handle you return to the client."
     )
+    languages = ("python", "typescript")
+
+    MESSAGE = "Looks like per-connection state held in process memory."
 
     def check(self, project: Project) -> list[Finding]:
+        if project.language == "typescript":
+            return [
+                self.finding(self.MESSAGE, f, line, text)
+                for f, line, text in project.search_code(TS_RX)
+            ]
+
         out: list[Finding] = []
         for f in project.files:
             if f.tree is None:
@@ -55,9 +84,14 @@ class PerConnectionState(Rule):
                     targets = node.targets
                 for target in targets:
                     if isinstance(target, ast.Name) and any(s in target.id for s in SUSPECT):
-                        out.append(self.finding(
-                            f"`{target.id}` looks like per-connection state held in process memory.",
-                            f, node.lineno,
-                            f.lines[node.lineno - 1].strip() if node.lineno <= len(f.lines) else None,
-                        ))
+                        out.append(
+                            self.finding(
+                                f"`{target.id}` looks like per-connection state held in process memory.",
+                                f,
+                                node.lineno,
+                                f.lines[node.lineno - 1].strip()
+                                if node.lineno <= len(f.lines)
+                                else None,
+                            )
+                        )
         return out
