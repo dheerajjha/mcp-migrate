@@ -217,3 +217,40 @@ def test_issue_87_bounding_does_not_cost_the_real_sdk_names(rule_id, source, ext
     assert rule_id in {f.rule_id for f in findings}, (
         f"{rule_id} no longer catches {source!r} in a {ext} file -- bounding overshot"
     )
+
+
+def test_r003_is_not_silenced_by_a_comment_naming_the_header(tmp_path):
+    """R003 decided "is this header set?" with a raw substring test over the
+    whole file, comments included. Its own fixer writes a TODO that names
+    `Mcp-Method`, so running `fix --write` made the rule stop firing without
+    anything having been set -- `check` then reported the file clean while
+    the header was still missing. `search_wire` keeps string literals (where
+    a real header lives) and skips comments (where a TODO lives)."""
+    (tmp_path / "a.py").write_text(
+        "import httpx\n"
+        "\n"
+        "def send(payload):\n"
+        "    # tools/call resources/read jsonrpc\n"
+        "    # TODO(mcp-migrate): add Mcp-Method (and Mcp-Name ...)\n"
+        '    return httpx.post("https://x/mcp", headers={"Accept": "*/*"}, data=payload)\n'
+    )
+    _, _, findings, _, _ = run_check(tmp_path)
+    assert "R003" in {f.rule_id for f in findings}, (
+        "a comment naming Mcp-Method must not count as setting it"
+    )
+
+
+def test_r003_is_satisfied_by_a_real_header_in_a_string_literal(tmp_path):
+    """The other direction: the header only ever appears as a dict key, so
+    a code-only search would never see it and the rule would fire forever."""
+    (tmp_path / "a.py").write_text(
+        "import httpx\n"
+        "\n"
+        "def send(payload):\n"
+        '    return httpx.post("https://x/mcp",\n'
+        '        headers={"Mcp-Method": "tools/list"}, data=payload)\n'
+    )
+    _, _, findings, _, _ = run_check(tmp_path)
+    assert "R003" not in {f.rule_id for f in findings}, (
+        "a real header in a dict literal must count as setting it"
+    )

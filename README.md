@@ -224,7 +224,7 @@ Every change is tagged `safe` or `review` in the diff output:
 
 Pass `--safe-only` to apply only `safe` fixers, `--rule R006` to restrict to
 one rule, `--include-tests` to also fix test/fixture paths (skipped by
-default, same rule as `check`). Only 18 of the 21 rules ship a fixer at all --
+default, same rule as `check`). Only 19 of the 21 rules ship a fixer at all --
 see the table below and [`mcp-migrate fixers`](#other-commands). Fixers are
 deliberately conservative: when a fixer can't be sure a transformation is
 correct, it leaves the source untouched rather than guess. A wrong fix that
@@ -269,7 +269,7 @@ mcp-migrate entry --repo owner/name   # print a registry/servers/*.yaml entry fo
 | ---- | -------- | ------------ | ----- |
 | [R001](src/mcp_migrate/rules/r001_session_id.py) | breaking | `Mcp-Session-Id` is gone from the Streamable HTTP transport ([SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567)). | yes (`review`) |
 | [R002](src/mcp_migrate/rules/r002_connection_state.py) | breaking | Servers are required to be stateless ([SEP-2567](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567)); a module-level dict keyed by connection breaks behind a load balancer or a restart. | yes (`review`) |
-| [R003](src/mcp_migrate/rules/r003_routing_headers.py) | advisory | Hand-rolled HTTP clients that skip the new required `Mcp-Method`/`Mcp-Name` [routing headers](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http) get rejected by anything enforcing the new transport. | no |
+| [R003](src/mcp_migrate/rules/r003_routing_headers.py) | advisory | Hand-rolled HTTP clients that skip the new required `Mcp-Method`/`Mcp-Name` [routing headers](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http) get rejected by anything enforcing the new transport. | yes (`review`) |
 | [R004](src/mcp_migrate/rules/r004_tool_ordering.py) | advisory | [`tools/list` order](https://modelcontextprotocol.io/specification/draft/changelog) is not guaranteed; non-deterministic ordering defeats caching. | yes (`safe`) |
 | [R005](src/mcp_migrate/rules/r005_extensions.py) | advisory | Optional capabilities negotiate through an [`extensions`](https://modelcontextprotocol.io/specification/draft/changelog) map that isn't declared. | yes (`safe`) |
 | [R006](src/mcp_migrate/rules/r006_sse_transport.py) | deprecated | [HTTP+SSE](https://modelcontextprotocol.io/specification/draft/changelog) is deprecated in favor of Streamable HTTP; stays in the spec 12+ months, then leaves. | yes (`review`) |

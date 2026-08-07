@@ -113,6 +113,23 @@ class MissingRoutingHeaders(Rule):
         if not imported_libs & set(HTTP_LIBS):
             return []
 
+        # Which files set these headers *in code*. `search_wire` skips
+        # comments but keeps ordinary string literals, which is exactly the
+        # distinction needed here: `headers={"Mcp-Method": ...}` is a string
+        # literal and must count, while a comment merely naming the header
+        # must not. `search_code` is the wrong tool -- it skips string
+        # literals, so it would never see a real header either.
+        #
+        # A raw `"Mcp-Method" in f.text` was the bug: R003's own fixer writes
+        # a TODO that names the header, so `fix --write` silenced the rule
+        # without setting anything, and `check` then reported "Grade A.
+        # Nothing to fix." on a file still missing the header entirely.
+        #
+        # Hoisted out of the per-file loop for the same reason `_check_ts`
+        # hoists its own scan -- see #67 and tests/test_scan_complexity.py.
+        sets_method = {f.path for f, _, _ in project.search_wire(r"Mcp-Method")}
+        sets_name = {f.path for f, _, _ in project.search_wire(r"Mcp-Name")}
+
         out: list[Finding] = []
         for f in project.files:
             if not any(lib in f.text for lib in HTTP_LIBS):
@@ -131,7 +148,7 @@ class MissingRoutingHeaders(Rule):
                 continue
             # Scoped to *this* file, not the whole project -- a header set
             # in some unrelated module doesn't mean this call site sends it.
-            missing_method = "Mcp-Method" not in f.text
+            missing_method = f.path not in sets_method
             # Mcp-Name is only required when the file is plausibly sending
             # one of the three methods that carry a name to route on. A
             # file that only ever mentions e.g. tools/list has nothing
@@ -139,7 +156,7 @@ class MissingRoutingHeaders(Rule):
             # this is the R003 bug fix: Mcp-Name is not required on every
             # POST, only on tools/call / resources/read / prompts/get.
             requires_name = bool(NAME_REQUIRED_RX.search(f.text))
-            missing_name = requires_name and "Mcp-Name" not in f.text
+            missing_name = requires_name and f.path not in sets_name
             if not missing_method and not missing_name:
                 continue
             i, line = hand_rolled[0]
