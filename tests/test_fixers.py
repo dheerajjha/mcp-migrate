@@ -1745,3 +1745,20 @@ def test_r003_still_writes_values_it_can_actually_recover():
     assert result.changed
     assert '"Mcp-Method": "tools/call"' in result.text
     assert '"Mcp-Name": name' in result.text
+
+
+def test_r017_fixer_leaves_a_legacy_named_constant_alone():
+    """The `safe` fixer rewrote `LEGACY_RESOURCE_NOT_FOUND: -32002` to
+    -32602 -- editing a constant whose name states the author kept the old
+    code on purpose. A wrong --write on correct code. See #217."""
+    before = "  LEGACY_RESOURCE_NOT_FOUND: -32002,\n"
+    result = fix("ResourceNotFoundErrorCodeFixer", before, path="a.ts")
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r017_fixer_still_rewrites_an_unmarked_old_code():
+    before = "  RESOURCE_NOT_FOUND: -32002,\n"
+    result = fix("ResourceNotFoundErrorCodeFixer", before, path="a.ts")
+    assert result.changed
+    assert "-32602" in result.text

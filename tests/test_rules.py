@@ -254,3 +254,28 @@ def test_r003_is_satisfied_by_a_real_header_in_a_string_literal(tmp_path):
     assert "R003" not in {f.rule_id for f in findings}, (
         "a real header in a dict literal must count as setting it"
     )
+
+
+def test_r017_skips_a_constant_explicitly_named_legacy(tmp_path):
+    """`LEGACY_RESOURCE_NOT_FOUND = -32002` is someone keeping the old code
+    deliberately, under a name that says so. Reporting it is noise; the
+    `safe` fixer rewriting it edits correct code. Found in dealfluence/adeu,
+    whose file defines -32602 two lines above. See #217."""
+    (tmp_path / "a.ts").write_text(
+        "export const MCP_ERROR_CODES = {\n"
+        "  INVALID_PARAMS: -32602,\n"
+        "  LEGACY_RESOURCE_NOT_FOUND: -32002,\n"
+        "} as const;\n"
+    )
+    _, _, findings, _, _ = run_check(tmp_path)
+    assert "R017" not in {f.rule_id for f in findings}
+
+
+def test_r017_still_fires_on_an_unmarked_old_code(tmp_path):
+    """The guard must key off the legacy marker, not off -32002 appearing in
+    a constant at all."""
+    (tmp_path / "a.ts").write_text(
+        "export const RESOURCE_NOT_FOUND = -32002;\n"
+    )
+    _, _, findings, _, _ = run_check(tmp_path)
+    assert "R017" in {f.rule_id for f in findings}
