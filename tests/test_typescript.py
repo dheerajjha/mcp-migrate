@@ -14,6 +14,7 @@ reporting matches out of TypeScript comments.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -1452,6 +1453,24 @@ def test_every_rule_declares_at_least_one_language():
     for rule in all_rules():
         assert rule.languages, f"{rule.id} declares no languages"
         assert "python" in rule.languages or "typescript" in rule.languages
+
+
+def test_every_typescript_rule_is_exercised_here():
+    # Adding "typescript" to a rule's `languages` tuple is a legitimate
+    # one-line port for rules whose patterns are language-independent, but
+    # that leaves the claim unverified unless something actually runs the
+    # rule against a .ts file. Every test above invokes a rule as
+    # `RuleClass().check(...)`, so a rule with no such call in this file
+    # has a language it claims to support but nothing that proves it.
+    source = Path(__file__).read_text()
+    for rule in all_rules():
+        if "typescript" not in rule.languages:
+            continue
+        class_name = type(rule).__name__
+        assert f"{class_name}().check(" in source, (
+            f"{rule.id} ({class_name}) declares typescript support but "
+            "tests/test_typescript.py never calls it on a .ts file"
+        )
 
 
 def test_declaration_files_are_skipped(tmp_path):
