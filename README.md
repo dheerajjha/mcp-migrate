@@ -231,6 +231,30 @@ correct, it leaves the source untouched rather than guess. A wrong fix that
 silently corrupts your server is worse than reporting the finding and doing
 nothing.
 
+## Catch it before it is committed
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/dheerajjha/mcp-migrate
+    rev: v0.1.4
+    hooks:
+      - id: mcp-migrate
+```
+
+A breaking finding fails the hook, which is the point. A repository with no
+readable source does **not** — the hook runs `mcp-migrate-precommit`, a thin
+wrapper that maps `check`'s exit `2` ("could not check it") to `0`. pre-commit
+treats every non-zero exit as a failure, so without that the hook would block
+every commit in a repo the tool cannot read, which is a reason the user can do
+nothing about. The message still prints; it just isn't fatal.
+
+The hook scans the **project**, not the staged files (`pass_filenames: false`),
+and that isn't an oversight to optimise away: several rules are whole-project
+questions — R010 asks whether `server/discover` exists *anywhere* — and handed a
+partial view they fire wrongly. Cost of that choice, measured on 600 files
+(300 Python + 300 TypeScript): **~0.32 s**.
+
 ## Other commands
 
 ```bash
