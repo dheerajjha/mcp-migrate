@@ -12,12 +12,18 @@ handler that needs them and drop a TODO right above it pointing at the
 cookbook recipe. The handler itself is untouched. Confidence "review":
 every flagged site still needs a human pass to pick the actual values.
 
-Unlike the rule this mirrors, `fix()` only ever sees one file's text, so it
-can't check whether `cache_hints`/`cacheHints` is already configured
-elsewhere in the project the way `check()` does. It flags the handler
-shape on sight, generous in the same direction as the rule's own presence
-check: a redundant reminder costs a human a few seconds to dismiss, a
-missing one costs a silent spec violation nobody sees.
+`fix()` only ever sees one file's text, so it cannot reproduce `check()`'s
+project-wide search for an existing `cache_hints`/`cacheHints` config. It
+does apply that same presence check to the file in front of it, which
+covers the common shape -- hints configured in the same module that
+registers the handlers. Without it the fixer annotated handlers that
+`check` had just declared clean in the same run, which is the one thing a
+fixer must not do: `check` is the tool's opinion, and `fix` contradicting
+it reads as a bug in whichever the user believes.
+
+Across files it stays generous, because there it has no choice: a
+redundant reminder costs a human a few seconds to dismiss, a missing one
+costs a silent spec violation nobody sees.
 """
 from __future__ import annotations
 
@@ -45,6 +51,14 @@ CALL_SITE_RX = re.compile(
     r"resources/read|resources/templates/list)[\"']"
 )
 
+# Taken from the rule (`rules/r016_cacheable_result.py`) so the two agree on
+# what "already configured" looks like. The rule searches the whole project
+# for these; the fixer can only see one file, so it applies them to that
+# file and stays silent when they are present.
+CACHE_HINT_CONFIG_RX = re.compile(
+    r"\bcache_hints\s*=|\bCacheHint\s*\(|\bcacheHints\b|\bcacheHint\s*:"
+)
+
 
 class CacheableResultFixer(Fixer):
     rule_id = "R016"
@@ -52,6 +66,12 @@ class CacheableResultFixer(Fixer):
     confidence = "review"
 
     def fix(self, source: str, path: Path) -> FixResult:
+        # This file already configures cache hints, so the rule would not
+        # have reported it. Annotating anyway would have `fix` contradict
+        # `check` on the same file in the same run.
+        if CACHE_HINT_CONFIG_RX.search(source):
+            return self.unchanged(source)
+
         lines = source.splitlines(keepends=True)
         out: list[str] = []
         changes: list[str] = []

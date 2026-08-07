@@ -1254,6 +1254,52 @@ def test_r016_leaves_comments_alone():
     assert result.text == before
 
 
+def test_r016_stays_silent_when_the_file_already_configures_hints():
+    # The rule does not report a project that configures cache hints, so the
+    # fixer must not annotate one either. Caught by running both against the
+    # same file: `check` said R016 was clean (findings were R004/R004/R010)
+    # while `fix --write` inserted an R016 TODO into it. `fix` contradicting
+    # `check` in the same run is a bug in whichever the user believes.
+    before = (
+        "server = Server(\n"
+        '    cache_hints={"tools/list": CacheHint(ttl_ms=60000)},\n'
+        ")\n"
+        "\n"
+        "@server.list_tools()\n"
+        "async def list_tools():\n"
+        "    return TOOLS\n"
+    )
+    result = fix("CacheableResultFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r016_still_annotates_when_no_hints_are_configured():
+    # The guard above must key off the hint config, not off `Server(` -- a
+    # file that registers handlers and configures nothing is the whole point
+    # of the rule.
+    before = (
+        "server = Server()\n"
+        "\n"
+        "@server.list_tools()\n"
+        "async def list_tools():\n"
+        "    return TOOLS\n"
+    )
+    result = fix("CacheableResultFixer", before)
+    assert result.changed
+    assert "TODO(mcp-migrate)" in result.text
+
+
+def test_r016_typescript_hints_config_also_suppresses():
+    before = (
+        "const server = new McpServer({}, { cacheHints: { 'tools/list': {} } });\n"
+        "server.setRequestHandler(ListToolsRequestSchema, handler);\n"
+    )
+    result = fix("CacheableResultFixer", before, path="server.ts")
+    assert result.changed is False
+    assert result.text == before
+
+
 def test_r016_idempotent():
     before = "@server.list_tools()\nasync def list_tools():\n    return TOOLS\n"
     once = fix("CacheableResultFixer", before)
