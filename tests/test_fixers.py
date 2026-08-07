@@ -1206,6 +1206,63 @@ def test_r002_idempotent():
 
 
 # ---------------------------------------------------------------------------
+# R016 -- list/read results missing ttlMs/cacheScope
+# ---------------------------------------------------------------------------
+
+def test_r016_annotates_python_list_tools_decorator():
+    before = "@server.list_tools()\nasync def list_tools():\n    return TOOLS\n"
+    result = fix("CacheableResultFixer", before)
+    assert result.changed
+    assert "# TODO(mcp-migrate): this result needs ttlMs/cacheScope" in result.text
+    # the decorator itself must survive untouched -- it's correct, just incomplete
+    assert "@server.list_tools()\n" in result.text
+
+
+def test_r016_annotates_python_read_resource_decorator():
+    before = "@server.read_resource()\nasync def read_resource(uri):\n    return contents\n"
+    result = fix("CacheableResultFixer", before)
+    assert result.changed
+    assert "TODO(mcp-migrate)" in result.text
+
+
+def test_r016_annotates_typescript_schema_handler():
+    before = 'server.setRequestHandler(ListToolsRequestSchema, handler);\n'
+    result = fix("CacheableResultFixer", before, path="server.ts")
+    assert result.changed
+    assert "// TODO(mcp-migrate)" in result.text
+    assert FIXERS["CacheableResultFixer"].confidence == "review"
+
+
+def test_r016_annotates_typescript_wire_method_handler():
+    before = 'server.setRequestHandler("resources/list", handler);\n'
+    result = fix("CacheableResultFixer", before, path="server.ts")
+    assert result.changed
+    assert "TODO(mcp-migrate)" in result.text
+
+
+def test_r016_leaves_unrelated_code_alone():
+    before = "def handle_call_tool(request):\n    return dispatch(request)\n"
+    result = fix("CacheableResultFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r016_leaves_comments_alone():
+    before = "# @server.list_tools() used to be registered here\n"
+    result = fix("CacheableResultFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r016_idempotent():
+    before = "@server.list_tools()\nasync def list_tools():\n    return TOOLS\n"
+    once = fix("CacheableResultFixer", before)
+    twice = fix("CacheableResultFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+# ---------------------------------------------------------------------------
 # CLI: fix / fixers
 # ---------------------------------------------------------------------------
 
