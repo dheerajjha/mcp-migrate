@@ -5,8 +5,10 @@
   (breaking, module-level dict keyed by connection)
 - **Fixer:** [R001](../src/mcp_migrate/fixers/r001_session_id.py) is `review`
   confidence -- it comments out the header read and leaves a `TODO`, it does
-  not (and can't) invent your new handle argument. R002 has no fixer: moving
-  state into a real store is an architectural decision, not a text edit.
+  not (and can't) invent your new handle argument. [R002](../src/mcp_migrate/fixers/r002_connection_state.py)
+  is also `review` confidence and just as limited -- it drops a `TODO` above
+  the module-level dict declaration it flags. Moving that state into a real
+  store is still an architectural decision the fixer can't make for you.
 - **Severity:** breaking
 - **Spec:** SEP-2567 -- https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567
 

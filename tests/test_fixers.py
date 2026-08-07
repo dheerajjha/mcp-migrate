@@ -1141,6 +1141,71 @@ def test_r018_idempotent():
 
 
 # ---------------------------------------------------------------------------
+# R002 -- per-connection state in a module-level dict
+# ---------------------------------------------------------------------------
+
+def test_r002_annotates_module_level_session_dict():
+    before = 'sessions: dict[str, "SessionState"] = {}\n'
+    result = fix("PerConnectionStateFixer", before)
+    assert result.changed
+    assert "TODO(mcp-migrate): per-connection state in a module-level dict" in result.text
+    # the declaration itself is left alone -- it's still valid code, just
+    # architecturally wrong, not something to comment out
+    assert before in result.text
+
+
+def test_r002_annotates_class_level_dict():
+    before = "class Foo:\n    connections = {}\n"
+    result = fix("PerConnectionStateFixer", before)
+    assert result.changed
+    assert "TODO(mcp-migrate)" in result.text
+
+
+def test_r002_leaves_function_local_dict_alone():
+    # Matches the rule's own scope boundary: a dict built and thrown away
+    # inside a request handler isn't process-wide state.
+    before = "def handler():\n    sessions = {}\n    return sessions\n"
+    result = fix("PerConnectionStateFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r002_leaves_non_dict_assignment_alone():
+    before = "sessions = SessionStore()\n"
+    result = fix("PerConnectionStateFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r002_leaves_non_python_files_alone():
+    # R002 is a Python-only rule (it walks the AST); nothing to annotate
+    # in a language the rule itself never scans.
+    before = "const sessions = {};\n"
+    result = fix("PerConnectionStateFixer", before, path="server.ts")
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r002_survives_unparseable_source():
+    before = "def f(\n"
+    result = fix("PerConnectionStateFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r002_is_review_confidence():
+    assert FIXERS["PerConnectionStateFixer"].confidence == "review"
+
+
+def test_r002_idempotent():
+    before = 'sessions: dict[str, "SessionState"] = {}\n\n\ndef f():\n    return 1\n'
+    once = fix("PerConnectionStateFixer", before)
+    twice = fix("PerConnectionStateFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+# ---------------------------------------------------------------------------
 # CLI: fix / fixers
 # ---------------------------------------------------------------------------
 
