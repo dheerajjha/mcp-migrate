@@ -49,6 +49,12 @@ contributed.
   the `extensions` map, trace context propagation, and Roots/Sampling/
   Logging deprecation. All eighteen slots are now written; there are no
   stubs left. (@waterlemonnn)
+- **`check --json` now has an executable schema contract** in
+  `schemas/check-json.schema.json`, documented in the README and validated
+  against clean, legacy, unscannable, and SDK outputs. Pre-1.0 compatibility
+  policy is stated next to the contract so external consumers know breaking
+  shape changes will be documented under Changed.
+  ([#188](https://github.com/dheerajjha/mcp-migrate/issues/188))
 
 ### Changed
 

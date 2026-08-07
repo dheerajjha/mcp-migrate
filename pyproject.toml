@@ -11,7 +11,7 @@ dependencies = ["pyyaml>=6.0", "rich>=13.0"]
 mcp-migrate = "mcp_migrate.cli:main"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["jsonschema>=4.0", "pytest>=8.0"]
 
 [build-system]
 requires = ["hatchling"]
