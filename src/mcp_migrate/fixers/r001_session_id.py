@@ -14,6 +14,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ._textedit import string_lines
 from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567"
@@ -40,11 +41,15 @@ class SessionIdHeaderFixer(Fixer):
         lines = source.splitlines(keepends=True)
         out: list[str] = []
         changes: list[str] = []
+        str_lines = string_lines(source, path)
 
         prefix = comment_prefix(path)
         todo = f"{prefix}{TODO}"
 
         for i, raw_line in enumerate(lines, start=1):
+            if i in str_lines:
+                out.append(raw_line)
+                continue
             stripped = raw_line.lstrip(" \t")
             already_commented = is_commented(raw_line)
             # Block-openers (if/while/for/def/...) are never touched: commenting

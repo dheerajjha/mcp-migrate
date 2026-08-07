@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ._textedit import string_lines
 from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://modelcontextprotocol.io/specification/2026-07-28/changelog"
@@ -57,10 +58,14 @@ class TasksPollingFixer(Fixer):
 
         prefix = comment_prefix(path)
         todo = f"{prefix}{TODO}"
+        # #105: a `#` inside a string literal opens no comment, so a TODO
+        # written there silently edits the user's prose instead of
+        # annotating their code.
+        str_lines = string_lines(source, path)
 
         for i, raw_line in enumerate(lines, start=1):
             stripped = raw_line.lstrip(" \t")
-            already_commented = is_commented(raw_line)
+            already_commented = i in str_lines or is_commented(raw_line)
             ends_as_block_opener = raw_line.rstrip("\n").rstrip().endswith(":")
             hit = (
                 None

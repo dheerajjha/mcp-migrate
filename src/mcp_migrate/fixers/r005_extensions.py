@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ._textedit import find_matching_close, leading_ws
+from ._textedit import find_matching_close, leading_ws, string_lines
 from .base import Fixer, FixResult
 
 CTOR_RX = re.compile(r"\bServerCapabilities\s*(\()")
@@ -26,6 +26,7 @@ class ExtensionsFixer(Fixer):
     def fix(self, source: str, path: Path) -> FixResult:
         lines = source.splitlines(keepends=True)
         changes: list[str] = []
+        str_lines = string_lines(source, path)
         # Find call sites by searching each line individually, so the
         # column of the matched "(" is already line-relative -- exactly
         # what `find_matching_close` expects. Collect them all against the
@@ -35,6 +36,8 @@ class ExtensionsFixer(Fixer):
         # number must stay valid while later ones are rewritten first.
         targets = []
         for i, line in enumerate(lines):
+            if (i + 1) in str_lines:
+                continue
             m = CTOR_RX.search(line)
             if not m:
                 continue

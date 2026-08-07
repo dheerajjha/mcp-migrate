@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ._textedit import find_matching_close, leading_ws
+from ._textedit import find_matching_close, leading_ws, string_lines
 from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://modelcontextprotocol.io/specification/draft/changelog"
@@ -42,10 +42,11 @@ class SseTransportFixer(Fixer):
         lines = source.splitlines(keepends=True)
         changes: list[str] = []
         todo = f"{comment_prefix(path)}{TODO}"
+        str_lines = string_lines(source, path)
 
         # 1. Import rename -- single-line, in place.
         for i, line in enumerate(lines):
-            if is_commented(line):
+            if (i + 1) in str_lines or is_commented(line):
                 continue
             new_line, n = IMPORT_RX.subn(
                 "from mcp.server.streamable_http import StreamableHTTPServerTransport",
@@ -63,7 +64,7 @@ class SseTransportFixer(Fixer):
         # rewritten first.
         targets = []
         for i, line in enumerate(lines):
-            if is_commented(line):
+            if (i + 1) in str_lines or is_commented(line):
                 continue
             m = CTOR_RX.search(line)
             if not m:

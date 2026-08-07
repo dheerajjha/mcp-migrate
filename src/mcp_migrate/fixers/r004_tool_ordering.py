@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ._textedit import find_matching_close
+from ._textedit import find_matching_close, string_lines
 from .base import Fixer, FixResult
 
 HANDLER_RX = re.compile(r"def\s+list_tools\b|@[\w.]*\blist_tools\b")
@@ -92,9 +92,12 @@ class SortToolsFixer(Fixer):
     def fix(self, source: str, path: Path) -> FixResult:
         lines = source.splitlines(keepends=True)
         changes: list[str] = []
+        str_lines = string_lines(source, path)
 
         for m in HANDLER_RX.finditer(source):
             line_no = source.count("\n", 0, m.start()) + 1
+            if line_no in str_lines:
+                continue
             body_start, body_end = _body_bounds(lines, line_no)
             window_text = "".join(lines[body_start:body_end])
             if "sorted(" in window_text or ".sort(" in window_text:
