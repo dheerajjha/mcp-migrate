@@ -6,7 +6,7 @@ no tests, no fixture files -- just a worked before/after example and the
 gotchas you hit doing it for real.
 
 `mcp-migrate check` and `mcp-migrate fix` tell you *that* something broke and,
-for sixteen rules, fix the mechanical part automatically. The cookbook is where
+for eighteen rules, fix the mechanical part automatically. The cookbook is where
 the *rest* of the migration lives -- the part a regex can't do because it
 requires a judgment call (what do you name the new handle argument? where
 does the durable store live? what does your `server/discover` response say

@@ -206,3 +206,36 @@ def test_fixer_pointers_resolve():
         )
 
     assert checked_any, "no fixer defines COOKBOOK or SPEC_URL -- test would pass vacuously"
+
+
+# The tables above are checked row by row, but both files also state the
+# fixer count in prose, and a sentence drifts exactly as easily as a row.
+# Both of these were stale within an hour of the R002 and R016 fixers
+# landing: the README said "Only 16 of the 21", the cookbook said "for
+# sixteen rules", while `all_fixers()` returned 18.
+WORDS = {
+    10: "ten", 11: "eleven", 12: "twelve", 13: "thirteen", 14: "fourteen",
+    15: "fifteen", 16: "sixteen", 17: "seventeen", 18: "eighteen",
+    19: "nineteen", 20: "twenty", 21: "twenty-one",
+}
+
+
+def test_prose_fixer_counts_match_all_fixers():
+    n_fixers = len({fx.rule_id for fx in all_fixers()})
+    n_rules = len(list(all_rules()))
+
+    readme = (ROOT / "README.md").read_text()
+    expected = f"Only {n_fixers} of the {n_rules} rules ship a fixer at all"
+    assert expected in readme, (
+        f"README's prose fixer count is stale: expected {expected!r}. "
+        f"all_fixers() covers {n_fixers} of {n_rules} rules."
+    )
+
+    cookbook = (COOKBOOK_DIR / "README.md").read_text()
+    word = WORDS.get(n_fixers)
+    assert word, f"no word spelling for {n_fixers} -- extend WORDS"
+    expected = f"for {word} rules, fix the mechanical part automatically"
+    assert expected in cookbook, (
+        f"cookbook README's prose fixer count is stale: expected {expected!r}. "
+        f"all_fixers() covers {n_fixers} rules."
+    )

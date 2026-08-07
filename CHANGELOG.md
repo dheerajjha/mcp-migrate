@@ -5,10 +5,65 @@ All notable changes to this project are documented here.
 ## [Unreleased]
 
 **Every rule now reads TypeScript** (up from 17 of 21), the fixer set went
-from ten to sixteen, and the cookbook from six recipes to eighteen. All of
-it was contributed.
+from ten to **eighteen**, and the cookbook from six recipes to eighteen.
+**JavaScript files are now read** — though no rule reads into them yet. All
+of it was contributed.
 
 ### Added
+
+- **JavaScript source is loaded.** `.js`/`.jsx`/`.mjs`/`.cjs` were counted by
+  `survey()` and never opened by `load_project()`, so a plain-JS server was
+  reported on with zero findings because nothing was read — not because
+  nothing was wrong. They now load and route through the TypeScript
+  comment/string span scanner, so `//` is recognised as a comment rather
+  than falling through to the Python tokenizer.
+  ([#149](https://github.com/dheerajjha/mcp-migrate/issues/149), @aryansk)
+
+  **No rule declares `javascript` yet** (0 of 21), so these projects still
+  exit 2. Porting the rules is [#149](https://github.com/dheerajjha/mcp-migrate/issues/149),
+  reopened; R006, R017 and R021 are one-line changes.
+- **Two more fixers** — **R002** (per-connection state dicts) and **R016**
+  (missing `ttlMs`/`cacheScope`) — taking the set to **18 of 21**. Only
+  R003, R010 and R015 now lack one, and R015's absence is now a documented
+  decision rather than a gap.
+  ([#14](https://github.com/dheerajjha/mcp-migrate/issues/14),
+  [#25](https://github.com/dheerajjha/mcp-migrate/issues/25),
+  [#24](https://github.com/dheerajjha/mcp-migrate/issues/24), @waterlemonnn)
+
+  Neither invents a value. R002 annotates the declaration and leaves it
+  intact — choosing a store and a key shape is architectural. R016 never
+  writes `ttlMs`/`cacheScope`, because a `cacheScope` guessed too wide can
+  serve one client's cached data to another.
+- **The docs are now checked against the code.** `tests/test_docs.py`
+  verifies the cookbook index, the README rule table and every fixer's
+  `COOKBOOK`/`SPEC_URL` pointer against `all_rules()`/`all_fixers()`.
+  ([#174](https://github.com/dheerajjha/mcp-migrate/issues/174), @waterlemonnn)
+
+  It caught two real drifts on its first run, both introduced hours
+  earlier by the R002 and R016 fixers above: a fixer shipped, one of the
+  three doc surfaces got updated, and the other two went on saying it did
+  not exist. It also fixed eleven README rows that had claimed `no` for
+  rules that had shipped fixers, some of them the same day.
+- **Two static guards against traps that already bit us.**
+  `test_rule_hygiene.py` walks the rule modules for
+  `search_*(RX.pattern)` calls that drop a compiled flag — the shape of
+  [#123](https://github.com/dheerajjha/mcp-migrate/issues/123) and
+  [#143](https://github.com/dheerajjha/mcp-migrate/issues/143), neither of
+  which any test caught. `test_typescript.py` now asserts that every rule
+  declaring `typescript` is actually exercised on a `.ts` file, so a
+  one-line language claim cannot go unverified.
+  ([#173](https://github.com/dheerajjha/mcp-migrate/issues/173),
+  [#177](https://github.com/dheerajjha/mcp-migrate/issues/177), @waterlemonnn)
+- **`scripts/benchmark.py`** — wall-clock timing per phase (walk / load /
+  rules), the half `test_scan_complexity.py` deliberately leaves out. It
+  measured a real cost rather than a hypothetical one: `survey()` prunes
+  `node_modules` via `os.walk`, `load_project()` does not, so 5000 vendored
+  files took `load` from ~1.4s to ~6.3s.
+  ([#185](https://github.com/dheerajjha/mcp-migrate/issues/185), @waterlemonnn)
+- **Two more servers on the board** — `arxiv-mcp-server` and
+  `excel-mcp-server`, both B, taking it to **16**. Both reproduced from a
+  clean checkout at the stated commit before merging.
+  ([#186](https://github.com/dheerajjha/mcp-migrate/issues/186), @waterlemonnn)
 
 - **Every rule reads TypeScript.** R013, R014 and R021 landed first
   (@waterlemonnn), then **R002** — the last holdout — closed the gap
@@ -84,6 +139,30 @@ it was contributed.
 
 ### Fixed
 
+- **A JavaScript project could be reported as clean.** Loading `.js` files
+  put them in `project.files` for the first time, and `_checked_something()`
+  was `bool(project.files)` — so a pure-JavaScript server with a live
+  `Mcp-Session-Id` in it exited **0**, "clean", with zero rules having run
+  against it. Exit 0 there is worse than the exit 2 it replaced: a refusal
+  became a verdict. It now checks `SUPPORTED`/`PARTIAL` membership, so a
+  language that loads without rule coverage is still "could not check".
+  ([#149](https://github.com/dheerajjha/mcp-migrate/issues/149), @waterlemonnn)
+- **Three more stale claims in `check`'s own output.** The no-readable-language
+  fallback said `mcp-migrate only reads Python today`, months after every
+  rule read TypeScript — and that is what a JavaScript user saw. Every
+  TypeScript *and JavaScript* tree was told "TypeScript support is the
+  most-wanted thing in this repo and it is up for grabs", pointing at
+  [#30](https://github.com/dheerajjha/mcp-migrate/issues/30) (now closed at
+  21 of 21); JavaScript now points at #149 and TypeScript at #172. And
+  `unscannable_reason`'s comment still reasoned about "2 of 21 rules" and
+  "the 19 that never ran". The first is now derived from
+  `SUPPORTED | PARTIAL` so it cannot drift again.
+- **The R016 fixer contradicted `check` on the same file.** It annotated
+  handler shapes on sight, so a file that already configured `cache_hints`
+  — which the rule correctly ignores — got a TODO telling it to add them.
+  It now applies the rule's own presence check to the file in front of it.
+  Across files it stays generous, since `fix()` cannot see the rest of the
+  project.
 - **`check` said "TypeScript support is partial -- 21 of 21 rules read it",
   which is not a partial anything.** The message was written when the
   fraction still moved; R002 landing closed it, and the tool kept quoting a
@@ -140,11 +219,19 @@ it was contributed.
 
 @waterlemonnn wrote most of the above. @IronLad123 ported the last rule
 (R002); @ujjwalprakash17's first PR fixed R014's case handling;
-@slegarraga's first PR added the `check --json` schema contract; @PuvaanRaaj's #56/#58/#60 were an independent take on
-the same three TypeScript ports, and #60 was measurably right about
-case-insensitivity -- that half became
+@slegarraga's first PR added the `check --json` schema contract;
+@aryansk's first PR made the scanner read JavaScript -- and got the half
+that is easy to miss, routing it to the TypeScript span scanner rather
+than only adding the extensions; @PuvaanRaaj's #56/#58/#60 were an
+independent take on the same three TypeScript ports, and #60 was
+measurably right about case-insensitivity -- that half became
 [#143](https://github.com/dheerajjha/mcp-migrate/issues/143), which
 @ujjwalprakash17 then closed.
+
+@aryansk and @waterlemonnn arrived at the JavaScript scanner fix
+independently, 1.5 hours apart. @aryansk's landed first as the earlier
+work; @waterlemonnn's reduced to the `_checked_something` bug neither the
+other PR nor its review had caught, which is the one that mattered.
 
 ## [0.1.4] - 2026-08-06
 
