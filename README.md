@@ -237,7 +237,7 @@ nothing.
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/dheerajjha/mcp-migrate
-    rev: v0.1.4
+    rev: v0.2.0
     hooks:
       - id: mcp-migrate
 ```
