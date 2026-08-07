@@ -81,6 +81,26 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- **Two superseded rule modules removed, and a guard so it cannot recur.**
+  `r001_session_id.py` and `r006_sse_transport.py` were the 0.1.0
+  originals, superseded and never deleted. Both rule ids were declared
+  twice, and which implementation went live was decided by filename sort
+  order inside `all_rules()` rather than by intent.
+  ([#219](https://github.com/dheerajjha/mcp-migrate/issues/219), @ankitverma31)
+
+  Nothing was wrong at runtime — the maintained implementations were the
+  live ones and the rule count was 21 either way. But rename the surviving
+  module to anything that sorts earlier and the tool silently reverts to a
+  superseded rule, with the count unchanged and every test still green.
+  `test_rule_hygiene.py` now reads the declarations statically — not
+  through `all_rules()`, whose import is where the dedup happens — and
+  fails if a rule id is declared twice, or if a rule declared on disk does
+  not survive into `all_rules()`.
+
+  The README rule table linked R001 and R006 to the **dead** modules, so
+  anyone following those links was reading a superseded implementation.
+  Caught by `test_docs.py` the moment the files were removed.
+
 - **R004 no longer fires on a wire method name that returns no tools.**
   Naming `tools/list` is not handling it, and the rule could not tell the
   difference. Three shapes are now excluded: a per-method config map key

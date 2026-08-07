@@ -3,7 +3,7 @@
 This is the "does it survive contact with a real, moderately-sized Python
 project" test. It deliberately does not assert a particular grade or an
 empty finding list: mcp-migrate's rule modules necessarily contain the very
-strings they search for (e.g. r001_session_id.py mentions "Mcp-Session-Id"
+strings they search for (e.g. r001_session_id_removed.py mentions "Mcp-Session-Id"
 in its own pattern and docstring), so self-scanning is expected to produce
 some findings. What matters is that scanning a real tree never raises.
 """
