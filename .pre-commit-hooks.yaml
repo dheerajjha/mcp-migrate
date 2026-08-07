@@ -1,0 +1,31 @@
+# Hook definitions consumed by projects that add this repo to their
+# .pre-commit-config.yaml. See the "pre-commit" section of README.md.
+
+- id: mcp-migrate
+  name: mcp-migrate
+  description: Check an MCP server against the 2026-07-28 spec revision
+  entry: mcp-migrate-precommit
+  language: python
+  # Gate on the languages the scanner can actually read, so the hook stays
+  # silent in repositories it has nothing to say about.
+  types_or: [python, ts, tsx, javascript, jsx]
+
+  # Scan the project, not the staged files -- and do not "optimise" this
+  # to true.
+  #
+  # Several rules are whole-project questions. R010 asks "does this project
+  # implement server/discover *anywhere*?" and R015/R016 look for evidence
+  # across a file set. Handed only the staged files, they would answer that
+  # question about a partial view of the tree and fire wrongly: stage one
+  # unrelated file and R010 reports a missing server/discover handler that
+  # exists two files away.
+  #
+  # The cost is that the hook re-reads the project each time. That is the
+  # right trade for a scanner whose rules are project-scoped.
+  pass_filenames: false
+
+  # `mcp-migrate-precommit` is a thin wrapper over `check` that maps exit
+  # 2 ("could not check -- no readable source") to 0. pre-commit treats
+  # every non-zero exit as a failure, so without this the hook blocks
+  # every commit in a repository the tool cannot read. Exit 1, a breaking
+  # finding, still fails the hook -- that is the point of installing it.

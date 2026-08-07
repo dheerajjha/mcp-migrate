@@ -9,6 +9,9 @@ dependencies = ["pyyaml>=6.0", "rich>=13.0"]
 
 [project.scripts]
 mcp-migrate = "mcp_migrate.cli:main"
+# Thin wrapper over `check` for .pre-commit-hooks.yaml -- see
+# src/mcp_migrate/precommit.py for the one thing it changes.
+mcp-migrate-precommit = "mcp_migrate.precommit:main"
 
 [project.optional-dependencies]
 dev = ["jsonschema>=4.0", "pytest>=8.0"]
