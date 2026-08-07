@@ -81,6 +81,45 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- **Fixers no longer edit inside string literals.** A new
+  `string_lines()` helper in `fixers/_textedit.py` marks every line that is
+  part of a Python docstring or a TypeScript template literal, and the
+  line-based fixers decline to touch them.
+  ([#105](https://github.com/dheerajjha/mcp-migrate/issues/105), @IronLad123)
+
+  Two fixers were editing prose. `ResourceNotFoundErrorCodeFixer` rewrote
+  `-32002` → `-32602` inside a docstring describing *historical* behaviour —
+  at `safe` confidence, leaving the file parseable and the documentation
+  wrong, so nothing caught it. `TasksPollingFixer` inserted
+  `# TODO(mcp-migrate): ...` into a string literal, where `#` opens no
+  comment and the line is simply corrupted. On failure the helper returns
+  every line, so an unparseable file makes fixers decline rather than guess.
+
+- **R018 and R019 now match the SDK names real code uses.** They keyed on
+  `list_roots`, `create_message`, `ListTasksRequest` and friends, missing the
+  `Params`/`Schema`/`Result` variants that appear in actual servers — a file
+  importing `ListRootsRequestSchema` or `GetTaskPayloadResultSchema` scanned
+  clean for both rules.
+  ([#99](https://github.com/dheerajjha/mcp-migrate/issues/99), @IronLad123)
+
+  Known consequence: R007 and R018 now both fire on the `CreateMessage*`
+  family, two findings for one symbol at two severities. Both claims are
+  true, so neither rule is wrong; the noise is tracked in
+  [#221](https://github.com/dheerajjha/mcp-migrate/issues/221).
+
+- **Wire method names are bounded at their end.** A new `wire_method()`
+  helper builds `\b<name>(?![\w/-])`, so `roots/listeners`,
+  `notifications/initializedAt`, `logging/setLevelPolicy` and
+  `tasks/listeners` stop reading as the methods whose names they begin with.
+  Five false positives on a four-line file, gone.
+  ([#88](https://github.com/dheerajjha/mcp-migrate/issues/88), @IronLad123)
+
+  Applied at each pattern's definition rather than its call site, because
+  `WIRE_RX` in R009 and R019 and the `logging/setLevel` literal in R012 each
+  feed both the Python and the TypeScript path — bounding only the Python
+  call sites left the same file still producing false positives when scanned
+  as TypeScript.
+
 - **Two superseded rule modules removed, and a guard so it cannot recur.**
   `r001_session_id.py` and `r006_sse_transport.py` were the 0.1.0
   originals, superseded and never deleted. Both rule ids were declared
