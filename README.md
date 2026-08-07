@@ -93,26 +93,28 @@ nothing readable in it gets silence instead of an A.
 
 **Python is graded. TypeScript is scanned but still not graded** — and as of
 R002 landing, that is no longer justified by coverage. **All 21 rules read
-TypeScript.** The grade is withheld by a `PARTIAL` flag that has outlived
-its reason, and the output says so in as many words:
+TypeScript.** The grade is withheld by a `PARTIAL` flag, and now that
+coverage is complete the reason it gives is a decision, not a fraction:
 
 ```
 $ mcp-migrate check ./my-ts-server
 
 mcp-migrate v0.1.4  ->  my-ts-server
 
-No grade for this one. Found 1 TypeScript. TypeScript support is partial --
-21 of 21 rules read it so far, which is enough to report findings but not
-enough to stand behind a grade.
+No grade for this one. Found 1 TypeScript. Every rule reads it now, but
+whether it gets graded is still an open decision, not a coverage gap --
+see https://github.com/dheerajjha/mcp-migrate/issues/172.
 
   breaking    R001  server.ts:4  Mcp-Session-Id was removed from the Streamable HTTP transport.
   deprecated  R006  server.ts:1  HTTP+SSE transport is deprecated.
   deprecated  R006  server.ts:5  HTTP+SSE transport is deprecated.
 
-3 finding(s) from the rules that do cover this language.
+3 finding(s) from the rules that do cover this language. Real, and worth
+fixing -- but a letter grade would be a claim about a decision that
+hasn't been made.
 ```
 
-"Partial — 21 of 21" is a contradiction, and it is tracked as
+Whether a language every rule reads should ever get a letter is tracked as
 [#172](https://github.com/dheerajjha/mcp-migrate/issues/172). Until that is
 resolved, a TypeScript tree gets findings but no grade, no badge, and no
 registry entry. Findings are real and complete; only the letter is withheld.

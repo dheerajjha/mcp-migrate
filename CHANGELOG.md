@@ -21,9 +21,8 @@ it was contributed.
   [#32](https://github.com/dheerajjha/mcp-migrate/issues/32))
 
   **This does not yet mean TypeScript gets a grade.** The `PARTIAL` flag
-  still withholds it, so `check` currently prints "TypeScript support is
-  partial -- 21 of 21 rules read it", which is a contradiction. Tracked as
-  [#172](https://github.com/dheerajjha/mcp-migrate/issues/172).
+  still withholds it -- that part is unchanged. What `check` says about
+  *why* is fixed below ([#172](https://github.com/dheerajjha/mcp-migrate/issues/172)).
 - **Three more fixers** — **R009** (initialize handshake), **R011** (ping) and
   **R012** (`logging/setLevel`) — taking the set to **16 of 21**. Only R002,
   R003, R010, R015 and R016 now lack one.
@@ -85,6 +84,17 @@ it was contributed.
 
 ### Fixed
 
+- **`check` said "TypeScript support is partial -- 21 of 21 rules read it",
+  which is not a partial anything.** The message was written when the
+  fraction still moved; R002 landing closed it, and the tool kept quoting a
+  coverage gap that no longer exists. It now says the honest thing when
+  coverage is complete: grading a `PARTIAL` language is an open decision, not
+  a count, and points at the issue that decides it instead of a fraction
+  stuck at its own denominator. Three call sites carried the same claim --
+  the refusal reason, the finding footnote, and the mixed-tree coverage
+  note -- and all three now branch on whether the fraction has actually
+  stopped moving, so this doesn't come back the next time a language sits at
+  full coverage. ([#172](https://github.com/dheerajjha/mcp-migrate/issues/172))
 - **R014 missed most spellings of its own identifier.** The TypeScript path
   matched case-sensitively, so `lastEventId` was found and `lastEventID`,
   `LAST_EVENT_ID` and `last_event_id` were not. Now one bounded pattern,

@@ -1493,7 +1493,11 @@ def test_typescript_only_tree_reports_findings_without_a_grade(tmp_path, capsys)
     assert data["score"] is None
     assert data["findings"], "the ported rules did run -- their findings are real"
     assert any(f["rule"] == "R001" for f in data["findings"])
-    assert "partial" in data["reason"]
+    # Not "X of 21" -- every rule reads TypeScript now (#172), so the
+    # reason has to name the actual thing withheld: a grading decision,
+    # not a coverage fraction that's stopped moving.
+    assert "of 21" not in data["reason"]
+    assert "172" in data["reason"]
 
 
 def test_r004_finds_unsorted_tools_in_typescript(tmp_path):
@@ -1595,23 +1599,29 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
 
 
-def test_partial_coverage_is_stated_with_a_denominator(tmp_path, capsys):
+def test_partial_coverage_is_stated_honestly(tmp_path, capsys):
     main(["check", str(_write(tmp_path, "transport.ts", LEGACY_TS))])
     # Collapse whitespace: rich wraps at terminal width and will happily
     # split the fraction across two lines.
     out = " ".join(capsys.readouterr().out.split())
 
-    # Derived, not hardcoded. Every TypeScript port moves this number by
-    # one, and a literal here makes the ports mutually exclusive: whoever
-    # merges second is asserting a count that main has already passed, so
-    # main goes red through no fault of theirs. Ports are meant to land in
-    # parallel and independently -- the test has to tolerate that.
+    # Derived, not hardcoded. Whichever branch fires depends on whether
+    # the TypeScript port is still in progress, and that moves as rules
+    # get ported -- the test has to tolerate either state instead of
+    # asserting one of them as a literal (#172).
     ported = sum(1 for r in all_rules() if "typescript" in r.languages)
     total = len(list(all_rules()))
-    assert f"{ported} of {total}" in out, (
-        "someone deciding whether to trust this needs the coverage fraction, "
-        "and it should move as rules get ported"
-    )
+    if ported < total:
+        assert f"{ported} of {total}" in out, (
+            "someone deciding whether to trust this needs the coverage fraction, "
+            "and it should move as rules get ported"
+        )
+    else:
+        # Nothing left uncovered, so a fraction here would be a false
+        # claim of a gap. The withheld grade is a decision (#172), and
+        # the output has to point at that instead of a stale "X of Y".
+        assert f"of {total}" not in out
+        assert "172" in out
     assert ported >= 4, "the reference ports (R001/R003/R005/R006) are still there"
 
 

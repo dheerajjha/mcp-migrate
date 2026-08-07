@@ -142,14 +142,14 @@ def test_check_still_grades_a_real_python_project(python_tree, capsys):
 def test_check_on_a_mixed_tree_declares_its_coverage(mixed_tree, capsys):
     # We *can* grade the Python here, so this is not a refusal -- but a
     # grade leaning on 1 of 7 files has to say so out loud, and it has to
-    # be honest that the TypeScript is only partially covered rather than
-    # claiming either "read" or "not read".
+    # be honest about *why* the TypeScript doesn't count toward it: every
+    # rule reads it (#172), so this can no longer claim a coverage gap.
     exit_code = main(["check", str(mixed_tree)])
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "TypeScript" in out
-    assert "partial coverage" in out
-    assert "of 21" in out, "say how many rules actually read it"
+    assert "read by every rule" in out
+    assert "coverage gap" in out
 
 
 def test_check_explains_when_the_only_python_is_test_code(tmp_path, capsys):
