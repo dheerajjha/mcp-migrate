@@ -44,7 +44,7 @@ All eighteen are written. There are no stubs left.
 | 11 | [Tasks moved to an extension, polling replaces blocking result](11-tasks-polling.md) | R019 | R019 (review) |
 | 12 | [Dynamic Client Registration deprecated](12-dynamic-client-registration-deprecated.md) | R020 | R020 (review) |
 | 13 | [JSON Schema 2020-12 required](13-json-schema-2020-12.md) | R021 | R021 (safe) |
-| 14 | [Required Mcp-Method / Mcp-Name routing headers](14-routing-headers.md) | R003 | none |
+| 14 | [Required Mcp-Method / Mcp-Name routing headers](14-routing-headers.md) | R003 | R003 (review, inline headers-literal shape only) |
 | 15 | [Deterministic tools/list ordering](15-deterministic-tool-ordering.md) | R004 | R004 (safe, list-literal shape only) |
 | 16 | [extensions map on ServerCapabilities](16-extensions-map.md) | R005 | R005 (safe) |
 | 17 | [Trace context propagation from _meta](17-trace-context-propagation.md) | R008 | R008 (review) |

@@ -10,6 +10,18 @@ it was contributed.
 
 ### Added
 
+- **R003 gets a fixer**: an inline `headers={...}` (Python) / `headers: {...}`
+  (TypeScript) dict literal missing `Mcp-Method` gets a TODO dropped above
+  it, `review` confidence.
+  ([#16](https://github.com/dheerajjha/mcp-migrate/issues/16), @waterlemonnn)
+
+  It does not write the header itself. Unlike R008/R018's call-site
+  annotations, R003's missing value (`Mcp-Method`'s value is the method
+  being sent) can't be recovered without real call-site parsing, so the
+  fixer stops at pointing a human at the exact dict to edit. Headers built
+  across multiple lines, from a variable, or merged from another dict are
+  left alone entirely -- inserting a key into a shape it can't read in full
+  is exactly the kind of guess `fixers/base.py` rules out.
 - **Every rule reads TypeScript.** R013, R014 and R021 landed first
   (@waterlemonnn), then **R002** — the last holdout — closed the gap
   (@IronLad123). R013 uses a bounded `(?:Schema|Params)` suffix rather than

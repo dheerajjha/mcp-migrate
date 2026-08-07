@@ -1309,6 +1309,86 @@ def test_r016_idempotent():
 
 
 # ---------------------------------------------------------------------------
+# R003 -- missing Mcp-Method / Mcp-Name routing headers
+# ---------------------------------------------------------------------------
+
+def test_r003_annotates_python_inline_headers_dict():
+    before = (
+        'resp = _client.post(url, headers={"Content-Type": "application/json"}, '
+        'json={"jsonrpc": "2.0", "method": "tools/call"})\n'
+    )
+    result = fix("RoutingHeadersFixer", before)
+    assert result.changed
+    assert "# TODO(mcp-migrate): add Mcp-Method" in result.text
+    # the call itself must survive untouched -- the fixer doesn't know the
+    # right header value, so it can't safely write into the dict
+    assert before in result.text
+
+
+def test_r003_annotates_typescript_inline_headers_object():
+    before = (
+        'const res = await fetch(url, { headers: { "Content-Type": "application/json" }, '
+        'body: JSON.stringify({ method: "tools/call" }) });\n'
+    )
+    result = fix("RoutingHeadersFixer", before, path="server.ts")
+    assert result.changed
+    assert "// TODO(mcp-migrate)" in result.text
+    assert FIXERS["RoutingHeadersFixer"].confidence == "review"
+
+
+def test_r003_stays_silent_without_mcp_surface_evidence():
+    # An inline headers dict on a plain REST call with no MCP wire evidence
+    # anywhere in the file -- the same false-positive shape the rule itself
+    # guards against (mcp-atlassian's Jira/Confluence clients).
+    before = 'resp = _client.post(url, headers={"Content-Type": "application/json"})\n'
+    result = fix("RoutingHeadersFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r003_stays_silent_when_mcp_method_already_present():
+    before = (
+        'resp = _client.post(url, headers={"Mcp-Method": "tools/call"}, '
+        'json={"jsonrpc": "2.0", "method": "tools/call"})\n'
+    )
+    result = fix("RoutingHeadersFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r003_leaves_multiline_headers_construction_alone():
+    # Headers built across multiple lines, or from a variable, aren't the
+    # narrow single-line-literal shape this fixer is confident about --
+    # refusing to guess beats inserting a key into the wrong dict.
+    before = (
+        'headers = {}\n'
+        'headers["Content-Type"] = "application/json"\n'
+        'resp = _client.post(url, headers=headers, json={"method": "tools/call"})\n'
+    )
+    result = fix("RoutingHeadersFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r003_leaves_comments_alone():
+    before = '# resp = _client.post(url, headers={"Content-Type": "x"}) # tools/call\n'
+    result = fix("RoutingHeadersFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r003_idempotent():
+    before = (
+        'resp = _client.post(url, headers={"Content-Type": "application/json"}, '
+        'json={"jsonrpc": "2.0", "method": "tools/call"})\n'
+    )
+    once = fix("RoutingHeadersFixer", before)
+    twice = fix("RoutingHeadersFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+# ---------------------------------------------------------------------------
 # CLI: fix / fixers
 # ---------------------------------------------------------------------------
 

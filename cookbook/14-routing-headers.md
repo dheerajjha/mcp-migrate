@@ -1,7 +1,14 @@
 # Required `Mcp-Method` / `Mcp-Name` routing headers
 
 - **Rule:** [R003](../src/mcp_migrate/rules/r003_routing_headers.py)
-- **Fixer:** none
+- **Fixer:** [RoutingHeadersFixer](../src/mcp_migrate/fixers/r003_routing_headers.py) (confidence `review`) --
+  annotates an inline `headers={...}` dict literal missing `Mcp-Method` with a
+  TODO. It does not write the header itself: the value is the method being
+  sent (see the before/after below), which the fixer has no reliable way to
+  recover from an arbitrary call site. Headers built across multiple lines,
+  from a variable, or merged from another dict are left alone entirely --
+  the fixer only fires on the narrow single-line-literal shape it can read
+  in full.
 - **Severity:** advisory (downgraded from an earlier `breaking` after a real
   false-positive incident -- see the rule source's comment for the
   mcp-atlassian story before reaching for a fixer here)
