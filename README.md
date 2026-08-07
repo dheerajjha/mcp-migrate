@@ -78,6 +78,28 @@ this shape may change in a breaking way; such changes are documented under
 Changed in [CHANGELOG.md](CHANGELOG.md), so consumers should pin a version
 and watch that section.
 
+### `check --format sarif`
+
+SARIF 2.1.0, for GitHub code scanning and anything else that speaks it:
+
+```yaml
+- run: mcp-migrate check . --format sarif > mcp-migrate.sarif
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: mcp-migrate.sarif
+```
+
+Findings land in the Security tab and annotate the diff, instead of scrolling
+past in a log. Severities map to SARIF levels as `breaking` -> `error`,
+`deprecated` -> `warning`, `advisory` -> `note`. `deprecated` is deliberately
+not `error`: code scanning's default gate fails on `error` alone, and the spec
+gives deprecated features 12+ months, so blocking a merge today over a change
+that doesn't break until next year is how an integration gets switched off.
+
+`--format {text,json,sarif}` is the general flag; `--json` remains as an alias
+for `--format json`. Output is validated against the vendored
+[SARIF 2.1.0 schema](schemas/sarif-2.1.0.schema.json) in CI.
+
 Exit codes, so it drops straight into CI:
 
 | code | meaning |
