@@ -14,7 +14,9 @@
     "score",
     "files_scanned",
     "counts",
-    "findings"
+    "findings",
+    "suppressed",
+    "unused_suppressions"
   ],
   "additionalProperties": false,
   "properties": {
@@ -50,11 +52,17 @@
       }
     },
     "grade": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "pattern": "^[A-F]$"
     },
     "score": {
-      "type": ["integer", "null"],
+      "type": [
+        "integer",
+        "null"
+      ],
       "minimum": 0,
       "maximum": 100
     },
@@ -64,7 +72,11 @@
     },
     "counts": {
       "type": "object",
-      "required": ["breaking", "deprecated", "advisory"],
+      "required": [
+        "breaking",
+        "deprecated",
+        "advisory"
+      ],
       "additionalProperties": false,
       "properties": {
         "breaking": {
@@ -85,7 +97,13 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["rule", "severity", "path", "line", "message"],
+        "required": [
+          "rule",
+          "severity",
+          "path",
+          "line",
+          "message"
+        ],
         "additionalProperties": false,
         "properties": {
           "rule": {
@@ -93,19 +111,110 @@
             "pattern": "^R[0-9]{3}$"
           },
           "severity": {
-            "enum": ["breaking", "deprecated", "advisory"]
+            "enum": [
+              "breaking",
+              "deprecated",
+              "advisory"
+            ]
           },
           "path": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "line": {
-            "type": ["integer", "null"]
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "message": {
             "type": "string"
           },
           "fix": {
             "type": "string"
+          }
+        }
+      }
+    },
+    "suppressed": {
+      "type": "array",
+      "description": "findings silenced by an inline `mcp-migrate: ignore[R0NN]` comment. Not counted in `counts`, and not counted against the grade.",
+      "items": {
+        "type": "object",
+        "required": [
+          "rule",
+          "severity",
+          "path",
+          "line",
+          "message",
+          "reason"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "rule": {
+            "type": "string",
+            "pattern": "^R[0-9]{3}$"
+          },
+          "severity": {
+            "enum": [
+              "breaking",
+              "deprecated",
+              "advisory"
+            ]
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "line": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "fix": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "description": "the text after `--` in the ignore comment; empty if none was given"
+          }
+        }
+      }
+    },
+    "unused_suppressions": {
+      "type": "array",
+      "description": "inline `mcp-migrate: ignore[R0NN]` directives that matched no finding. Either the finding was fixed or the code moved; both are worth knowing, because stale suppressions accumulate in CI and nothing else in the pipeline can see them. One entry per rule id: a directive naming several rules that matched nothing has every one of them stale.",
+      "items": {
+        "type": "object",
+        "required": [
+          "rule",
+          "path",
+          "line",
+          "reason"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "rule": {
+            "type": "string",
+            "pattern": "^R[0-9]{3}$"
+          },
+          "path": {
+            "type": "string"
+          },
+          "line": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string",
+            "description": "the text after `--` in the ignore comment; empty if none was given"
           }
         }
       }
@@ -119,10 +228,14 @@
             "const": false
           }
         },
-        "required": ["scannable"]
+        "required": [
+          "scannable"
+        ]
       },
       "then": {
-        "required": ["reason"],
+        "required": [
+          "reason"
+        ],
         "properties": {
           "grade": {
             "const": null
@@ -140,10 +253,14 @@
             "const": true
           }
         },
-        "required": ["is_sdk"]
+        "required": [
+          "is_sdk"
+        ]
       },
       "then": {
-        "required": ["sdk_reason"],
+        "required": [
+          "sdk_reason"
+        ],
         "properties": {
           "grade": {
             "const": null

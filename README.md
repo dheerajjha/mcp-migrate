@@ -60,13 +60,24 @@ every finding).
 
 `--json` emits one JSON object with these always-present top-level keys:
 `tool`, `version`, `spec`, `path`, `scannable`, `languages`, `grade`,
-`score`, `files_scanned`, `counts`, and `findings`.
+`score`, `files_scanned`, `counts`, `findings`, `suppressed`, and
+`unused_suppressions`.
 
 Conditional keys:
 
 - `is_sdk` and `sdk_reason` only when the tree is a protocol SDK. In that case `grade` and `score` are `null`.
 - `reason` only when `scannable` is `false`. In that case `grade` and `score` are `null`.
 - `grade` and `score` are also `null` when a tree was read but is not gradable, for example TypeScript-only trees.
+
+`suppressed` holds findings silenced by an inline `mcp-migrate: ignore[R0NN]`
+comment; they are excluded from `findings`, from `counts`, and from the grade,
+and each carries the `reason` from its comment.
+
+`unused_suppressions` holds directives that matched no finding — either it was
+fixed or the code moved. Each entry has `rule`, `path`, `line`, and `reason`,
+one per rule id. It is always present, empty array included: stale suppressions
+accumulate in CI, and CI is the consumer that reads `--json` and never sees a
+console line.
 
 Each finding always has `rule`, `severity`, `path`, `line`, and `message`.
 `path` and `line` may be `null` for project-level findings. `fix` is present
@@ -99,6 +110,46 @@ that doesn't break until next year is how an integration gets switched off.
 `--format {text,json,sarif}` is the general flag; `--json` remains as an alias
 for `--format json`. Output is validated against the vendored
 [SARIF 2.1.0 schema](schemas/sarif-2.1.0.schema.json) in CI.
+### Suppressing a finding
+
+This tool has open false-positive classes and says so above. When a finding
+is wrong, or the code is deliberate and not changing, silence that one line
+rather than the whole rule:
+
+```python
+mcp_session_id = req.headers["X-Sid"]  # mcp-migrate: ignore[R001] -- proxy shim, not MCP session state
+```
+
+```ts
+const mcpSessionId = req.headers["x-sid"];  // mcp-migrate: ignore[R001] -- proxy shim
+```
+
+The rule id is required — a blanket `ignore` would also silence rules that
+don't exist yet, and nobody ever revisits it. A reason after `--` is expected;
+`check` reports directives that lack one.
+
+A suppressed finding **doesn't count against the grade** — a suppression that
+still costs you the grade isn't one, and the only move left would be to stop
+running the tool. That does make the grade partly self-reported, so three
+things keep it auditable:
+
+- the count is always printed, never behind a flag
+- `--show-suppressions` lists every one with its file, rule and reason
+- `check` reports suppressions that matched nothing, so stale ones don't
+  quietly accumulate
+
+`--json` carries them under `suppressed`, each with its `reason`, and the stale
+ones under `unused_suppressions`.
+
+**One caveat, because "line-scoped" promises slightly less than it delivers for
+three rules.** `R005`, `R015` and `R016` ask a question about a *file* — does
+this file declare capabilities without `extensions`, does it build a JSON-RPC
+result without `resultType`, does it implement a list/read handler without cache
+metadata — so each reports at most one finding per file, on the first line that
+matches. Suppressing that line therefore silences the rule **for the whole
+file**, not just that line. Every other rule reports each occurrence
+separately, and there suppression really is per line. If you suppress one of
+these three, you are accepting the rule's verdict on that file.
 
 Exit codes, so it drops straight into CI:
 

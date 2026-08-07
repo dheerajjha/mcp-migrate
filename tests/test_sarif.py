@@ -198,3 +198,4 @@ def test_an_unreadable_tree_still_emits_a_valid_document(capsys, tmp_path):
     doc, exit_code = run_sarif(capsys, tmp_path)
     assert only_run(doc)["results"] == []
     assert exit_code == 2
+
