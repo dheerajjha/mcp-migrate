@@ -9,6 +9,12 @@ spec:          {required: true,  type: str,  desc: "spec revision checked agains
 status:        {required: true,  type: str,  enum: [ready, migrating, unmaintained]}
 notes:         {required: true,  type: str,  desc: "one sentence, what it does"}
 homepage:      {required: false, type: str}
+# Subdirectory that was actually scanned, when `repo` is a monorepo. Without
+# it the entry is not reproducible: `awslabs/mcp` holds 62 servers, and
+# checking the repo root scores it F/0 -- which is what happened when these
+# grades were first re-verified. A published grade nobody else can reproduce
+# is not a measurement, it is an assertion.
+path:          {required: false, type: str,  desc: "subdir scanned, if repo is a monorepo"}
 # Who put this entry here. "project" means mcp-migrate scanned a public repo
 # and wrote the entry; "owner" means someone who maintains that server
 # submitted it themselves. The distinction is the whole value of the board --

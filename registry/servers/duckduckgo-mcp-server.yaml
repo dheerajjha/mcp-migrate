@@ -3,7 +3,7 @@ repo: nickclyde/duckduckgo-mcp-server
 language: python
 grade: A
 score: 97
-checked_with: mcp-migrate 0.1.1
+checked_with: mcp-migrate 0.2.0
 spec: "2026-07-28"
 status: ready
 submitted_by: project
