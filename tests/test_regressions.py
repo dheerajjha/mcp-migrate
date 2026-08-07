@@ -699,3 +699,101 @@ def test_search_wire_keeps_string_literals_and_drops_prose(tmp_path):
     assert hits == [3], f"expected only the dict literal on line 3, got {hits}"
     assert len(list(project.search("resources/subscribe"))) == 3
     assert list(project.search_code("resources/subscribe")) == []
+
+
+# --- 10. a wire method name used as a map key is configuration -------------
+#
+# R004 fired on `"tools/list"` wherever the literal appeared, including as a
+# key in a per-method config map and as a lookup into one. Found on
+# dealfluence/adeu (#218), where the map exists *because* they implement the
+# 2026-07-28 cache metadata -- so the rule penalised them for correctly
+# implementing another part of the same revision.
+
+CONFIG_MAP_TS = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+
+export const CACHE_POLICY: Record<string, {ttlMs: number}> = {
+  "tools/list": { ttlMs: 3600000 },
+  "resources/list": { ttlMs: 3600000 },
+};
+
+export function inferCachePolicy(method: string) {
+  return CACHE_POLICY[method] ?? CACHE_POLICY["tools/list"];
+}
+"""
+
+CONFIG_MAP_PY = """\
+CACHE_POLICY = {
+    "tools/list": {"ttl_ms": 3600000},
+    "resources/list": {"ttl_ms": 3600000},
+}
+
+
+def infer_cache_policy(method):
+    return CACHE_POLICY.get(method) or CACHE_POLICY["tools/list"]
+"""
+
+# The third shape on the same project: a build script that drives the server
+# as a *client* to extract its tool list. Only requests carry `method`, so a
+# wire name in that field is never a handler returning tools.
+CLIENT_REQUEST_PY = """\
+def extract_tools(send, wait_for_id):
+    send({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+    tools_resp = wait_for_id(2)
+    return tools_resp.get("result", {}).get("tools", [])
+"""
+
+
+@pytest.mark.parametrize(
+    "filename,source",
+    [
+        ("adapter.ts", CONFIG_MAP_TS),
+        ("adapter.py", CONFIG_MAP_PY),
+        ("extract.py", CLIENT_REQUEST_PY),
+    ],
+)
+def test_r004_does_not_fire_on_a_method_name_that_returns_no_tools(
+    tmp_path, filename, source
+):
+    (tmp_path / filename).write_text(source)
+    findings = NondeterministicToolOrder().check(load_project(tmp_path))
+    assert findings == [], (
+        "naming a wire method -- as a map key, a lookup into one, or the "
+        "method field of an outbound request -- returns no tools: "
+        f"{[(f.line, f.snippet) for f in findings]}"
+    )
+
+
+def test_r004_still_fires_on_every_real_handler_shape_ts(tmp_path):
+    (tmp_path / "server.ts").write_text(
+        'import { Server } from "@modelcontextprotocol/sdk/server/index.js";\n\n'
+        "const HANDLERS = {\n"
+        '  "tools/list": async () => ({ tools: TOOLS }),\n'
+        "};\n\n"
+        'server.setRequestHandler("tools/list", async () => ({ tools: TOOLS }));\n\n'
+        "function dispatch(method: string) {\n"
+        "  switch (method) {\n"
+        '    case "tools/list":\n'
+        "      return { tools: TOOLS };\n"
+        "  }\n"
+        "}\n"
+    )
+    lines = {f.line for f in NondeterministicToolOrder().check(load_project(tmp_path))}
+    # 4 is an object key, but its value opens the handler body right there --
+    # so the sort look-ahead has something real to scan and the check holds.
+    assert lines == {4, 7, 11}, lines
+
+
+def test_r004_still_fires_on_every_real_handler_shape_python(tmp_path):
+    (tmp_path / "server.py").write_text(
+        "import mcp\n\n\n"
+        "def dispatch(method):\n"
+        '    if method == "tools/list":\n'
+        '        return {"tools": TOOLS}\n'
+        "    return None\n\n\n"
+        "@server.list_tools()\n"
+        "async def list_tools():\n"
+        "    return TOOLS\n"
+    )
+    lines = {f.line for f in NondeterministicToolOrder().check(load_project(tmp_path))}
+    assert lines == {5, 10}, lines

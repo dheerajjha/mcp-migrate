@@ -9,6 +9,72 @@ from .base import Finding, Project, Rule, _in_content_span
 # does its own line scan below rather than using `search_code`.
 HANDLER_RX = re.compile(r"def\s+list_tools\b|tools/list|@[\w.]*\blist_tools\b")
 
+QUOTES = ("\"", "'", "`")
+# A dict/object value that opens a function body right there on the same line.
+INLINE_FUNCTION_VALUE_RX = re.compile(
+    r"^\s*(?:async\s+)?(?:function\b|lambda\b|\(|[\w$]+\s*=>)"
+)
+# `{"jsonrpc": "2.0", "id": 2, "method": "tools/list"}` -- the literal is the
+# method field of a request being *sent*. Only requests carry `method`, so
+# this is always the client side of the wire, never a handler returning tools.
+METHOD_FIELD_VALUE_RX = re.compile(r"""(?:["']method["']|\bmethod)\s*:\s*$""")
+
+
+def _is_config_or_request_use(line: str, start: int, end: int) -> bool:
+    """True when the matched wire method name is naming a method rather than
+    handling one -- a map key, a lookup into that map, or the `method` field
+    of a request being sent.
+
+    A wire method name lands on a line for reasons that have nothing to do
+    with listing tools. All three of these are on dealfluence/adeu (#218),
+    and account for 4 of the 5 R004 findings we reported against it:
+
+        CACHE_POLICY = {"tools/list": {"ttl_ms": 3_600_000}}   # a key
+        CACHE_POLICY["tools/list"]                             # reading it
+        send({"jsonrpc": "2.0", "id": 2, "method": "tools/list"})  # a client
+
+    None of them returns anything tool-shaped, so "tools are returned without
+    an explicit sort" is just false at those lines -- and worse, the sort
+    look-ahead below then scans whatever happens to follow, which for a dict
+    entry is its sibling entries. A method name used as a key, or as the
+    method field of an outbound request, is not a call site.
+
+    Only quoted string literals are considered here. `def list_tools`,
+    `@server.list_tools()` and `ListToolsRequestSchema` are unaffected, and
+    so is every shape where the literal is compared or passed rather than
+    keyed on -- `if method == "tools/list":`, `case "tools/list":`,
+    `setRequestHandler("tools/list", handler)`.
+
+    The one key shape kept alive is a value that opens a function body on
+    the same line::
+
+        const HANDLERS = {"tools/list": async () => ({tools: TOOLS})};
+
+    There the handler body really is inside the window about to be scanned,
+    so the check still means something. When the value is a bare identifier
+    (``{"tools/list": handle_list_tools}``) this skips and accepts the miss:
+    that body lives in another function, so the look-ahead was never going
+    to find its sort either way. R004 is advisory -- three wrong points on
+    a stranger's grade cost more than three missed ones.
+    """
+    before, after = line[:start], line[end:]
+    if not (before.endswith(QUOTES) and after[:1] in QUOTES):
+        return False
+    before, after = before[:-1], after[1:]
+
+    if before.rstrip().endswith("[") and after.lstrip().startswith("]"):
+        return True
+    if METHOD_FIELD_VALUE_RX.search(before):
+        return True
+
+    rest = after.lstrip()
+    if not rest.startswith(":"):
+        return False
+    lead = before.rstrip()
+    if lead and not lead.endswith(("{", ",")):
+        return False
+    return not INLINE_FUNCTION_VALUE_RX.match(rest[1:])
+
 
 def _body_bounds(lines: list[str], line_no: int) -> tuple[int, int]:
     """Return (body_start, body_end) 0-based bounds for the block that
@@ -121,6 +187,8 @@ class NondeterministicToolOrder(Rule):
                     continue
                 if prose is not None and _in_content_span(line_no, m.start(), prose):
                     continue
+                if _is_config_or_request_use(line, m.start(), m.end()):
+                    continue
                 if any(start <= line_no <= end for start, end in covered):
                     continue
 
@@ -153,6 +221,8 @@ class NondeterministicToolOrder(Rule):
                 if not m:
                     continue
                 if prose is not None and _in_content_span(line_no, m.start(), prose):
+                    continue
+                if _is_config_or_request_use(line, m.start(), m.end()):
                     continue
                 if any(start <= line_no <= end for start, end in covered):
                     continue

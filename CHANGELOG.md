@@ -4,6 +4,38 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **R004 no longer fires on a wire method name that returns no tools.**
+  Naming `tools/list` is not handling it, and the rule could not tell the
+  difference. Three shapes are now excluded: a per-method config map key
+  (`{"tools/list": {"ttl_ms": ...}}`), a lookup back into that map
+  (`CACHE_POLICY["tools/list"]`), and the `method` field of an outbound
+  request (`send({"jsonrpc": "2.0", "method": "tools/list"})` — only
+  requests carry `method`, so that is always the client side of the wire).
+  Both languages.
+  ([#218](https://github.com/dheerajjha/mcp-migrate/issues/218))
+
+  Found by reading `dealfluence/adeu` rather than by trusting our own
+  output: **4 of the 5** R004 findings we reported against it were wrong,
+  and the config map exists there *because* they implement this revision's
+  cache metadata — so the rule was penalising them for correctly
+  implementing another part of the same spec. Their grade goes **D (44) →
+  C (72)** together with [#217](https://github.com/dheerajjha/mcp-migrate/issues/217).
+
+  Handler shapes all still fire, including the one object-literal key whose
+  value opens the handler body on the same line
+  (`{"tools/list": async () => ...}`), where the sort look-ahead has
+  something real to scan. A key whose value is a bare identifier is skipped
+  and the miss accepted: that body lives in another function, so the
+  look-ahead was never going to find its sort there anyway. R004 is
+  advisory — three wrong points on a stranger's grade cost more than three
+  missed ones.
+
+  R015 and R016 were checked for the same trigger and are not affected;
+  both anchor on a call-site shape (`setRequestHandler("tools/list", ...)`)
+  rather than a bare literal.
+
 ## [0.2.0] - 2026-08-07
 
 **Every rule now reads TypeScript** (up from 17 of 21), the fixer set went
