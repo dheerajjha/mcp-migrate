@@ -12,9 +12,20 @@
   JSON-RPC envelopes, which do own it.
   R016 *does* apply to SDK users, because the SDK fills `ttlMs`/`cacheScope`
   only when you configured the server with cache hints.
-- **Fixer:** none. `ttlMs` depends on how long *your* particular list
-  response stays valid, which only you know; inventing a default risks being
-  silently wrong in a way that's worse than the missing field.
+- **Fixer:** none, for both, and for different reasons. R016's `ttlMs`
+  depends on how long *your* particular list response stays valid, which
+  only you know; inventing a default risks being silently wrong in a way
+  that's worse than the missing field. R015's blocker is the value, not a
+  default: `resultType` is `"complete"` or `"input_required"` depending on
+  what the specific handler does (see Gotchas below), and a fixer that
+  stamps `"complete"` onto a handler that actually needs another round trip
+  produces a result that looks fixed but silently drops the
+  `InputRequiredResult` path. Even a TODO-only annotation doesn't have
+  anywhere safe to land: the rule's finding line is the first MCP method
+  name it sees in the file (typically a dispatch-table key), not the
+  specific `return`/`yield` that's missing the field, so annotating it
+  would point at the wrong line as often as the right one -- the same
+  reason R018's fixer skips its own wire-literal call sites.
 - **Severity:** advisory for both. Originally shipped `breaking`, then
   downgraded after a real audit: they check for things the new spec
   introduced, so almost nothing has adopted them yet and the finding has
