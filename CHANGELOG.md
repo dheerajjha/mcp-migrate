@@ -4,19 +4,26 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
-**TypeScript coverage went from 17 of 21 rules to 20, the fixer set from ten
-to sixteen, and the cookbook from six recipes to eighteen.** All of it was
-contributed.
+**Every rule now reads TypeScript** (up from 17 of 21), the fixer set went
+from ten to sixteen, and the cookbook from six recipes to eighteen. All of
+it was contributed.
 
 ### Added
 
-- **R013, R014 and R021 read TypeScript**, leaving **R002** as the only
-  Python-only rule. R013 uses a bounded `(?:Schema|Params)` suffix rather
-  than `\w*`, so `class SubscribeRequester` no longer reads as a removed
+- **Every rule reads TypeScript.** R013, R014 and R021 landed first
+  (@waterlemonnn), then **R002** — the last holdout — closed the gap
+  (@IronLad123). R013 uses a bounded `(?:Schema|Params)` suffix rather than
+  `\w*`, so `class SubscribeRequester` no longer reads as a removed
   subscription handler.
   ([#42](https://github.com/dheerajjha/mcp-migrate/issues/42),
   [#43](https://github.com/dheerajjha/mcp-migrate/issues/43),
-  [#50](https://github.com/dheerajjha/mcp-migrate/issues/50), @waterlemonnn)
+  [#50](https://github.com/dheerajjha/mcp-migrate/issues/50),
+  [#32](https://github.com/dheerajjha/mcp-migrate/issues/32))
+
+  **This does not yet mean TypeScript gets a grade.** The `PARTIAL` flag
+  still withholds it, so `check` currently prints "TypeScript support is
+  partial -- 21 of 21 rules read it", which is a contradiction. Tracked as
+  [#172](https://github.com/dheerajjha/mcp-migrate/issues/172).
 - **Three more fixers** — **R009** (initialize handshake), **R011** (ping) and
   **R012** (`logging/setLevel`) — taking the set to **16 of 21**. Only R002,
   R003, R010, R015 and R016 now lack one.
@@ -121,8 +128,9 @@ contributed.
 
 ### Contributors
 
-@waterlemonnn wrote most of the above. @ujjwalprakash17's first PR fixed
-R014's case handling; @PuvaanRaaj's #56/#58/#60 were an independent take on
+@waterlemonnn wrote most of the above. @IronLad123 ported the last rule
+(R002); @ujjwalprakash17's first PR fixed R014's case handling;
+@slegarraga's first PR added the `check --json` schema contract; @PuvaanRaaj's #56/#58/#60 were an independent take on
 the same three TypeScript ports, and #60 was measurably right about
 case-insensitivity -- that half became
 [#143](https://github.com/dheerajjha/mcp-migrate/issues/143), which

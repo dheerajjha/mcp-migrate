@@ -91,10 +91,10 @@ finding set otherwise conflates "we read it and it's clean" with "we read
 nothing", and a grade that can't tell those apart is worthless. A tree with
 nothing readable in it gets silence instead of an A.
 
-**Python is graded. TypeScript is scanned but not graded.** 20 of the 21
-rules read TypeScript, which is enough to report real findings and not
-enough to stand behind a letter grade, so a TypeScript tree gets findings
-and no grade:
+**Python is graded. TypeScript is scanned but still not graded** — and as of
+R002 landing, that is no longer justified by coverage. **All 21 rules read
+TypeScript.** The grade is withheld by a `PARTIAL` flag that has outlived
+its reason, and the output says so in as many words:
 
 ```
 $ mcp-migrate check ./my-ts-server
@@ -102,27 +102,29 @@ $ mcp-migrate check ./my-ts-server
 mcp-migrate v0.1.4  ->  my-ts-server
 
 No grade for this one. Found 1 TypeScript. TypeScript support is partial --
-20 of 21 rules read it so far, which is enough to report findings but not
+21 of 21 rules read it so far, which is enough to report findings but not
 enough to stand behind a grade.
 
   breaking    R001  server.ts:4  Mcp-Session-Id was removed from the Streamable HTTP transport.
   deprecated  R006  server.ts:1  HTTP+SSE transport is deprecated.
   deprecated  R006  server.ts:5  HTTP+SSE transport is deprecated.
 
-3 finding(s) from the rules that do cover this language. Real, and worth
-fixing -- but a letter grade would be a claim about the rules that didn't run.
-No grade and no badge: a letter grade would be a claim about the rules that
-didn't run.
+3 finding(s) from the rules that do cover this language.
 ```
 
-**The exit code still works on TypeScript**, so this drops into CI today: a
-`breaking` finding exits `1` whether or not a grade was issued. (Until
+"Partial — 21 of 21" is a contradiction, and it is tracked as
+[#172](https://github.com/dheerajjha/mcp-migrate/issues/172). Until that is
+resolved, a TypeScript tree gets findings but no grade, no badge, and no
+registry entry. Findings are real and complete; only the letter is withheld.
+
+**The exit code works on TypeScript**, so this drops into CI today regardless:
+a `breaking` finding exits `1` whether or not a grade was issued. (Until
 v0.1.3 it always exited `2`, so CI could not fail on a TypeScript
 regression — that was [#98](https://github.com/dheerajjha/mcp-migrate/issues/98).)
 
-Still Python-only: **R002**, and that is the whole list. See
-[issue #30](https://github.com/dheerajjha/mcp-migrate/issues/30) to help
-close the gap — one rule from done.
+No rule is Python-only any more.
+[Issue #30](https://github.com/dheerajjha/mcp-migrate/issues/30) is closed on
+coverage; what remains is the grading decision in #172.
 
 By default, `check` skips test code: anything under a `tests/`, `test/`,
 `testing/`, `fixtures/`, `examples/`, or `docs/` directory, plus `test_*.py`,
