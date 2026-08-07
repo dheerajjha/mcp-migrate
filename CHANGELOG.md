@@ -4,6 +4,42 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **SARIF 2.1.0 output: `check --format sarif`.** Findings land in GitHub
+  code scanning as annotations on the diff and entries in the Security tab,
+  tracked across commits instead of re-read from a CI log every time.
+  ([#182](https://github.com/dheerajjha/mcp-migrate/issues/182))
+
+  `--format {text,json,sarif}` is the new surface; `--json` keeps working as
+  an alias for `--format json` and its output is byte-identical. The format
+  decides what is printed and never what is returned — exit codes are
+  unchanged across all three.
+
+  Two decisions worth stating rather than burying:
+
+  - **`deprecated` maps to `warning`, not `error`.** Code scanning's default
+    gate fails on `error` alone, so this mapping decides whether a
+    deprecation blocks a merge. The spec gives deprecated features 12+
+    months; making a server unmergeable today over something that breaks
+    next year gets the integration switched off, and then it catches
+    nothing. `breaking` → `error` and `advisory` → `note`.
+  - **The driver declares all 21 rules, not only those that fired.** That is
+    what lets code scanning tell "this rule ran and found nothing" from
+    "this rule does not exist", and therefore close a resolved alert instead
+    of leaving it open forever. A clean tree still emits a full run with
+    `results: []`.
+
+  Paths are repo-relative and forward-slashed on every platform, because
+  code scanning matches results to the diff by path and an absolute path
+  from the scanning machine matches nothing — the annotations would silently
+  never appear. Project-level findings (R010 asks about the whole tree) are
+  kept with an empty `locations` array rather than dropped.
+
+  Validated in CI against a vendored copy of the official schema at
+  `schemas/sarif-2.1.0.schema.json`; it is checked in rather than fetched so
+  the suite does not depend on the network across four Python versions.
+
 ### Fixed
 
 - **R004 no longer fires on a wire method name that returns no tools.**
