@@ -161,7 +161,8 @@ class Project:
         key = id(f)
         if key not in self._span_cache:
             self._span_cache[key] = (
-                _ts_spans(f.text, prose_only=False) if f.language == "typescript"
+                _ts_spans(f.text, prose_only=False)
+                if f.language in {"typescript", "javascript"}
                 else _content_spans(f.text)
             )
         return self._span_cache[key]
@@ -170,7 +171,8 @@ class Project:
         key = ("prose", id(f))
         if key not in self._span_cache:
             self._span_cache[key] = (
-                _ts_spans(f.text, prose_only=True) if f.language == "typescript"
+                _ts_spans(f.text, prose_only=True)
+                if f.language in {"typescript", "javascript"}
                 else _prose_spans(f.text)
             )
         return self._span_cache[key]
