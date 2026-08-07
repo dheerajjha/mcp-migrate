@@ -31,11 +31,11 @@ All eighteen are written. There are no stubs left.
 
 | # | Recipe | Rule(s) | Fixer |
 | - | ------ | ------- | ----- |
-| 01 | [Sessions to explicit handles](01-sessions-to-explicit-handles.md) | R001, R002 | R001 (review) |
+| 01 | [Sessions to explicit handles](01-sessions-to-explicit-handles.md) | R001, R002 | R001 (review), R002 (review) |
 | 02 | [initialize/initialized to server/discover](02-initialize-to-server-discover.md) | R009, R010 | R009 (review) |
 | 03 | [HTTP+SSE to Streamable HTTP](03-sse-to-streamable-http.md) | R006 | R006 (review) |
 | 04 | [subscribe/unsubscribe to subscriptions/listen](04-subscribe-to-subscriptions-listen.md) | R013 | R013 (review) |
-| 05 | [resultType and cache metadata on results](05-result-type-and-cache-metadata.md) | R015, R016 | none |
+| 05 | [resultType and cache metadata on results](05-result-type-and-cache-metadata.md) | R015, R016 | R016 (review) |
 | 06 | [ping removed](06-ping-removed.md) | R011 | R011 (review) |
 | 07 | [logging/setLevel removed](07-logging-set-level-removed.md) | R012 | R012 (review) |
 | 08 | [SSE resumability removed](08-sse-resumability-removed.md) | R014 | R014 (review) |
