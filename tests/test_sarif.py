@@ -199,3 +199,54 @@ def test_an_unreadable_tree_still_emits_a_valid_document(capsys, tmp_path):
     assert only_run(doc)["results"] == []
     assert exit_code == 2
 
+
+
+# --- suppression and SARIF, which landed as two independent PRs -----------
+#
+# #182 and #180 were written against separate branches and each passed on
+# its own. Nothing exercised the pair until they were merged, and the
+# failure mode is quiet in the worst way: a finding a maintainer had
+# deliberately silenced would still open a code-scanning alert on their
+# pull request, which is precisely the thing suppression exists to stop.
+
+SUPPRESSED_AND_LIVE = """\
+import mcp
+mcp_session_id = None  # mcp-migrate: ignore[R001] -- handle is a tool arg now
+other = mcp_session_id
+value = 1  # mcp-migrate: ignore[R004] -- this one matches nothing
+"""
+
+
+def test_a_suppressed_finding_does_not_become_a_code_scanning_alert(capsys, tmp_path):
+    (tmp_path / "s.py").write_text(SUPPRESSED_AND_LIVE)
+    doc, _ = run_sarif(capsys, tmp_path)
+    hits = [
+        (r["ruleId"], r["locations"][0]["physicalLocation"]["region"]["startLine"])
+        for r in only_run(doc)["results"]
+        if r.get("locations")
+    ]
+    # Line 2 carries the directive; line 3 trips the same rule and does not.
+    assert hits == [("R001", 3)], hits
+
+
+def test_every_format_agrees_on_what_suppression_removed(capsys, tmp_path):
+    (tmp_path / "s.py").write_text(SUPPRESSED_AND_LIVE)
+
+    doc, sarif_exit = run_sarif(capsys, tmp_path)
+    sarif_hits = {
+        (r["ruleId"], r["locations"][0]["physicalLocation"]["region"]["startLine"])
+        for r in only_run(doc)["results"]
+        if r.get("locations")
+    }
+
+    json_exit = main(["check", str(tmp_path), "--format", "json"])
+    payload = json.loads(capsys.readouterr().out)
+    json_hits = {(f["rule"], f["line"]) for f in payload["findings"]}
+
+    assert sarif_hits == json_hits
+    assert sarif_exit == json_exit
+    # And the suppressed one is accounted for rather than simply gone.
+    assert [(s["rule"], s["line"]) for s in payload["suppressed"]] == [("R001", 2)]
+    assert [(u["rule"], u["line"]) for u in payload["unused_suppressions"]] == [
+        ("R004", 4)
+    ]
