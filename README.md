@@ -91,6 +91,12 @@ finding set otherwise conflates "we read it and it's clean" with "we read
 nothing", and a grade that can't tell those apart is worthless. A tree with
 nothing readable in it gets silence instead of an A.
 
+Pass `--allow-unscannable` to turn that `2` into `0` -- for callers where an
+unreadable tree shouldn't be a failure, like the [pre-commit hook](#use-with-pre-commit)
+below, which re-checks the whole project on every commit regardless of what
+language that commit happened to touch. `1` is untouched: an actual
+`breaking` finding still fails.
+
 **Python is graded. TypeScript is scanned but still not graded** — and as of
 R002 landing, that is no longer justified by coverage. **All 21 rules read
 TypeScript.** The grade is withheld by a `PARTIAL` flag that has outlived
@@ -236,6 +242,27 @@ mcp-migrate rules                     # list every rule this version ships, with
 mcp-migrate fixers                    # list every fixer, with confidence (safe/review)
 mcp-migrate entry --repo owner/name   # print a registry/servers/*.yaml entry for the board
 ```
+
+## Use with pre-commit
+
+```yaml
+repos:
+  - repo: https://github.com/dheerajjha/mcp-migrate
+    rev: v0.1.4
+    hooks:
+      - id: mcp-migrate
+```
+
+The hook always scans the whole project, not just staged files
+(`pass_filenames: false`) -- several rules are whole-project checks (R010
+asks "does this project implement `server/discover` anywhere?"), and
+handing them only the staged files would make them fire wrongly on a
+partial view.
+
+It also runs with `--allow-unscannable`, so a commit to a path this tool
+can't read (no supported source under it yet, or a monorepo path that's
+someone else's language) exits `0` instead of `2` and doesn't block every
+commit. An actual `breaking` finding still exits `1` and fails the hook.
 
 ## Every rule
 

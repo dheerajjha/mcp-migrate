@@ -156,6 +156,18 @@ def _checked_something(project) -> bool:
 
 
 def cmd_check(args) -> int:
+    """Wraps `_cmd_check` so `--allow-unscannable` has one choke point instead
+    of touching every EXIT_UNSCANNABLE return below. `1` (breaking findings
+    found) is untouched -- only "we could not read this" gets remapped, and
+    only when the caller opted in.
+    """
+    code = _cmd_check(args)
+    if code == EXIT_UNSCANNABLE and getattr(args, "allow_unscannable", False):
+        return EXIT_OK
+    return code
+
+
+def _cmd_check(args) -> int:
     console = Console()
     root = Path(args.path).resolve()
 
@@ -641,6 +653,12 @@ def main(argv=None) -> int:
         "--include-tests", action="store_true",
         help="also scan tests/, fixtures/, examples/, docs/, and test_*.py files "
              "(skipped by default -- see README)",
+    )
+    p_check.add_argument(
+        "--allow-unscannable", action="store_true",
+        help="exit 0 instead of 2 when nothing could be read, e.g. a repo with no "
+             "supported source under it -- for pre-commit, where that should not "
+             "block every commit",
     )
     p_check.set_defaults(func=cmd_check)
 

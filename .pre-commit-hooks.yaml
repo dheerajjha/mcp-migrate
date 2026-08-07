@@ -1,0 +1,19 @@
+# pass_filenames: false is deliberate, not a default left unconsidered.
+# Several rules are whole-project checks rather than per-line ones -- R010
+# asks "does this project implement server/discover anywhere?", R015 looks
+# for evidence across the whole file set. Handing them only the staged
+# files would make them fire wrongly on a partial view, so every commit
+# re-scans the project instead of just what's staged.
+#
+# --allow-unscannable turns exit 2 ("could not read anything here") into 0.
+# A project mid-migration to a language this tool doesn't read yet, or a
+# monorepo path with no source under it, would otherwise fail every commit
+# for a reason that has nothing to do with the code being committed. Exit 1
+# (an actual breaking finding) is untouched and still fails the hook.
+- id: mcp-migrate
+  name: mcp-migrate
+  description: Check an MCP server against the 2026-07-28 spec revision
+  entry: mcp-migrate check --allow-unscannable
+  language: python
+  types_or: [python, ts, tsx, javascript]
+  pass_filenames: false

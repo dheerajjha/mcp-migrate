@@ -62,6 +62,13 @@ it was contributed.
   policy is stated next to the contract so external consumers know breaking
   shape changes will be documented under Changed.
   ([#188](https://github.com/dheerajjha/mcp-migrate/issues/188))
+- **`.pre-commit-hooks.yaml`**, so `mcp-migrate` can be installed as a
+  pre-commit hook. It always scans the whole project rather than staged
+  files (several rules, like R010, are whole-project checks), and a new
+  `check --allow-unscannable` flag turns exit `2` into `0` so a tree this
+  tool can't read yet doesn't block every commit -- an actual `breaking`
+  finding still fails it. (@waterlemonnn)
+  ([#184](https://github.com/dheerajjha/mcp-migrate/issues/184))
 
 ### Changed
 
