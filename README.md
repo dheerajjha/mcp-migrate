@@ -60,13 +60,17 @@ every finding).
 
 `--json` emits one JSON object with these always-present top-level keys:
 `tool`, `version`, `spec`, `path`, `scannable`, `languages`, `grade`,
-`score`, `files_scanned`, `counts`, and `findings`.
+`score`, `files_scanned`, `counts`, `findings`, and `suppressed`.
 
 Conditional keys:
 
 - `is_sdk` and `sdk_reason` only when the tree is a protocol SDK. In that case `grade` and `score` are `null`.
 - `reason` only when `scannable` is `false`. In that case `grade` and `score` are `null`.
 - `grade` and `score` are also `null` when a tree was read but is not gradable, for example TypeScript-only trees.
+
+`suppressed` holds findings silenced by an inline `mcp-migrate: ignore[R0NN]`
+comment; they are excluded from `findings`, from `counts`, and from the grade,
+and each carries the `reason` from its comment.
 
 Each finding always has `rule`, `severity`, `path`, `line`, and `message`.
 `path` and `line` may be `null` for project-level findings. `fix` is present
@@ -77,6 +81,36 @@ The executable contract is
 this shape may change in a breaking way; such changes are documented under
 Changed in [CHANGELOG.md](CHANGELOG.md), so consumers should pin a version
 and watch that section.
+
+### Suppressing a finding
+
+This tool has open false-positive classes and says so above. When a finding
+is wrong, or the code is deliberate and not changing, silence that one line
+rather than the whole rule:
+
+```python
+mcp_session_id = req.headers["X-Sid"]  # mcp-migrate: ignore[R001] -- proxy shim, not MCP session state
+```
+
+```ts
+const mcpSessionId = req.headers["x-sid"];  // mcp-migrate: ignore[R001] -- proxy shim
+```
+
+The rule id is required — a blanket `ignore` would also silence rules that
+don't exist yet, and nobody ever revisits it. A reason after `--` is expected;
+`check` reports directives that lack one.
+
+A suppressed finding **doesn't count against the grade** — a suppression that
+still costs you the grade isn't one, and the only move left would be to stop
+running the tool. That does make the grade partly self-reported, so three
+things keep it auditable:
+
+- the count is always printed, never behind a flag
+- `--show-suppressions` lists every one with its file, rule and reason
+- `check` reports suppressions that matched nothing, so stale ones don't
+  quietly accumulate
+
+`--json` carries them under `suppressed`, each with its `reason`.
 
 Exit codes, so it drops straight into CI:
 

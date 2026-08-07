@@ -7,12 +7,14 @@ import itertools
 import json
 import sys
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
 
 from . import __version__
+from . import suppress as suppress_mod
 from .fixers import all_fixers
 from .grade import badge_url, letter, score
 from .languages import DISPLAY, PARTIAL, SUPPORTED, describe, primary, survey
@@ -44,7 +46,26 @@ GRADE_ISSUE_URL = "https://github.com/dheerajjha/mcp-migrate/issues/172"
 JS_ISSUE_URL = "https://github.com/dheerajjha/mcp-migrate/issues/149"
 
 
-def run_check(root: Path, *, include_tests: bool = False):
+@dataclass
+class CheckResult:
+    """Everything one `check` produced.
+
+    `findings` excludes suppressed ones -- they are in `suppressed`, and
+    the score is computed without them. See suppress.apply for why, and
+    for what keeps that honest.
+    """
+
+    project: object
+    rules: dict
+    findings: list
+    value: int
+    grade: str
+    suppressed: list
+    suppressions: list
+    suppression_problems: list
+
+
+def run_check_detailed(root: Path, *, include_tests: bool = False) -> "CheckResult":
     project = load_project(root, include_tests=include_tests)
     rules = {r.id: r for r in all_rules()}
     findings = []
@@ -61,8 +82,27 @@ def run_check(root: Path, *, include_tests: bool = False):
             if view.files:
                 findings.extend(rule.check(view))
     findings.sort(key=lambda f: (SEV_ORDER.get(rules[f.rule_id].severity, 9), f.rule_id))
+
+    suppressions, problems = suppress_mod.collect(project)
+    findings, suppressed = suppress_mod.apply(findings, suppressions)
+
     value = score(findings, rules)
-    return project, rules, findings, value, letter(value)
+    return CheckResult(
+        project=project, rules=rules, findings=findings, value=value,
+        grade=letter(value), suppressed=suppressed,
+        suppressions=suppressions, suppression_problems=problems,
+    )
+
+
+def run_check(root: Path, *, include_tests: bool = False):
+    """The 5-tuple every existing caller unpacks.
+
+    `run_check_detailed` is the full result; this stays because a lot of
+    code -- tests included -- unpacks exactly five values, and widening a
+    tuple is the kind of change that breaks callers silently.
+    """
+    r = run_check_detailed(root, include_tests=include_tests)
+    return r.project, r.rules, r.findings, r.value, r.grade
 
 
 def _partial_coverage() -> tuple[int, int]:
@@ -159,6 +199,22 @@ def _print_language_hint(console, counts) -> None:
         )
 
 
+def _suppressed_dict(f, rules, result) -> dict:
+    """A suppressed finding, with the reason that suppressed it.
+
+    The reason is the point. A suppression list without reasons is a list
+    of findings somebody made disappear.
+    """
+    d = _finding_dict(f, rules)
+    reason = ""
+    for s in result.suppressions:
+        if str(s.path) == str(f.path) and s.line == f.line and f.rule_id.upper() in s.rule_ids:
+            reason = s.reason
+            break
+    d["reason"] = reason
+    return d
+
+
 def _finding_dict(f, rules) -> dict:
     d = {
         "rule": f.rule_id,
@@ -207,6 +263,47 @@ def _checked_something(project) -> bool:
     return any(f.language in SUPPORTED or f.language in PARTIAL for f in project.files)
 
 
+def _report_suppressions(console, result, *, show: bool) -> None:
+    """Say how many findings were suppressed -- always, not behind a flag.
+
+    A suppressed finding is one the grade no longer pays for, so the count
+    is part of reading the grade honestly. Hiding it behind a flag would
+    make this a way to quietly improve a score, which is exactly the
+    stale-claim problem #101 removed from the badge.
+    """
+    for problem in result.suppression_problems:
+        console.print(
+            f"[yellow]suppression ignored[/yellow]  {problem.location()}  {problem.message}"
+        )
+
+    stale = suppress_mod.unused(result.suppressions)
+    for s in stale:
+        console.print(
+            f"[dim]unused suppression[/dim]    {s.location()}  "
+            f"ignore[{', '.join(s.rule_ids)}] matched nothing -- fixed, or the code moved?"
+        )
+
+    if not result.suppressed:
+        return
+
+    console.print()
+    console.print(
+        f"[yellow]{len(result.suppressed)} finding(s) suppressed[/yellow] by inline "
+        f"`mcp-migrate: ignore` comments, and not counted against the grade."
+    )
+    if show:
+        for f in result.suppressed:
+            reason = next(
+                (s.reason for s in result.suppressions
+                 if str(s.path) == str(f.path) and s.line == f.line
+                 and f.rule_id.upper() in s.rule_ids),
+                "",
+            )
+            console.print(f"  [dim]{f.rule_id}  {f.location()}[/dim]  {reason or '(no reason given)'}")
+    else:
+        console.print("[dim]Run with --show-suppressions to see each one and its reason.[/dim]")
+
+
 def cmd_check(args) -> int:
     console = Console()
     root = Path(args.path).resolve()
@@ -217,7 +314,9 @@ def cmd_check(args) -> int:
         console.print(f"[bold red]No such path:[/bold red] {root}")
         return EXIT_UNSCANNABLE
 
-    project, rules, findings, value, grade = run_check(root, include_tests=args.include_tests)
+    result = run_check_detailed(root, include_tests=args.include_tests)
+    project, rules, findings = result.project, result.rules, result.findings
+    value, grade = result.value, result.grade
     counts = survey(root)
     reason = unscannable_reason(root, project, counts, include_tests=args.include_tests)
     sdk_info = detect_sdk(root)
@@ -238,6 +337,7 @@ def cmd_check(args) -> int:
                 "files_scanned": len(project.files),
                 "counts": _severity_counts(findings, rules),
                 "findings": [_finding_dict(f, rules) for f in findings],
+                "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
             }, indent=2))
             return EXIT_OK
         if reason:
@@ -257,6 +357,7 @@ def cmd_check(args) -> int:
                 # doesn't get is a grade.
                 "counts": _severity_counts(findings, rules),
                 "findings": [_finding_dict(f, rules) for f in findings],
+                "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
             }, indent=2))
             return _exit_for(findings, rules) if _checked_something(project) \
                 else EXIT_UNSCANNABLE
@@ -272,6 +373,7 @@ def cmd_check(args) -> int:
             "files_scanned": len(project.files),
             "counts": _severity_counts(findings, rules),
             "findings": [_finding_dict(f, rules) for f in findings],
+            "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
         }, indent=2))
         return _exit_for(findings, rules)
 
@@ -378,6 +480,8 @@ def cmd_check(args) -> int:
         console.print()
         return _exit_for(findings, rules) if _checked_something(project) \
             else EXIT_UNSCANNABLE
+
+    _report_suppressions(console, result, show=args.show_suppressions)
 
     n_python = sum(1 for f in project.files if f.language == "python")
     console.print(f"[dim]{n_python} Python files, {len(rules)} rules, spec {SPEC}[/dim]")
@@ -714,6 +818,10 @@ def main(argv=None) -> int:
     p_check = sub.add_parser("check", help="check a project")
     p_check.add_argument("path", nargs="?", default=".")
     p_check.add_argument("--json", action="store_true")
+    p_check.add_argument(
+        "--show-suppressions", action="store_true",
+        help="list every inline `mcp-migrate: ignore` suppression and its reason",
+    )
     p_check.add_argument(
         "--include-tests", action="store_true",
         help="also scan tests/, fixtures/, examples/, docs/, and test_*.py files "
