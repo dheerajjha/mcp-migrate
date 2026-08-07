@@ -14,6 +14,7 @@ from rich.table import Table
 
 from . import __version__
 from .fixers import all_fixers
+from . import sarif as sarif_mod
 from .grade import badge_url, letter, score
 from .languages import DISPLAY, PARTIAL, SUPPORTED, describe, primary, survey
 from .rules import all_rules
@@ -159,6 +160,20 @@ def _print_language_hint(console, counts) -> None:
         )
 
 
+def _output_format(args) -> str:
+    """Resolve `--format` and the older `--json` into one answer.
+
+    `--json` predates this and is depended on by anyone who scripted
+    against it, so it stays and means `--format json`. Keeping it as an
+    alias rather than a second, independently-settable boolean is what
+    stops the two from ever disagreeing.
+    """
+    fmt = getattr(args, "format", None)
+    if fmt:
+        return fmt
+    return "json" if getattr(args, "json", False) else "text"
+
+
 def _finding_dict(f, rules) -> dict:
     d = {
         "rule": f.rule_id,
@@ -222,7 +237,23 @@ def cmd_check(args) -> int:
     reason = unscannable_reason(root, project, counts, include_tests=args.include_tests)
     sdk_info = detect_sdk(root)
 
-    if args.json:
+    if _output_format(args) == "sarif":
+        # Emitted for every outcome, including the ungraded one: code
+        # scanning wants a run even when it is empty, or it cannot tell
+        # "checked, nothing found" from "never ran" and leaves resolved
+        # alerts open forever.
+        print(json.dumps(
+            sarif_mod.build(findings, rules, root, version=__version__, spec=SPEC),
+            indent=2,
+        ))
+        if sdk_info.is_sdk:
+            return EXIT_OK
+        if reason:
+            return _exit_for(findings, rules) if _checked_something(project) \
+                else EXIT_UNSCANNABLE
+        return _exit_for(findings, rules)
+
+    if _output_format(args) == "json":
         if sdk_info.is_sdk:
             print(json.dumps({
                 "tool": "mcp-migrate",
@@ -713,7 +744,15 @@ def main(argv=None) -> int:
 
     p_check = sub.add_parser("check", help="check a project")
     p_check.add_argument("path", nargs="?", default=".")
-    p_check.add_argument("--json", action="store_true")
+    p_check.add_argument(
+        "--format", choices=("text", "json", "sarif"),
+        help="output format (default: text). sarif is SARIF 2.1.0, for "
+             "GitHub code scanning.",
+    )
+    p_check.add_argument(
+        "--json", action="store_true",
+        help="alias for --format json, kept for compatibility",
+    )
     p_check.add_argument(
         "--include-tests", action="store_true",
         help="also scan tests/, fixtures/, examples/, docs/, and test_*.py files "
