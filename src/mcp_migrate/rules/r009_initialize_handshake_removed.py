@@ -9,7 +9,8 @@ from .base import Finding, Project, Rule
 # which is one of the most overloaded words in software: class
 # initializers, database `.initialize()` calls, config keys, ...).
 HANDSHAKE_CODE_RX = re.compile(
-    r"\bInitializeRequest\b|\bInitializeResult\b|\bInitializedNotification\b"
+    r"\bInitializeRequest(?:Params|Schema)?\b|\bInitializeResult(?:Schema)?\b"
+    r"|\bInitializedNotification(?:Schema)?\b"
 )
 
 # --- TypeScript -----------------------------------------------------------
@@ -24,7 +25,8 @@ HANDSHAKE_CODE_RX = re.compile(
 # needs to catch. Same treatment `r011_ping_removed.py` gives
 # `PingRequest\w*`, for the same reason.
 TS_HANDSHAKE_CODE_RX = (
-    r"\bInitializeRequest\w*|\bInitializeResult\w*|\bInitializedNotification\w*"
+    r"\bInitializeRequest(?:Params|Schema)?\b|\bInitializeResult(?:Schema)?\b"
+    r"|\bInitializedNotification(?:Schema)?\b"
 )
 
 # The wire name is spelled the same in both languages, and needs
