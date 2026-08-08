@@ -99,6 +99,18 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- **R007 and R018 no longer both report the same SDK symbol.**
+  ([#221](https://github.com/dheerajjha/mcp-migrate/issues/221))
+
+  `CreateMessageResultSchema` and a few other names sit at the intersection
+  of "Sampling is a deprecated core feature" (R007) and "server-initiated
+  sampling/createMessage was replaced by Multi Round-Trip Requests" (R018) —
+  both true, both firing on the same line, with two different severities. A
+  new `overlap.py` collapses a known-overlapping rule pair down to one
+  finding per location, keeping the more urgent rule's message and
+  appending the other's rather than dropping it. Only R007/R018 are in the
+  table today; two rules sharing a line by coincidence are left alone.
+
 - **Fixers no longer edit inside string literals.** A new
   `string_lines()` helper in `fixers/_textedit.py` marks every line that is
   part of a Python docstring or a TypeScript template literal, and the
