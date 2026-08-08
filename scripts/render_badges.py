@@ -31,18 +31,12 @@ ROOT = Path(__file__).resolve().parent.parent
 SERVERS = ROOT / "registry" / "servers"
 OUT = ROOT / "docs" / "badge"
 
+sys.path.insert(0, str(ROOT / "src"))
+
+from mcp_migrate.grade import BADGE_COLOR as GRADE_COLOR
+
 LABEL = "MCP 2026-07-28"
 
-# Must agree with how the grades read elsewhere, or the badge undermines
-# the thing it is reporting: a C rendered in green teaches the reader that
-# the colour means nothing, and then the next badge is not trusted either.
-GRADE_COLOR = {
-    "A": "brightgreen",
-    "B": "brightgreen",
-    "C": "yellow",
-    "D": "red",
-    "F": "red",
-}
 UNKNOWN_COLOR = "lightgrey"
 
 # A 404 renders as a broken image on a stranger's README. Anyone can point
