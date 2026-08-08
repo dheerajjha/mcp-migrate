@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 import render_board as rb
 import validate_registry as vr
 
@@ -68,6 +70,23 @@ def test_non_integer_score_is_an_error(tmp_path):
     path = _write(tmp_path, "acme-notes.yaml", content)
     errs = vr.validate(path)
     assert any("`score` must be an int 0-100" in e for e in errs)
+
+
+@pytest.mark.parametrize("suppressed", [0, 2])
+def test_non_negative_suppression_count_passes(tmp_path, suppressed):
+    content = VALID_ENTRY.replace(
+        "score: 97", f"score: 97\nsuppressed: {suppressed}"
+    )
+    path = _write(tmp_path, "acme-notes.yaml", content)
+    assert vr.validate(path) == []
+
+
+@pytest.mark.parametrize("value", ["-1", "1.5", '"2"', "true"])
+def test_invalid_suppression_count_is_an_error(tmp_path, value):
+    content = VALID_ENTRY.replace("score: 97", f"score: 97\nsuppressed: {value}")
+    path = _write(tmp_path, "acme-notes.yaml", content)
+    errs = vr.validate(path)
+    assert any("`suppressed` must be a non-negative int" in e for e in errs)
 
 
 def test_malformed_repo_string_is_an_error(tmp_path):
@@ -198,6 +217,29 @@ def test_render_board_sorts_by_grade_then_score(tmp_path, monkeypatch):
     assert rb.main() == 0
     text = readme.read_text()
     assert text.index("acme-notes") < text.index("low-grade")
+
+
+def test_render_board_marks_only_entries_with_suppressions(tmp_path, monkeypatch):
+    servers_dir = tmp_path / "servers"
+    servers_dir.mkdir()
+    (servers_dir / "acme-notes.yaml").write_text(
+        VALID_ENTRY.replace("score: 97", "score: 97\nsuppressed: 2")
+    )
+    (servers_dir / "plain.yaml").write_text(
+        VALID_ENTRY.replace("name: acme-notes", "name: plain")
+    )
+
+    readme = tmp_path / "README.md"
+    readme.write_text("<!-- BOARD:START -->\n<!-- BOARD:END -->\n")
+    monkeypatch.setattr(rb, "SERVERS", servers_dir)
+    monkeypatch.setattr(rb, "README", readme)
+
+    assert rb.main() == 0
+    text = readme.read_text()
+    acme_row = next(line for line in text.splitlines() if "acme-notes" in line)
+    plain_row = next(line for line in text.splitlines() if "plain" in line)
+    assert "**A** (2 suppressed)" in acme_row
+    assert "suppressed" not in plain_row
 
 
 def test_render_board_fails_cleanly_without_markers(tmp_path, monkeypatch):

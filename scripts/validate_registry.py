@@ -122,6 +122,12 @@ def validate(path: Path) -> list[str]:
             errs.append(f"{path.name}: `{key}` must be one of {sorted(allowed)}, got {data[key]!r}")
     if "score" in data and not (isinstance(data["score"], int) and 0 <= data["score"] <= 100):
         errs.append(f"{path.name}: `score` must be an int 0-100")
+    if "suppressed" in data and not (
+        isinstance(data["suppressed"], int)
+        and not isinstance(data["suppressed"], bool)
+        and data["suppressed"] >= 0
+    ):
+        errs.append(f"{path.name}: `suppressed` must be a non-negative int")
     if "repo" in data and isinstance(data["repo"], str) and not REPO_RX.match(data["repo"]):
         errs.append(f"{path.name}: `repo` must look like owner/name")
     if "name" in data and data["name"] != path.stem:

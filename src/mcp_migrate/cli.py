@@ -804,7 +804,8 @@ def cmd_entry(args) -> int:
         err.print(f"[bold red]No such path:[/bold red] {root}")
         return EXIT_UNSCANNABLE
 
-    project, _, findings, value, grade = run_check(root)
+    result = run_check_detailed(root)
+    project, value, grade = result.project, result.value, result.grade
     counts = survey(root)
 
     sdk_info = detect_sdk(root)
@@ -848,13 +849,16 @@ def cmd_entry(args) -> int:
 
     repo = args.repo or root.name
     slug = repo.split("/")[-1].lower().replace("_", "-")
+    suppressed_line = (
+        f"suppressed: {len(result.suppressed)}\n" if result.suppressed else ""
+    )
     body = f"""# registry/servers/{slug}.yaml
 name: {slug}
 repo: {repo}
 language: {language}
 grade: {grade}
 score: {value}
-checked_with: mcp-migrate {__version__}
+{suppressed_line}checked_with: mcp-migrate {__version__}
 spec: "{SPEC}"
 status: {"ready" if grade in "AB" else "migrating"}
 notes: >-

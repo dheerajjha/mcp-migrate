@@ -135,6 +135,7 @@ def test_cli_entry_command_prints_registry_yaml(capsys):
     assert "name: notes-mcp" in out
     assert "repo: acme/notes-mcp" in out
     assert "grade: A" in out
+    assert "suppressed:" not in out
 
 
 def test_unbounded_suffix_bounded_pattern_issue_87(tmp_path):

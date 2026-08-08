@@ -165,6 +165,19 @@ def test_the_suppression_count_is_printed_without_a_flag(tmp_path, capsys):
     assert "suppressed" in out
 
 
+def test_entry_carries_the_suppression_count(tmp_path, capsys):
+    body = "import httpx\n" + f"{PY_TRIGGER}  # mcp-migrate: ignore[R001] -- deliberate\n"
+
+    exit_code = main([
+        "entry", str(project(tmp_path, "server.py", body)),
+        "--repo", "acme/notes-mcp",
+    ])
+    out = capsys.readouterr().out
+
+    assert exit_code == 0
+    assert "suppressed: 1" in out
+
+
 def test_show_suppressions_lists_each_one_with_its_reason(tmp_path, capsys):
     body = "import httpx\n" + f"{PY_TRIGGER}  # mcp-migrate: ignore[R001] -- proxy shim\n"
     main(["check", str(project(tmp_path, "server.py", body)), "--show-suppressions"])
