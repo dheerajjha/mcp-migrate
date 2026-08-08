@@ -28,8 +28,15 @@ def main() -> int:
     for e in entries:
         repo = e.get("repo", "")
         notes = str(e.get("notes", "")).strip().replace("|", "\\|")
+        # `or 0` rather than a default: a `suppressed:` key written with no
+        # value parses as None, and None > 0 is a TypeError. validate_registry
+        # rejects that entry, but this script runs independently of it, and a
+        # traceback is a worse answer than a rendered board.
+        suppression_note = (
+            f" ({e['suppressed']} suppressed)" if (e.get("suppressed") or 0) > 0 else ""
+        )
         rows.append(
-            f"| [{e.get('name')}](https://github.com/{repo}) | **{e.get('grade')}** "
+            f"| [{e.get('name')}](https://github.com/{repo}) | **{e.get('grade')}**{suppression_note} "
             f"| {EMOJI.get(e.get('status'), e.get('status'))} | {e.get('language')} | {notes} |"
         )
 

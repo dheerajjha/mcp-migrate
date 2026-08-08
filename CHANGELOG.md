@@ -65,6 +65,24 @@ All notable changes to this project are documented here.
   suppressing their line silences those rules for that whole file. Documented
   in the README; every other rule is genuinely per-line.
 
+- **A registry entry records what its grade was computed from.**
+  `mcp-migrate entry` emits an optional `suppressed:` count when the scan
+  had any, `registry/schema.yaml` accepts it, `validate_registry.py`
+  enforces a non-negative int, and the board marks those rows.
+  ([#220](https://github.com/dheerajjha/mcp-migrate/issues/220), @soltonigiri)
+
+  Suppression deliberately does not cost the grade, and that decision was
+  fine while the number stayed in a terminal. It stopped being fine the
+  moment the same grade could be submitted to a public board with nothing
+  anywhere recording that findings were silenced — the board's whole claim
+  is that its grades are reproducible, and a grade you cannot reproduce
+  without knowing what was suppressed does not meet that bar.
+
+  Optional and omitted when zero, so the sixteen existing entries and the
+  rendered board are byte-identical. Whether the **badge** should change is
+  a separate and genuinely contested question, still open in
+  [discussion #210](https://github.com/dheerajjha/mcp-migrate/discussions/210).
+
 ### Changed
 
 - **`check --json` gained two required keys, `suppressed` and

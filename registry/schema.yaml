@@ -4,6 +4,7 @@ repo:          {required: true,  type: str,  desc: "owner/name on GitHub"}
 language:      {required: true,  type: str,  enum: [python, typescript, go, rust, java, csharp, ruby, other]}
 grade:         {required: true,  type: str,  enum: [A, B, C, D, F]}
 score:         {required: true,  type: int,  range: [0, 100]}
+suppressed:    {required: false, type: int,  desc: "non-negative count of findings suppressed when the grade was computed"}
 checked_with:  {required: true,  type: str,  desc: "mcp-migrate <version>"}
 spec:          {required: true,  type: str,  desc: "spec revision checked against"}
 status:        {required: true,  type: str,  enum: [ready, migrating, unmaintained]}
