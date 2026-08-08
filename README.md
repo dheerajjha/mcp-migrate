@@ -56,12 +56,40 @@ Zero findings prints `Grade A` and a ready-to-paste badge instead. Add
 rule at 5 rows with a "+N more" line so it stays readable; JSON always has
 every finding).
 
+`--rule R001` (repeatable, e.g. `--rule R001 --rule R017`) restricts which
+rules run at all, not just what's printed -- the natural way to adopt this
+tool on an existing codebase is one rule at a time. An unknown id is a usage
+error (exit `2`), same as `--write --dry-run` together on `fix`. A grade
+computed from part of the rule set isn't a grade, so `--rule` suppresses it
+entirely rather than printing one that only ever looked at a subset.
+
+`--severity breaking` (repeatable, composes with `--rule`) only changes what
+gets *displayed* -- the grade and the exit code are always computed from every
+finding, so two runs against the same code never disagree just because
+someone chose to look at a narrower slice of the output.
+
+`--fail-on {breaking,deprecated,advisory,never}` (default `breaking`) is the
+minimum severity that fails the run. A team mid-migration that has decided
+`deprecated` blocks a merge sets `--fail-on deprecated`; a team still
+adopting the tool that wants findings reported without failing the build yet
+sets `--fail-on never` -- which is not the same as `check || true`: exit `2`
+("could not check it") is a refusal, not a severity, and no `--fail-on`
+setting suppresses it.
+
 ### `check --json` contract
 
 `--json` emits one JSON object with these always-present top-level keys:
 `tool`, `version`, `spec`, `path`, `scannable`, `languages`, `grade`,
-`score`, `files_scanned`, `counts`, `findings`, `suppressed`, and
-`unused_suppressions`.
+`score`, `rule_filtered`, `filters`, `fail_on`, `files_scanned`, `counts`,
+`findings`, `suppressed`, and `unused_suppressions`.
+
+- `filters` is `{"rule": [...], "severity": [...]}`, the ids/severities
+  passed to `--rule`/`--severity`, empty arrays when neither was given.
+- `rule_filtered` is `true` whenever `--rule` was given. `counts` and
+  `findings` reflect the requested filters; `grade` and `score` are always
+  `null` when `rule_filtered` is `true`.
+- `fail_on` echoes the `--fail-on` threshold that decided the process exit
+  code, so a consumer doesn't have to re-derive it.
 
 Conditional keys:
 
@@ -296,9 +324,10 @@ Every change is tagged `safe` or `review` in the diff output:
   args did the old transport need that the new one doesn't take?).
 
 Pass `--safe-only` to apply only `safe` fixers, `--rule R006` to restrict to
-one rule, `--include-tests` to also fix test/fixture paths (skipped by
-default, same rule as `check`). Only 19 of the 21 rules ship a fixer at all --
-see the table below and [`mcp-migrate fixers`](#other-commands). Fixers are
+one or more rules (repeatable, same flag `check` uses), `--include-tests` to
+also fix test/fixture paths (skipped by default, same rule as `check`).
+Only 19 of the 21 rules ship a fixer at all -- see the table below and
+[`mcp-migrate fixers`](#other-commands). Fixers are
 deliberately conservative: when a fixer can't be sure a transformation is
 correct, it leaves the source untouched rather than guess. A wrong fix that
 silently corrupts your server is worse than reporting the finding and doing

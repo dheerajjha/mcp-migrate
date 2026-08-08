@@ -64,6 +64,9 @@ class DummyArgs:
         self.path = str(path)
         self.json = json_output
         self.include_tests = include_tests
+        self.rule = None
+        self.severity = None
+        self.fail_on = "breaking"
 
 
 def test_cli_check_sdk_json_output(tmp_path: Path, capsys):

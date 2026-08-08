@@ -66,7 +66,9 @@ class CheckResult:
     suppression_problems: list
 
 
-def run_check_detailed(root: Path, *, include_tests: bool = False) -> "CheckResult":
+def run_check_detailed(
+    root: Path, *, include_tests: bool = False, rule_ids: frozenset[str] | None = None,
+) -> "CheckResult":
     project = load_project(root, include_tests=include_tests)
     rules = {r.id: r for r in all_rules()}
     findings = []
@@ -76,6 +78,8 @@ def run_check_detailed(root: Path, *, include_tests: bool = False) -> "CheckResu
     # difference between a fast scan and a slow one.
     views: dict[str, Project] = {}
     for rule in rules.values():
+        if rule_ids is not None and rule.id not in rule_ids:
+            continue
         for language in rule.languages:
             if language not in views:
                 views[language] = project.for_language(language)
@@ -275,10 +279,23 @@ def _severity_counts(findings, rules) -> dict:
     return counts
 
 
-def _exit_for(findings, rules) -> int:
-    """Exit code from findings alone: 1 if anything breaking, else 0."""
+FAIL_ON_CHOICES = ("breaking", "deprecated", "advisory", "never")
+
+
+def _exit_for(findings, rules, fail_on: str = "breaking") -> int:
+    """Exit code from findings alone: 1 if anything at or above `fail_on`'s
+    severity, else 0.
+
+    `fail_on="never"` never fails on findings -- it does not touch
+    EXIT_UNSCANNABLE, which callers gate on `_checked_something` before
+    they ever get here. "Could not check" isn't a severity, and no
+    threshold set here is allowed to suppress it.
+    """
+    if fail_on == "never":
+        return EXIT_OK
+    threshold = SEV_ORDER[fail_on]
     return EXIT_FINDINGS if any(
-        rules[f.rule_id].severity == "breaking" for f in findings
+        SEV_ORDER.get(rules[f.rule_id].severity, 9) <= threshold for f in findings
     ) else EXIT_OK
 
 
@@ -353,9 +370,31 @@ def cmd_check(args) -> int:
         console.print(f"[bold red]No such path:[/bold red] {root}")
         return EXIT_UNSCANNABLE
 
-    result = run_check_detailed(root, include_tests=args.include_tests)
-    project, rules, findings = result.project, result.rules, result.findings
+    rule_ids = frozenset(args.rule) if args.rule else None
+    severities = frozenset(args.severity) if args.severity else None
+    fail_on = args.fail_on
+
+    result = run_check_detailed(root, include_tests=args.include_tests, rule_ids=rule_ids)
+    project, rules, all_findings = result.project, result.rules, result.findings
     value, grade = result.value, result.grade
+    # A grade computed from a subset of the rule set isn't a grade -- #178.
+    # `--rule` restricts which rules ran (not just what's printed), so
+    # suppressing the grade here is more honest than reporting one that
+    # only ever looked at part of the ruleset.
+    if rule_ids is not None:
+        value, grade = None, None
+    # `--severity` only ever changes what's *displayed*. Scoring and the
+    # exit code below both read `all_findings`, never this filtered list,
+    # so two runs against the same code never disagree just because
+    # someone chose to look at a narrower slice of the output.
+    findings = (
+        [f for f in all_findings if rules[f.rule_id].severity in severities]
+        if severities is not None else all_findings
+    )
+    filters = {
+        "rule": sorted(rule_ids) if rule_ids else [],
+        "severity": sorted(severities) if severities else [],
+    }
     counts = survey(root)
     reason = unscannable_reason(root, project, counts, include_tests=args.include_tests)
     sdk_info = detect_sdk(root)
@@ -372,9 +411,9 @@ def cmd_check(args) -> int:
         if sdk_info.is_sdk:
             return EXIT_OK
         if reason:
-            return _exit_for(findings, rules) if _checked_something(project) \
+            return _exit_for(all_findings, rules, fail_on) if _checked_something(project) \
                 else EXIT_UNSCANNABLE
-        return _exit_for(findings, rules)
+        return _exit_for(all_findings, rules, fail_on)
 
     if _output_format(args) == "json":
         if sdk_info.is_sdk:
@@ -389,6 +428,9 @@ def cmd_check(args) -> int:
                 "languages": dict(counts),
                 "grade": None,
                 "score": None,
+                "rule_filtered": rule_ids is not None,
+                "filters": filters,
+                "fail_on": fail_on,
                 "files_scanned": len(project.files),
                 "counts": _severity_counts(findings, rules),
                 "findings": [_finding_dict(f, rules) for f in findings],
@@ -407,6 +449,9 @@ def cmd_check(args) -> int:
                 "languages": dict(counts),
                 "grade": None,
                 "score": None,
+                "rule_filtered": rule_ids is not None,
+                "filters": filters,
+                "fail_on": fail_on,
                 "files_scanned": len(project.files),
                 # Findings can be non-empty here: a partially-supported
                 # language gets read by the rules that cover it. What it
@@ -416,7 +461,7 @@ def cmd_check(args) -> int:
                 "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
                 "unused_suppressions": _unused_suppression_dicts(result),
             }, indent=2))
-            return _exit_for(findings, rules) if _checked_something(project) \
+            return _exit_for(all_findings, rules, fail_on) if _checked_something(project) \
                 else EXIT_UNSCANNABLE
         print(json.dumps({
             "tool": "mcp-migrate",
@@ -427,13 +472,16 @@ def cmd_check(args) -> int:
             "languages": dict(counts),
             "grade": grade,
             "score": value,
+            "rule_filtered": rule_ids is not None,
+            "filters": filters,
+            "fail_on": fail_on,
             "files_scanned": len(project.files),
             "counts": _severity_counts(findings, rules),
             "findings": [_finding_dict(f, rules) for f in findings],
             "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
             "unused_suppressions": _unused_suppression_dicts(result),
         }, indent=2))
-        return _exit_for(findings, rules)
+        return _exit_for(all_findings, rules, fail_on)
 
     console.print()
     console.print(f"[bold]mcp-migrate[/bold] [dim]v{__version__}[/dim]  ->  {root.name}")
@@ -536,7 +584,7 @@ def cmd_check(args) -> int:
                 "rules that didn't run.[/dim]"
             )
         console.print()
-        return _exit_for(findings, rules) if _checked_something(project) \
+        return _exit_for(all_findings, rules, fail_on) if _checked_something(project) \
             else EXIT_UNSCANNABLE
 
     _report_suppressions(console, result, show=args.show_suppressions)
@@ -568,52 +616,86 @@ def cmd_check(args) -> int:
             f"[dim]Also found {describe(unread)} -- not read at all. This grade covers "
             f"the Python only.[/dim]"
         )
+    if rule_ids is not None:
+        console.print(
+            f"[dim]Restricted to rule(s) {', '.join(sorted(rule_ids))} -- a grade computed "
+            "from part of the rule set isn't a grade, so none is shown here.[/dim]"
+        )
+
     console.print()
 
-    if not findings:
-        console.print("[bold green]Grade A.[/bold green] Nothing to fix. Add your badge:")
-        console.print(f"[dim]![MCP {SPEC}]({badge_url(grade)})[/dim]")
-        return 0
+    if not all_findings:
+        if rule_ids is not None:
+            console.print("[bold green]Nothing found[/bold green] for the selected rule(s).")
+        else:
+            console.print("[bold green]Grade A.[/bold green] Nothing to fix. Add your badge:")
+            console.print(f"[dim]![MCP {SPEC}]({badge_url(grade)})[/dim]")
+        return _exit_for(all_findings, rules, fail_on)
 
-    counts = {"breaking": 0, "deprecated": 0, "advisory": 0}
-    for f in findings:
-        counts[rules[f.rule_id].severity] += 1
+    # The severity breakdown printed with the grade below is always the
+    # true one, from `all_findings` -- it has to match the score, which
+    # --severity never touches. `findings` (possibly narrower) only
+    # decides what the table above it lists.
+    sev_counts = {"breaking": 0, "deprecated": 0, "advisory": 0}
+    for f in all_findings:
+        sev_counts[rules[f.rule_id].severity] += 1
 
-    table = Table(show_header=True, header_style="bold", box=None, pad_edge=False)
-    table.add_column("", width=10)
-    table.add_column("rule", width=6)
-    table.add_column("where", overflow="fold")
-    table.add_column("what")
-    # `findings` is sorted by (severity-order-of-rule, rule_id), so every
-    # rule's findings are contiguous -- group them to cap how many rows
-    # any single rule can spam into the table. The JSON output above is
-    # unaffected; this only trims what prints to the terminal.
-    for rule_id, group in itertools.groupby(findings, key=lambda f: f.rule_id):
-        group = list(group)
-        sev = rules[rule_id].severity
-        for f in group[:MAX_SHOWN_PER_RULE]:
-            table.add_row(f"[{SEV_STYLE[sev]}]{sev}[/]", f.rule_id, f.location(), f.message)
-        extra = len(group) - MAX_SHOWN_PER_RULE
-        if extra > 0:
-            table.add_row("", "", "", f"[dim]+{extra} more {rule_id} finding(s) (see --json for all)[/dim]")
-    console.print(table)
-    console.print()
+    if severities is not None and not findings:
+        console.print(
+            f"[yellow]0 finding(s) match --severity {', '.join(sorted(severities))}[/yellow] "
+            f"(of {len(all_findings)} total -- not shown, but still counted below)."
+        )
+        console.print()
+    else:
+        if severities is not None:
+            console.print(
+                f"[dim]{len(findings)} of {len(all_findings)} finding(s) shown "
+                f"(--severity {', '.join(sorted(severities))}).[/dim]"
+            )
+            console.print()
 
-    for rule_id in dict.fromkeys(f.rule_id for f in findings):
-        rule = rules[rule_id]
-        console.print(f"  [bold]{rule.id}[/bold]  {rule.title}")
-        console.print(f"  [dim]{rule.spec_ref}[/dim]")
-        console.print(f"  {rule.fix}")
+        table = Table(show_header=True, header_style="bold", box=None, pad_edge=False)
+        table.add_column("", width=10)
+        table.add_column("rule", width=6)
+        table.add_column("where", overflow="fold")
+        table.add_column("what")
+        # `findings` is sorted by (severity-order-of-rule, rule_id), so every
+        # rule's findings are contiguous -- group them to cap how many rows
+        # any single rule can spam into the table. The JSON output above is
+        # unaffected; this only trims what prints to the terminal.
+        for rule_id, group in itertools.groupby(findings, key=lambda f: f.rule_id):
+            group = list(group)
+            sev = rules[rule_id].severity
+            for f in group[:MAX_SHOWN_PER_RULE]:
+                table.add_row(f"[{SEV_STYLE[sev]}]{sev}[/]", f.rule_id, f.location(), f.message)
+            extra = len(group) - MAX_SHOWN_PER_RULE
+            if extra > 0:
+                table.add_row("", "", "", f"[dim]+{extra} more {rule_id} finding(s) (see --json for all)[/dim]")
+        console.print(table)
         console.print()
 
-    grade_style = "bold green" if grade in "AB" else "bold yellow" if grade == "C" else "bold red"
-    console.print(
-        f"[{grade_style}]Grade {grade}[/] ({value}/100)  "
-        f"{counts['breaking']} breaking, {counts['deprecated']} deprecated, {counts['advisory']} advisory"
-    )
+        for rule_id in dict.fromkeys(f.rule_id for f in findings):
+            rule = rules[rule_id]
+            console.print(f"  [bold]{rule.id}[/bold]  {rule.title}")
+            console.print(f"  [dim]{rule.spec_ref}[/dim]")
+            console.print(f"  {rule.fix}")
+            console.print()
+
+    if grade is not None:
+        grade_style = "bold green" if grade in "AB" else "bold yellow" if grade == "C" else "bold red"
+        console.print(
+            f"[{grade_style}]Grade {grade}[/] ({value}/100)  "
+            f"{sev_counts['breaking']} breaking, {sev_counts['deprecated']} deprecated, {sev_counts['advisory']} advisory"
+        )
+        console.print()
+        console.print("[dim]Add your server to the board:  mcp-migrate entry --repo owner/name[/dim]")
+    else:
+        console.print(
+            f"[dim]No grade shown: {sev_counts['breaking']} breaking, "
+            f"{sev_counts['deprecated']} deprecated, {sev_counts['advisory']} advisory.[/dim]"
+        )
     console.print()
-    console.print("[dim]Add your server to the board:  mcp-migrate entry --repo owner/name[/dim]")
-    return 1 if counts["breaking"] else 0
+    return _exit_for(all_findings, rules, fail_on)
 
 
 def cmd_rules(args) -> int:
@@ -629,10 +711,10 @@ def cmd_rules(args) -> int:
     return 0
 
 
-def _select_fixers(*, safe_only: bool = False, rule: str | None = None):
+def _select_fixers(*, safe_only: bool = False, rule_ids: frozenset[str] | None = None):
     fixers = all_fixers()
-    if rule:
-        fixers = [fx for fx in fixers if fx.rule_id == rule]
+    if rule_ids is not None:
+        fixers = [fx for fx in fixers if fx.rule_id in rule_ids]
     if safe_only:
         fixers = [fx for fx in fixers if fx.confidence == "safe"]
     return fixers
@@ -659,14 +741,15 @@ def _findings_for(root: Path, files: list[SourceFile]):
     return findings
 
 
-def run_fix(root: Path, *, include_tests: bool = False, safe_only: bool = False, rule: str | None = None):
+def run_fix(root: Path, *, include_tests: bool = False, safe_only: bool = False,
+            rule_ids: frozenset[str] | None = None):
     """Compute fixes for every file under `root`, without touching disk.
 
     Returns (project, list of (SourceFile, new_text, [change descriptions])
     for files that actually changed, sorted fixers actually available).
     """
     project = load_project(root, include_tests=include_tests)
-    fixers = _select_fixers(safe_only=safe_only, rule=rule)
+    fixers = _select_fixers(safe_only=safe_only, rule_ids=rule_ids)
     results = []
     for f in project.files:
         text = f.text
@@ -702,13 +785,14 @@ def cmd_fix(args) -> int:
         return 2
 
     root = Path(args.path).resolve()
-    fixers = _select_fixers(safe_only=args.safe_only, rule=args.rule)
+    rule_ids = frozenset(args.rule) if args.rule else None
+    fixers = _select_fixers(safe_only=args.safe_only, rule_ids=rule_ids)
     if not fixers:
         console.print("[yellow]No fixers match the given filters (--rule / --safe-only).[/yellow]")
         return 0
 
     project, _, results = run_fix(
-        root, include_tests=args.include_tests, safe_only=args.safe_only, rule=args.rule,
+        root, include_tests=args.include_tests, safe_only=args.safe_only, rule_ids=rule_ids,
     )
 
     if not results:
@@ -877,6 +961,8 @@ def main(argv=None) -> int:
     parser.add_argument("--version", action="version", version=__version__)
     sub = parser.add_subparsers(dest="command")
 
+    all_rule_ids = sorted(r.id for r in all_rules())
+
     p_check = sub.add_parser("check", help="check a project")
     p_check.add_argument("path", nargs="?", default=".")
     p_check.add_argument(
@@ -887,6 +973,24 @@ def main(argv=None) -> int:
     p_check.add_argument(
         "--json", action="store_true",
         help="alias for --format json, kept for compatibility",
+    )
+    p_check.add_argument(
+        "--rule", action="append", choices=all_rule_ids, metavar="RULE",
+        help="restrict to this rule id, e.g. --rule R001 (repeatable). A grade "
+             "computed from part of the rule set isn't a grade, so this "
+             "suppresses it -- see `mcp-migrate rules` for the full list.",
+    )
+    p_check.add_argument(
+        "--severity", action="append", choices=("breaking", "deprecated", "advisory"),
+        metavar="SEVERITY",
+        help="only show findings at this severity (repeatable, composes with "
+             "--rule). Changes what's displayed, never the grade.",
+    )
+    p_check.add_argument(
+        "--fail-on", choices=FAIL_ON_CHOICES, default="breaking",
+        help="minimum severity that fails the run (default: breaking). "
+             "\"never\" never fails on findings -- exit 2 for a tree this "
+             "cannot read happens regardless of this setting.",
     )
     p_check.add_argument(
         "--show-suppressions", action="store_true",
@@ -913,7 +1017,10 @@ def main(argv=None) -> int:
         "--safe-only", action="store_true",
         help="only apply \"safe\"-confidence fixers, skip anything needing review",
     )
-    p_fix.add_argument("--rule", help="restrict to a single rule id, e.g. R001")
+    p_fix.add_argument(
+        "--rule", action="append", choices=all_rule_ids, metavar="RULE",
+        help="restrict to this rule id, e.g. --rule R001 (repeatable)",
+    )
     p_fix.add_argument(
         "--include-tests", action="store_true",
         help="also fix tests/, fixtures/, examples/, docs/, and test_*.py files "
