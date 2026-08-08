@@ -1,6 +1,7 @@
 """Turn findings into a single letter you can put in a README badge."""
 from __future__ import annotations
 
+from .constants import GRADE_COLOR
 from .rules.base import Finding, Rule
 
 WEIGHT = {"breaking": 25, "deprecated": 8, "advisory": 3}
@@ -12,8 +13,6 @@ WEIGHT = {"breaking": 25, "deprecated": 8, "advisory": 3}
 # mcp-atlassian's R003 hit 19 times before it was tightened, for 475 raw
 # penalty points -- more than 4x over from one rule alone.
 RULE_CAP = {"breaking": 25, "deprecated": 12, "advisory": 6}
-
-BADGE_COLOR = {"A": "brightgreen", "B": "green", "C": "yellow", "D": "orange", "F": "red"}
 
 
 def score(findings: list[Finding], rules: dict[str, Rule]) -> int:
@@ -45,5 +44,5 @@ def letter(value: int) -> str:
 
 
 def badge_url(grade: str) -> str:
-    color = BADGE_COLOR.get(grade, "lightgrey")
+    color = GRADE_COLOR.get(grade, "lightgrey")
     return f"https://img.shields.io/badge/MCP%202026--07--28-{grade}-{color}"
