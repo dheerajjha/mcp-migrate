@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-08
+
 ### Added
 
 - **SARIF 2.1.0 output: `check --format sarif`.** Findings land in GitHub
