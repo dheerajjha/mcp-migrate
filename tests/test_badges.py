@@ -53,13 +53,24 @@ def test_every_grade_renders_a_valid_endpoint_document(grade):
 
 
 @pytest.mark.parametrize("grade,color", [
-    ("A", "brightgreen"), ("B", "brightgreen"),
-    ("C", "yellow"), ("D", "red"), ("F", "red"),
+    ("A", "brightgreen"), ("B", "green"),
+    ("C", "yellow"), ("D", "orange"), ("F", "red"),
 ])
 def test_colours_match_the_grades(grade, color):
     # A C rendered in green teaches the reader that the colour means
-    # nothing, and then the next badge is not trusted either.
+    # nothing, and then the next badge is not trusted either. These are
+    # the same colours the README's grade table and `check`'s own badge
+    # suggestion use -- see test_badge_colours_match_the_cli below.
     assert badge_for(entry(grade=grade))["color"] == color
+
+
+def test_badge_colours_match_the_cli():
+    # GRADE_COLOR here is imported from mcp_migrate.grade.BADGE_COLOR, the
+    # same map `check` uses for its own suggested badge -- so this mostly
+    # guards against a future local re-definition drifting from it again.
+    from mcp_migrate.grade import BADGE_COLOR
+
+    assert GRADE_COLOR == BADGE_COLOR
 
 
 def test_an_unlisted_repo_renders_rather_than_404s(tmp_path):
@@ -99,7 +110,7 @@ def test_a_multi_server_repo_reports_its_worst_grade():
     group = [entry(name="a", grade="A"), entry(name="b", grade="D"), entry(name="c", grade="B")]
     doc = badge_for_repo(group)
     assert doc["message"] == "D", "a repo containing a D must not advertise an A"
-    assert doc["color"] == "red"
+    assert doc["color"] == "orange"
     assert "3 servers" in doc["label"]
 
 

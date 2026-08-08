@@ -4,6 +4,17 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The badge `check` prints and the board's live badges disagreed on
+  colour.** `grade.py`'s `BADGE_COLOR` (what `badge_url()` suggests you
+  paste) and `render_badges.py`'s `GRADE_COLOR` (what actually renders
+  under `docs/badge/`) had drifted apart on B and D — a B rendered green
+  from the CLI and brightgreen on the board, and on the board A and B were
+  the same colour. `render_badges.py` now imports `BADGE_COLOR` from
+  `grade.py` instead of keeping its own copy, so there is one map, not two
+  that can disagree. ([#224](https://github.com/dheerajjha/mcp-migrate/issues/224))
+
 ## [0.3.0] - 2026-08-08
 
 ### Added
