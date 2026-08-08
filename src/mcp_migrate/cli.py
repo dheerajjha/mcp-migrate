@@ -14,9 +14,10 @@ from rich.console import Console
 from rich.table import Table
 
 from . import __version__
+from . import overlap as overlap_mod
+from . import sarif as sarif_mod
 from . import suppress as suppress_mod
 from .fixers import all_fixers
-from . import sarif as sarif_mod
 from .grade import badge_url, letter, score
 from .languages import DISPLAY, PARTIAL, SUPPORTED, describe, primary, survey
 from .rules import all_rules
@@ -86,6 +87,11 @@ def run_check_detailed(root: Path, *, include_tests: bool = False) -> "CheckResu
 
     suppressions, problems = suppress_mod.collect(project)
     findings, suppressed = suppress_mod.apply(findings, suppressions)
+    # After suppression, not before: a suppression targets one rule id by
+    # name (`ignore[R007]`), and merging first would hide the id a user
+    # meant to suppress behind whichever rule won the merge.
+    findings = overlap_mod.dedupe(findings, rules)
+    findings.sort(key=lambda f: (SEV_ORDER.get(rules[f.rule_id].severity, 9), f.rule_id))
 
     value = score(findings, rules)
     return CheckResult(

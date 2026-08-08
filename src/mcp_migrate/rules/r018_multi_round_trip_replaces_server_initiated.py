@@ -6,9 +6,11 @@ from .base import Finding, Project, Rule, wire_method
 # they're the exact same signal r007_deprecated_features.py already ships
 # with for these two features, just now also reported as `breaking` under
 # SEP-2322's replacement of the whole server-initiated-request pattern (as
-# opposed to r007's "still deprecated, not yet gone" framing) -- so some
-# double-reporting between R007 and R018 on the same line is expected, not
-# a bug.
+# opposed to r007's "still deprecated, not yet gone" framing). The two
+# rules firing on the same line is expected, not a bug -- both claims are
+# true -- but showing the reader two contradicting severities for one
+# symbol isn't, so `overlap.py` collapses the pair back into a single
+# finding at report time (see #221).
 FEATURES_CODE = {
     r"\blist_roots\b|\bListRootsRequest(?:Params|Schema)?\b|\bListRootsResult(?:Schema)?\b": "Server-initiated roots/list",
     r"\bcreate_message\b|\bCreateMessageRequest(?:Params|Schema)?\b|\bCreateMessageResult(?:Schema)?\b": "Server-initiated sampling/createMessage",
