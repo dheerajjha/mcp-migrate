@@ -53,12 +53,14 @@ def test_every_grade_renders_a_valid_endpoint_document(grade):
 
 
 @pytest.mark.parametrize("grade,color", [
-    ("A", "brightgreen"), ("B", "brightgreen"),
-    ("C", "yellow"), ("D", "red"), ("F", "red"),
+    ("A", "brightgreen"), ("B", "green"),
+    ("C", "yellow"), ("D", "orange"), ("F", "red"),
 ])
 def test_colours_match_the_grades(grade, color):
     # A C rendered in green teaches the reader that the colour means
     # nothing, and then the next badge is not trusted either.
+    # All five grades must have distinct colours so each carries a
+    # specific, trustworthy signal.
     assert badge_for(entry(grade=grade))["color"] == color
 
 
@@ -99,7 +101,7 @@ def test_a_multi_server_repo_reports_its_worst_grade():
     group = [entry(name="a", grade="A"), entry(name="b", grade="D"), entry(name="c", grade="B")]
     doc = badge_for_repo(group)
     assert doc["message"] == "D", "a repo containing a D must not advertise an A"
-    assert doc["color"] == "red"
+    assert doc["color"] == "orange"
     assert "3 servers" in doc["label"]
 
 
