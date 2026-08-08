@@ -4,6 +4,31 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`check --rule`, `check --severity`, and `check --fail-on`.**
+  ([#178](https://github.com/dheerajjha/mcp-migrate/issues/178))
+
+  `--rule R001` (repeatable) restricts which rules run at all, matching
+  `fix --rule`, which is now also repeatable. A grade computed from part of
+  the rule set isn't a grade, so `--rule` suppresses `grade`/`score` rather
+  than reporting one; an unknown id is a usage error (exit `2`).
+
+  `--severity breaking` (repeatable, composes with `--rule`) only changes
+  what's displayed. The grade and the exit code are always computed from
+  every finding, so filtering the output can never change the answer to
+  "does this pass".
+
+  `--fail-on {breaking,deprecated,advisory,never}` (default `breaking`,
+  so nothing changes for existing users) replaces the previously-hardcoded
+  "fail only on breaking" exit logic. `never` still leaves exit `2`
+  ("could not check it") alone — that's a refusal, not a severity, and
+  `check || true` already threw it away by accident, which is the failure
+  this flag exists to let people avoid on purpose.
+
+  `check --json` gains `rule_filtered`, `filters`, and `fail_on` keys —
+  see the README's `check --json` contract section.
+
 ## [0.3.0] - 2026-08-08
 
 ### Added
