@@ -185,7 +185,7 @@ def test_twenty_hits_of_one_breaking_rule_cost_25_points_not_500():
     assert 20 * WEIGHT["breaking"] > 100
     value = score(findings, rules)
     assert value == 100 - RULE_CAP["breaking"]
-    assert value == 75
+    assert value == 50
 
 
 def test_rule_cap_applies_independently_per_rule():
@@ -207,6 +207,21 @@ def test_single_hit_is_unaffected_by_the_cap():
     rules = {"R900": _FakeBreakingRule()}
     findings = [Finding(rule_id="R900", message="x")]
     assert score(findings, rules) == 100 - WEIGHT["breaking"]
+
+
+def test_firings_to_cap_does_not_invert_with_severity():
+    """#214: RULE_CAP used to be hand-picked independently of WEIGHT, so
+    `breaking` reached its cap in fewer repeated firings than `advisory`
+    despite being the more severe category -- a second breaking hit was
+    already free while a second advisory hit still counted. The cap is now
+    derived from WEIGHT by a single multiple, so "firings until the cap
+    stops adding penalty" must be the same for every severity."""
+    firings_to_cap = {
+        severity: RULE_CAP[severity] / WEIGHT[severity] for severity in WEIGHT
+    }
+    assert len(set(firings_to_cap.values())) == 1, (
+        f"firings-to-cap should be identical across severities, got {firings_to_cap}"
+    )
 
 
 # --- CLI display cap (findings table capped at 5/rule, JSON stays full) ---

@@ -87,6 +87,24 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- **`RULE_CAP` is now derived from `WEIGHT`, not hand-picked.**
+  ([#214](https://github.com/dheerajjha/mcp-migrate/issues/214))
+
+  `WEIGHT` and `RULE_CAP` were chosen independently and never checked
+  against each other. Expressed as firings-to-cap, that inverted severity:
+  `breaking` reached its cap after a single hit (weight 25, cap 25) while
+  `advisory` took two (weight 3, cap 6) — a server's second breaking
+  finding was already free of penalty while its second advisory finding
+  still counted. `RULE_CAP` is now `WEIGHT[severity] * CAP_MULTIPLE` with
+  `CAP_MULTIPLE = 2` for every severity, so firings-to-cap is the same
+  across the board: `breaking` 50, `deprecated` 16, `advisory` 6
+  (unchanged, since 3 × 2 was already 6).
+
+  This moves scores for any project whose penalty was sitting at the old
+  `breaking`/`deprecated` cap. The registry board is not re-verified in
+  this PR — that needs re-running `check` against each entry's upstream
+  source, which is a separate pass once the multiple itself is agreed.
+
 - **`check --json` gained two required keys, `suppressed` and
   `unused_suppressions`.** Both are always present, empty array included. A
   consumer validating against the 0.2.0 schema will reject 0.3.0 output until
