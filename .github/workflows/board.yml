@@ -4,7 +4,18 @@ on:
   push:
     branches: [main]
     paths:
+      # The data, and everything that decides how the data renders. Watching
+      # `registry/**` alone was wrong in a way that hid itself: change a
+      # colour or a row format and the workflow never fires, so the committed
+      # board and badges keep serving the *old* rendering with no diff, no
+      # failure, and nothing to notice. #226 changed the grade colours and
+      # would have left all 16 badge endpoints stale exactly this way.
       - "registry/**"
+      - "scripts/render_board.py"
+      - "scripts/render_badges.py"
+      - "scripts/validate_registry.py"
+      - "src/mcp_migrate/constants.py"
+      - ".github/workflows/board.yml"
 
 permissions:
   contents: write

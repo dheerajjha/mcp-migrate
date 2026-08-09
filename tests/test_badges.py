@@ -200,3 +200,39 @@ def test_grades_match_the_registry_yaml(tmp_path):
         data = yaml.safe_load(path.read_text())
         doc = json.loads((tmp_path / f"{data['name']}.json").read_text())
         assert doc["message"] == data["grade"], data["name"]
+
+
+def test_the_committed_endpoints_are_what_the_renderer_produces_today(tmp_path):
+    """The checked-in `docs/badge/*.json` must match a fresh render.
+
+    Every other test here renders into a tmp dir and checks *that*, which
+    says the generator is correct and nothing at all about the files
+    actually being served. Those are the files on other people's READMEs.
+
+    This is the drift the Board workflow could not catch on its own: it
+    fires on a path list, so a change to the renderer that never touches
+    `registry/**` regenerates nothing, and the committed endpoints go on
+    serving the previous rendering with no diff and no failure. #226
+    changed every grade colour and would have left all 27 stale exactly
+    that way. A path list is a reminder; this is a check.
+    """
+    render(load_entries(), tmp_path)
+    committed = ROOT / "docs" / "badge"
+
+    fresh_files = sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*.json"))
+    live_files = sorted(p.relative_to(committed) for p in committed.rglob("*.json"))
+    assert live_files == fresh_files, (
+        "docs/badge/ has files the renderer no longer produces (or is missing "
+        "new ones) -- run `python scripts/render_badges.py` and commit the result"
+    )
+
+    stale = [
+        str(rel)
+        for rel in fresh_files
+        if (committed / rel).read_text() != (tmp_path / rel).read_text()
+    ]
+    assert not stale, (
+        f"{len(stale)} committed badge endpoint(s) disagree with the renderer: "
+        f"{', '.join(stale[:5])}{' ...' if len(stale) > 5 else ''} -- run "
+        "`python scripts/render_badges.py` and commit the result"
+    )
