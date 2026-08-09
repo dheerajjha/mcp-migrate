@@ -215,7 +215,13 @@ def test_issue_87_false_positives_are_silent_in_both_languages(rule_id, source, 
 def test_issue_87_bounding_does_not_cost_the_real_sdk_names(rule_id, source, ext, tmp_path):
     (tmp_path / f"m{ext}").write_text(source + "\n", encoding="utf-8")
     _, _, findings, _, _ = run_check(tmp_path)
-    assert rule_id in {f.rule_id for f in findings}, (
+    # R007's CreateMessageResult case also trips R018 (see #221) -- the two
+    # are a known overlapping pair, so overlap.dedupe() folds them into one
+    # R018 finding that carries R007's message rather than dropping it.
+    fired = rule_id in {f.rule_id for f in findings} or any(
+        f"Also flagged by {rule_id}:" in f.message for f in findings
+    )
+    assert fired, (
         f"{rule_id} no longer catches {source!r} in a {ext} file -- bounding overshot"
     )
 
