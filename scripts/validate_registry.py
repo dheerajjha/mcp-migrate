@@ -33,6 +33,7 @@ ENUMS = {
     "status": {"ready", "migrating", "unmaintained"},
 }
 REPO_RX = re.compile(r"^[\w.-]+/[\w.-]+$")
+SHA_RX = re.compile(r"^[0-9a-f]{7,40}$")
 
 # Our language values spelled the way GitHub's linguist spells them.
 # `other` is deliberately absent: it claims nothing, so there is nothing
@@ -130,6 +131,8 @@ def validate(path: Path) -> list[str]:
         errs.append(f"{path.name}: `suppressed` must be a non-negative int")
     if "repo" in data and isinstance(data["repo"], str) and not REPO_RX.match(data["repo"]):
         errs.append(f"{path.name}: `repo` must look like owner/name")
+    if "sha" in data and not (isinstance(data["sha"], str) and SHA_RX.match(data["sha"])):
+        errs.append(f"{path.name}: `sha` must be a 7-40 character hex commit SHA")
     if "name" in data and data["name"] != path.stem:
         errs.append(f"{path.name}: `name` ({data['name']}) must match the filename ({path.stem})")
     if "notes" in data and isinstance(data["notes"], str) and len(data["notes"]) > 200:

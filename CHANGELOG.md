@@ -29,6 +29,25 @@ All notable changes to this project are documented here.
   `check --json` gains `rule_filtered`, `filters`, and `fail_on` keys —
   see the README's `check --json` contract section.
 
+- **A registry entry records the commit its grade was computed against.**
+  `mcp-migrate entry` emits an optional `sha:` when the scanned tree is a
+  git checkout, `registry/schema.yaml` accepts it, and
+  `validate_registry.py` enforces a 7-40 character hex string.
+  ([#223](https://github.com/dheerajjha/mcp-migrate/issues/223),
+  [#230](https://github.com/dheerajjha/mcp-migrate/pull/230), @waterlemonnn)
+
+  `repo:` names a repository, not a state — re-verifying all sixteen board
+  entries found four repos had moved upstream since the previous
+  verification a day earlier. All four still graded identically, but that
+  was luck: nothing on the board would have shown a reader that the thing
+  being claimed about had changed underneath the claim. With a SHA, a
+  drifted entry becomes something a re-verification script can catch
+  instead of something that just happens to still be true.
+
+  The sixteen existing entries are backfilled with the SHA they verify
+  against today, each noted as backfilled rather than original — they
+  predate this field and are not invalidated by its landing.
+
 ### Changed
 
 - **`RULE_CAP` is now derived from `WEIGHT` instead of hand-picked, and two

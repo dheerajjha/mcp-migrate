@@ -5,6 +5,7 @@ import ast
 import difflib
 import itertools
 import json
+import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass
@@ -875,6 +876,29 @@ def cmd_fix(args) -> int:
     return 0
 
 
+def _git_sha(root: Path) -> str | None:
+    """The commit `root` is checked out at, or None.
+
+    None covers two different situations on purpose: a tree that isn't a
+    git checkout at all (people do scan unpacked tarballs, and that's a
+    legitimate thing to scan), and a tree where git is present but the
+    question couldn't be answered (detached weirdness, git missing from
+    PATH, whatever). Either way a missing sha is honest silence about what
+    was scanned, not a claim -- it must never surface as an error.
+    """
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    sha = result.stdout.strip()
+    return sha or None
+
+
 def cmd_entry(args) -> int:
     """Print a ready-to-commit registry entry for this project.
 
@@ -942,6 +966,8 @@ def cmd_entry(args) -> int:
     suppressed_line = (
         f"suppressed: {len(result.suppressed)}\n" if result.suppressed else ""
     )
+    sha = _git_sha(root)
+    sha_line = f"sha: {sha}\n" if sha else ""
     body = f"""# registry/servers/{slug}.yaml
 name: {slug}
 repo: {repo}
@@ -950,7 +976,7 @@ grade: {grade}
 score: {value}
 {suppressed_line}checked_with: mcp-migrate {__version__}
 spec: "{SPEC}"
-status: {"ready" if grade in "AB" else "migrating"}
+{sha_line}status: {"ready" if grade in "AB" else "migrating"}
 notes: >-
   Replace this line with one sentence about what your server does.
 """

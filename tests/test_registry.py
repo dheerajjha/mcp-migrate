@@ -89,6 +89,21 @@ def test_invalid_suppression_count_is_an_error(tmp_path, value):
     assert any("`suppressed` must be a non-negative int" in e for e in errs)
 
 
+@pytest.mark.parametrize("sha", ["a1b2c3d", "0123456789abcdef0123456789abcdef01234567"])
+def test_valid_sha_passes(tmp_path, sha):
+    content = VALID_ENTRY.replace("score: 97", f"score: 97\nsha: {sha}")
+    path = _write(tmp_path, "acme-notes.yaml", content)
+    assert vr.validate(path) == []
+
+
+@pytest.mark.parametrize("sha", ["abc123", "not-hex-at-all", "0123456789abcdef0123456789abcdef012345678"])
+def test_invalid_sha_is_an_error(tmp_path, sha):
+    content = VALID_ENTRY.replace("score: 97", f"score: 97\nsha: {sha}")
+    path = _write(tmp_path, "acme-notes.yaml", content)
+    errs = vr.validate(path)
+    assert any("`sha` must be a 7-40 character hex commit SHA" in e for e in errs)
+
+
 def test_malformed_repo_string_is_an_error(tmp_path):
     content = VALID_ENTRY.replace("repo: acme/notes-mcp", "repo: not-a-valid-repo-string")
     path = _write(tmp_path, "acme-notes.yaml", content)
