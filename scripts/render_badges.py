@@ -28,22 +28,14 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+
 SERVERS = ROOT / "registry" / "servers"
 OUT = ROOT / "docs" / "badge"
 
 LABEL = "MCP 2026-07-28"
 
-# Must agree with how the grades read elsewhere, or the badge undermines
-# the thing it is reporting: a C rendered in green teaches the reader that
-# the colour means nothing, and then the next badge is not trusted either.
-GRADE_COLOR = {
-    "A": "brightgreen",
-    "B": "brightgreen",
-    "C": "yellow",
-    "D": "red",
-    "F": "red",
-}
-UNKNOWN_COLOR = "lightgrey"
+from mcp_migrate.constants import GRADE_COLOR, UNKNOWN_COLOR  # noqa: E402,F401
 
 # A 404 renders as a broken image on a stranger's README. Anyone can point
 # an endpoint URL at us -- including at a repo we have never scanned -- so
