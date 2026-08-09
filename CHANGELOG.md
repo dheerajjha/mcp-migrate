@@ -189,6 +189,16 @@ All notable changes to this project are documented here.
   stays silent when the `tools` value is itself a call rather than guess.
   ([#91](https://github.com/dheerajjha/mcp-migrate/issues/91))
 
+- **Project config: `[tool.mcp-migrate]` in `pyproject.toml`, or a standalone
+  `.mcp-migrate.toml` for projects with none.** Extra `skip` directories,
+  `include-tests`, and per-rule `rules.R0NN = "off"` no longer have to be
+  retyped as flags on every invocation or drift between a developer's shell
+  and CI. A flag still beats config, and config still beats the built-in
+  default. A disabled rule never runs, so it costs nothing against the
+  grade and is never mistaken for a pass -- `check` reports how many rules
+  config switched off, and why, in every run, the same way it already
+  reports suppressions. ([#183](https://github.com/dheerajjha/mcp-migrate/issues/183))
+
 ## [0.3.0] - 2026-08-08
 
 ### Added

@@ -88,7 +88,16 @@ def _language_of(path: Path) -> str | None:
     return SOURCE_EXTENSIONS.get(path.suffix.lower())
 
 
-def load_project(root: Path, *, include_tests: bool = False) -> Project:
+def load_project(
+    root: Path, *, include_tests: bool = False, extra_skip: frozenset[str] = frozenset(),
+) -> Project:
+    """`extra_skip` is project-config-supplied directory names (#183), on
+    top of the built-in `SKIP_DIRS` -- vendored SDKs, generated clients, a
+    `proto/` tree someone doesn't want scanned. Matched the same way
+    `SKIP_DIRS` is: by segment name anywhere under `root`, not a full path,
+    so `skip = ["vendor"]` catches `vendor/` wherever it lives in the tree.
+    """
+    skip_dirs = SKIP_DIRS | extra_skip
     files: list[SourceFile] = []
     for path in sorted(root.rglob("*")):
         if not path.is_file():
@@ -103,7 +112,7 @@ def load_project(root: Path, *, include_tests: bool = False) -> Project:
         # exactly the situation for mcp-migrate's own fixtures, which live
         # under tests/fixtures/<name> and are scanned with that directory
         # as root), and that shouldn't cause every file in it to vanish.
-        if any(part in SKIP_DIRS for part in rel.parts[:-1]):
+        if any(part in skip_dirs for part in rel.parts[:-1]):
             continue
         if not include_tests and _is_test_path(rel):
             continue
