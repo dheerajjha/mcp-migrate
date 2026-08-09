@@ -19,6 +19,15 @@ INLINE_FUNCTION_VALUE_RX = re.compile(
 # this is always the client side of the wire, never a handler returning tools.
 METHOD_FIELD_VALUE_RX = re.compile(r"""(?:["']method["']|\bmethod)\s*:\s*$""")
 
+# `return { tools: alphabetize(registry) }` -- the sort may live one function
+# away, extracted into a helper. Chasing that is a call graph, not a line
+# scan, and this is a regex-based tool by design (#91). Rather than resolve
+# the call -- or worse, keep scanning past it and stumble onto some sibling
+# statement's `.sort(` -- treat any call assigned to `tools` as unprovable
+# either way and stay silent. A wrong "no sort" against a helper that does
+# sort costs more than a missed one against a helper that doesn't.
+TOOLS_CALL_RESULT_RX = re.compile(r"""(?:["']tools["']|\btools\b)\s*:\s*[A-Za-z_$][\w.$]*\s*\(""")
+
 
 def _is_config_or_request_use(line: str, start: int, end: int) -> bool:
     """True when the matched wire method name is naming a method rather than
@@ -203,6 +212,8 @@ class NondeterministicToolOrder(Rule):
                 window = "\n".join(f.lines[line_no - 1:end_line])
                 if "sorted(" in window or ".sort(" in window:
                     continue
+                if TOOLS_CALL_RESULT_RX.search(window):
+                    continue
                 out.append(self.finding(
                     "Tools are returned without an explicit sort.", f, line_no, line.strip(),
                 ))
@@ -232,6 +243,8 @@ class NondeterministicToolOrder(Rule):
 
                 window = "\n".join(f.lines[line_no - 1:end_line])
                 if TS_SORT_RX.search(window):
+                    continue
+                if TOOLS_CALL_RESULT_RX.search(window):
                     continue
                 out.append(self.finding(
                     "Tools are returned without an explicit sort.", f, line_no, line.strip(),

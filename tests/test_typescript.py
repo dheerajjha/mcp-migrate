@@ -1565,6 +1565,24 @@ items.sort((a, b) => a.id - b.id);
     assert findings[0].line == 5
 
 
+def test_r004_stays_silent_when_handler_returns_a_helper_call(tmp_path):
+    # #91: the sort lives one function away, inside `alphabetize`. Chasing
+    # that is a call graph, not a line scan -- silence is the honest answer.
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const alphabetize = (xs: Tool[]) => xs.toSorted((a, b) => a.name.localeCompare(b.name));
+
+const server = new Server({ name: "example", version: "1.0.0" });
+server.setRequestHandler(ListToolsRequestSchema, () => {
+  return { tools: alphabetize(registry) };
+});
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert NondeterministicToolOrder().check(project) == []
+
+
 def test_r004_scopes_long_handlers_correctly_past_40_lines(tmp_path):
     padding = "\n".join(f"  const step{i} = {i};" for i in range(45))
     code = f"""\

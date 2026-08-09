@@ -123,6 +123,13 @@ async def list_tools() -> list[Tool]:
   answers "is this your problem to fix?", not "is every result correct?"
 - **`ttlMs` is milliseconds, not seconds** -- `300_000` above is five
   minutes, not five hundred thousand seconds.
+- **R016's presence check is a literal-token search, and a computed
+  property key can dodge it.** `const TTL = "ttl" + "Ms"; ({ tools: [],
+  [TTL]: 1000 })` puts `ttlMs` on the wire but never spells it as one token
+  in the file, so it reads as missing ([#91](https://github.com/dheerajjha/mcp-migrate/issues/91)).
+  This is an accepted won't-fix: it's an exotic way to write the field
+  name, and catching it would mean evaluating string expressions instead
+  of scanning text.
 - **`cacheScope` values are semantic, not just plumbing.** Pick per-client
   scope for anything that varies by caller identity or auth, not just
   because it's the "safe-sounding" default -- a resource list scoped

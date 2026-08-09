@@ -15,6 +15,15 @@ CACHEABLE_HANDLER_RX = re.compile(
 # enough to count the metadata as handled, because a wrong "still missing"
 # (breaking) claim costs far more than a generous read of "present" does.
 # Searched via search_wire to ignore comments and docstrings.
+#
+# Known limitation (#91): this looks for the literal token, so a computed
+# property key built from string concatenation --
+#   const TTL = "ttl" + "Ms";
+#   ({ tools: [], [TTL]: 1000 })
+# -- never spells "ttlMs" anywhere in the file and reads as absent even
+# though it's on the wire. Accepted as a won't-fix: this is an exotic way
+# to write the field name, and catching it would mean evaluating string
+# expressions rather than scanning text.
 CACHE_META_MENTION_RX = re.compile(r"ttlMs|cacheScope")
 
 # The other, and more likely, way these fields get onto the wire.

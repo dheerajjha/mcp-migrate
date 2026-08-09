@@ -139,6 +139,14 @@ All notable changes to this project are documented here.
   the generator works and says nothing about the files actually being
   served on other people's READMEs.
 
+- **R004 no longer flags `tools/list` handlers that delegate sorting to a
+  helper.** `return { tools: alphabetize(registry) }` was reported as
+  missing an explicit sort even when `alphabetize` does sort — the
+  handler-body window scanned for `.sort(`/`sorted(` never sees inside the
+  helper. Resolving the call is a call graph, not a line scan, so R004 now
+  stays silent when the `tools` value is itself a call rather than guess.
+  ([#91](https://github.com/dheerajjha/mcp-migrate/issues/91))
+
 ## [0.3.0] - 2026-08-08
 
 ### Added

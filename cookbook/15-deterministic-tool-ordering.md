@@ -79,6 +79,12 @@ def list_tools():
   dict-shaped tools, or falling back to whatever unique field you do have
   -- the fixer's `Tool(...).name` assumption doesn't generalize past the
   SDK's own model class.
+- **The rule itself stays silent when the sort lives one function away.**
+  A handler that returns `{"tools": alphabetize(registry)}` isn't scanned
+  any further -- `alphabetize` might sort, might not, and resolving it
+  would mean following a call graph instead of scanning lines ([#91](https://github.com/dheerajjha/mcp-migrate/issues/91)).
+  Extracting the sort into a helper is legitimate code; the rule would
+  rather miss that case than wrongly accuse it of not sorting.
 
 ## Spec link
 
