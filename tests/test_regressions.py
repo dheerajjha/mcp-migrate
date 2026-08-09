@@ -784,6 +784,50 @@ def test_r004_still_fires_on_every_real_handler_shape_ts(tmp_path):
     assert lines == {4, 7, 11}, lines
 
 
+# --- 11. a handler that returns a helper's call result -----------------
+#
+# #91: the sort can live one function away, in a helper extracted out of
+# the handler body. The window scanned for `.sort(`/`sorted(` never sees
+# it -- and resolving the call is a call graph, not a line scan. Rather
+# than risk a wrong "no sort" against code that does sort, stay silent
+# when the `tools` value is itself a call.
+
+R004_HELPER_CALL_TS = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const alphabetize = (xs) => xs.toSorted((a, b) => a.name.localeCompare(b.name));
+
+const server = new Server({ name: "example", version: "1.0.0" });
+server.setRequestHandler(ListToolsRequestSchema, () => {
+  return { tools: alphabetize(registry) };
+});
+"""
+
+R004_HELPER_CALL_PY = """\
+def alphabetize(xs):
+    return sorted(xs, key=lambda t: t.name)
+
+
+@server.list_tools()
+async def list_tools():
+    return {"tools": alphabetize(registry)}
+"""
+
+
+@pytest.mark.parametrize(
+    "filename,source",
+    [("server.ts", R004_HELPER_CALL_TS), ("server.py", R004_HELPER_CALL_PY)],
+)
+def test_r004_stays_silent_when_tools_value_is_a_call(tmp_path, filename, source):
+    (tmp_path / filename).write_text(source)
+    findings = NondeterministicToolOrder().check(load_project(tmp_path))
+    assert findings == [], (
+        "the sort lives inside the call -- unprovable either way from a "
+        f"line scan, so silence is the honest answer: {[f.message for f in findings]}"
+    )
+
+
 def test_r004_still_fires_on_every_real_handler_shape_python(tmp_path):
     (tmp_path / "server.py").write_text(
         "import mcp\n\n\n"
