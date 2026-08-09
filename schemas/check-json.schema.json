@@ -12,6 +12,9 @@
     "languages",
     "grade",
     "score",
+    "rule_filtered",
+    "filters",
+    "fail_on",
     "files_scanned",
     "counts",
     "findings",
@@ -65,6 +68,46 @@
       ],
       "minimum": 0,
       "maximum": 100
+    },
+    "rule_filtered": {
+      "type": "boolean",
+      "description": "true when --rule restricted which rules ran. A grade computed from part of the rule set isn't a grade, so grade/score are null whenever this is true."
+    },
+    "filters": {
+      "type": "object",
+      "required": [
+        "rule",
+        "severity"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "rule": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^R[0-9]{3}$"
+          }
+        },
+        "severity": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "breaking",
+              "deprecated",
+              "advisory"
+            ]
+          }
+        }
+      }
+    },
+    "fail_on": {
+      "enum": [
+        "breaking",
+        "deprecated",
+        "advisory",
+        "never"
+      ],
+      "description": "the --fail-on threshold used to compute the process exit code."
     },
     "files_scanned": {
       "type": "integer",
@@ -261,6 +304,28 @@
         "required": [
           "sdk_reason"
         ],
+        "properties": {
+          "grade": {
+            "const": null
+          },
+          "score": {
+            "const": null
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "rule_filtered": {
+            "const": true
+          }
+        },
+        "required": [
+          "rule_filtered"
+        ]
+      },
+      "then": {
         "properties": {
           "grade": {
             "const": null

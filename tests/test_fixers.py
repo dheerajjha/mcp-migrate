@@ -1514,7 +1514,7 @@ def test_safe_only_skips_review_confidence_fixers(roundtrip_copy, capsys):
 
 
 def test_rule_filter_restricts_to_one_fixer(roundtrip_copy):
-    project, fixers, results = run_fix(roundtrip_copy, rule="R005")
+    project, fixers, results = run_fix(roundtrip_copy, rule_ids=frozenset({"R005"}))
     assert [fx.rule_id for fx in fixers] == ["R005"]
     applied_rule_ids = {fx.rule_id for _, _, changes in results for fx, _ in changes}
     assert applied_rule_ids == {"R005"}
