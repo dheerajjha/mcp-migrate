@@ -12,7 +12,16 @@ WEIGHT = {"breaking": 25, "deprecated": 8, "advisory": 3}
 # call sites) can single-handedly zero a project's score. Real evidence:
 # mcp-atlassian's R003 hit 19 times before it was tightened, for 475 raw
 # penalty points -- more than 4x over from one rule alone.
-RULE_CAP = {"breaking": 25, "deprecated": 12, "advisory": 6}
+#
+# The cap is derived from WEIGHT, not hand-picked: CAP_MULTIPLE is how many
+# firings of a rule it takes before the cap kicks in, and that multiple is
+# the same for every severity. Picking RULE_CAP independently of WEIGHT (as
+# a previous version of this file did) let the two disagree on how quickly
+# repetition should stop mattering -- breaking findings capped out after 1
+# firing while advisory ones got 2, which is backwards from what anyone
+# actually wants. See #214.
+CAP_MULTIPLE = 2
+RULE_CAP = {severity: weight * CAP_MULTIPLE for severity, weight in WEIGHT.items()}
 
 
 def score(findings: list[Finding], rules: dict[str, Rule]) -> int:
