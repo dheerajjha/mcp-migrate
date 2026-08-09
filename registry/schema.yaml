@@ -7,6 +7,13 @@ score:         {required: true,  type: int,  range: [0, 100]}
 suppressed:    {required: false, type: int,  desc: "non-negative count of findings suppressed when the grade was computed"}
 checked_with:  {required: true,  type: str,  desc: "mcp-migrate <version>"}
 spec:          {required: true,  type: str,  desc: "spec revision checked against"}
+# The commit `repo` was at when this entry was graded. Without it, `repo`
+# names a moving target and a published grade can never be checked against
+# the thing it was actually a claim about -- see #223. Optional because the
+# 16 entries that predate this field can't be invalidated by its landing,
+# and because `mcp-migrate entry` can only fill it in when the tree it
+# scanned is a git checkout in the first place.
+sha:           {required: false, type: str,  desc: "commit SHA the entry was graded against, 7-40 hex chars"}
 status:        {required: true,  type: str,  enum: [ready, migrating, unmaintained]}
 notes:         {required: true,  type: str,  desc: "one sentence, what it does"}
 homepage:      {required: false, type: str}

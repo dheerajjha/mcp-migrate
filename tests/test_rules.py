@@ -136,6 +136,9 @@ def test_cli_entry_command_prints_registry_yaml(capsys):
     assert "repo: acme/notes-mcp" in out
     assert "grade: A" in out
     assert "suppressed:" not in out
+    # CLEAN lives inside this project's own git checkout, so the entry
+    # command can (and should) find a commit to attribute the grade to.
+    assert "sha: " in out
 
 
 def test_unbounded_suffix_bounded_pattern_issue_87(tmp_path):

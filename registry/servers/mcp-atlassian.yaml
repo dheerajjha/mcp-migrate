@@ -5,6 +5,10 @@ grade: C
 score: 60
 checked_with: mcp-migrate 0.3.0
 spec: "2026-07-28"
+# backfilled 2026-08-09: re-verified against current HEAD, not the
+# commit this entry was originally graded from -- that predates the
+# `sha` field. See #223.
+sha: 12fb6fa9e75de20fa70f56ae0d896a79c5a38c4e
 status: migrating
 submitted_by: project
 notes: >-
