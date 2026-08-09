@@ -239,3 +239,52 @@ def test_prose_fixer_counts_match_all_fixers():
         f"cookbook README's prose fixer count is stale: expected {expected!r}. "
         f"all_fixers() covers {n_fixers} rules."
     )
+
+
+# --- README.md's grade table ---------------------------------------------
+
+def test_readme_grade_table_matches_the_code():
+    """README's `Score | Grade | Badge color` table is the fourth document
+    that makes factual claims about the code, and until now nothing checked
+    it.
+
+    That gap is not hypothetical -- it is how #224 happened. Two colour maps
+    disagreed for long enough to ship, and the tie-break turned out to be
+    that README had documented the right answer the whole time while one of
+    the maps quietly contradicted it. A table nobody verifies is not
+    documentation, it is a second source of truth.
+
+    Both columns are checked: the colour against `GRADE_COLOR`, and the
+    score bands against `letter()` itself rather than a copy of its
+    thresholds -- asserting the boundary and the value just below it, so a
+    band edited in one place and not the other fails here.
+    """
+    from mcp_migrate.constants import GRADE_COLOR
+    from mcp_migrate.grade import letter
+
+    readme = (ROOT / "README.md").read_text()
+    _header, rows = _table_after(readme, "| Score  | Grade | Badge color   |")
+
+    documented = {grade: colour for _score, grade, colour in rows}
+    assert documented == GRADE_COLOR, (
+        "README's grade table disagrees with GRADE_COLOR in "
+        "src/mcp_migrate/constants.py -- one of them is lying to a "
+        f"maintainer about what their badge looks like.\n"
+        f"  README:    {documented}\n"
+        f"  constants: {GRADE_COLOR}"
+    )
+
+    for score_range, grade, _colour in rows:
+        low, high = (int(n) for n in score_range.split("-"))
+        assert letter(low) == grade, (
+            f"README says {low} is a {grade}, letter() says {letter(low)}"
+        )
+        assert letter(high) == grade, (
+            f"README says {high} is a {grade}, letter() says {letter(high)}"
+        )
+        if low > 0:
+            assert letter(low - 1) != grade, (
+                f"README puts the {grade} band's floor at {low}, but "
+                f"letter({low - 1}) is also {grade} -- the band starts lower "
+                "than the table claims"
+            )
