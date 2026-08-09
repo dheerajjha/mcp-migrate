@@ -185,7 +185,12 @@ def test_twenty_hits_of_one_breaking_rule_cost_25_points_not_500():
     assert 20 * WEIGHT["breaking"] > 100
     value = score(findings, rules)
     assert value == 100 - RULE_CAP["breaking"]
-    assert value == 50
+    # Deliberately also asserted as a literal. The line above is true for any
+    # cap, so on its own it would keep passing while the number every
+    # published grade is computed from moved underneath it. This one has to
+    # be edited by hand, which is the point: changing it means re-grading
+    # the board, and that should never happen quietly. See #214/#227.
+    assert value == 75
 
 
 def test_rule_cap_applies_independently_per_rule():

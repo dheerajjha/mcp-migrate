@@ -20,7 +20,31 @@ WEIGHT = {"breaking": 25, "deprecated": 8, "advisory": 3}
 # repetition should stop mattering -- breaking findings capped out after 1
 # firing while advisory ones got 2, which is backwards from what anyone
 # actually wants. See #214.
-CAP_MULTIPLE = 2
+#
+# The multiple is 1 because of what the alternatives did to real projects,
+# not on taste. Every multiple fixes the inversion equally -- what it
+# actually selects is how harshly we grade, and 14 of the 16 board servers
+# do not move at either setting. The two that do:
+#
+#     multiple   caps        mcp-atlassian   mcp-server-git
+#     1          25/ 8/3     C 60 -> C 64    D 54 -> D 58
+#     2          50/16/6     C 60 -> F 31    D 54 -> F 25
+#     3          75/24/9     C 60 -> F  6    D 54 -> F 25
+#
+# Those projects did not change; only our arithmetic would have. Publishing
+# two new F grades as a side effect of an internal cleanup is a claim about
+# somebody else's code that the cleanup does not earn -- and the A-F
+# boundaries in letter() were themselves tuned when caps were 25/12/6, so
+# raising caps without revisiting them shifts the whole distribution down
+# rather than fixing the inversion.
+#
+# The cost is real and worth stating: at 1, the cap binds immediately, so a
+# rule's 2nd firing is free and its 20th costs the same as its 2nd.
+# Repetition stops carrying any signal at all. Whether it should -- and
+# whether the letter boundaries need recalibrating alongside it -- is a
+# deliberate scoring decision, tracked separately rather than smuggled in
+# here. See the discussion on #227.
+CAP_MULTIPLE = 1
 RULE_CAP = {severity: weight * CAP_MULTIPLE for severity, weight in WEIGHT.items()}
 
 

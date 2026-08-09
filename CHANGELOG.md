@@ -29,6 +29,97 @@ All notable changes to this project are documented here.
   `check --json` gains `rule_filtered`, `filters`, and `fail_on` keys —
   see the README's `check --json` contract section.
 
+### Changed
+
+- **`RULE_CAP` is now derived from `WEIGHT` instead of hand-picked, and two
+  published scores move up.**
+  ([#214](https://github.com/dheerajjha/mcp-migrate/issues/214),
+  [#227](https://github.com/dheerajjha/mcp-migrate/pull/227), @waterlemonnn)
+
+  `WEIGHT` and `RULE_CAP` were chosen independently and never checked
+  against each other. Expressed as firings-to-cap, that inverted severity:
+  `breaking` reached its cap after a single hit (weight 25, cap 25) while
+  `advisory` took two (weight 3, cap 6) — a server's second breaking
+  finding was already free while its second advisory finding still counted.
+  `RULE_CAP` is now `WEIGHT[severity] * CAP_MULTIPLE`, one multiple for
+  every severity, so the inversion cannot come back by hand-editing one
+  number.
+
+  `CAP_MULTIPLE` is **1**, and the reason is empirical rather than
+  aesthetic. Every multiple fixes the inversion equally; what it actually
+  selects is how harshly we grade. All 16 board servers were re-scanned at
+  each candidate — 14 do not move at any of them, and the two that do:
+
+  | multiple | caps (b/d/a) | mcp-atlassian | mcp-server-git |
+  | --- | --- | --- | --- |
+  | **1** | 25/8/3 | C 60 → **C 64** | D 54 → **D 58** |
+  | 2 | 50/16/6 | C 60 → **F 31** | D 54 → **F 25** |
+  | 3 | 75/24/9 | C 60 → **F 6** | D 54 → **F 25** |
+
+  Neither project changed; only our arithmetic would have. Publishing two
+  new F grades as a side effect of an internal cleanup is a claim about
+  somebody else's code that the cleanup does not earn — and the A–F
+  boundaries in `letter()` were tuned when caps were 25/12/6, so raising
+  caps without revisiting them shifts the whole distribution down rather
+  than fixing the inversion.
+
+  The cost, stated plainly: at 1 the cap binds immediately, so a rule's 2nd
+  firing is free and its 20th costs the same as its 2nd — repetition now
+  carries no signal at all. Whether it should, and whether the letter
+  boundaries want recalibrating alongside it, is a deliberate scoring
+  decision left to its own change.
+
+  `mcp-atlassian` (64) and `mcp-server-git` (58) are updated in the
+  registry. Both keep their letter, so the board table and all 27 badge
+  endpoints are byte-identical.
+
+### Fixed
+
+- **R007 and R018 no longer both report the same SDK symbol on one line.**
+  ([#221](https://github.com/dheerajjha/mcp-migrate/issues/221),
+  [#225](https://github.com/dheerajjha/mcp-migrate/pull/225), @waterlemonnn)
+
+  `CreateMessageResultSchema` and a few other names sit at the intersection
+  of "Sampling is a deprecated core feature" (R007) and "server-initiated
+  `sampling/createMessage` was replaced by Multi Round-Trip Requests"
+  (R018) — both true, both firing on the same line, at two different
+  severities. A new `overlap.py` collapses a known-overlapping rule pair to
+  one finding per location, keeping the more urgent rule's message and
+  appending the other's rather than dropping it. Only R007/R018 are in the
+  table; two rules sharing a line by coincidence are left alone.
+
+  Verified against real code rather than fixtures: `mcp-server-git` goes
+  from `R007 ×3` to `R007 ×2`. No board grade or score moved.
+
+  #221 stays **open**, deliberately. The merge keys on `(path, line)`, so
+  the pair still double-reports when the two rules describe the same
+  migration from different lines — which `mcp-server-git` also does. That
+  is the right conservative default (same-symbol-different-line is not
+  something a line number can assert) but it means the issue is narrowed,
+  not closed.
+
+- **One grade→colour map instead of two that disagreed.**
+  ([#224](https://github.com/dheerajjha/mcp-migrate/issues/224),
+  [#226](https://github.com/dheerajjha/mcp-migrate/pull/226), @Jah-yee)
+
+  `grade.py` rendered B as `green` and D as `orange`; `render_badges.py`
+  rendered them `brightgreen` and `red`. A B-graded maintainer was handed a
+  badge URL that did not match their own board row, and on the board A/B
+  and D/F were each a single colour — a five-value signal collapsed to
+  three. Both now import one map from `src/mcp_migrate/constants.py`,
+  keeping the five-step scale.
+
+  The 27 committed badge endpoints were regenerated to match; 15 changed.
+  `.github/workflows/board.yml` only triggered on `registry/**`, so a
+  change to the *renderer* regenerated nothing and the endpoints would have
+  gone on serving the old scheme with no diff and no failure — the
+  renderers, `constants.py` and the workflow itself are now in its path
+  list. A path list is only a reminder, so `test_badges.py` also compares
+  the committed endpoints against a fresh render and fails on any
+  difference; every other test there renders into a tmp dir, which proves
+  the generator works and says nothing about the files actually being
+  served on other people's READMEs.
+
 ## [0.3.0] - 2026-08-08
 
 ### Added
@@ -112,24 +203,6 @@ All notable changes to this project are documented here.
 
 ### Changed
 
-- **`RULE_CAP` is now derived from `WEIGHT`, not hand-picked.**
-  ([#214](https://github.com/dheerajjha/mcp-migrate/issues/214))
-
-  `WEIGHT` and `RULE_CAP` were chosen independently and never checked
-  against each other. Expressed as firings-to-cap, that inverted severity:
-  `breaking` reached its cap after a single hit (weight 25, cap 25) while
-  `advisory` took two (weight 3, cap 6) — a server's second breaking
-  finding was already free of penalty while its second advisory finding
-  still counted. `RULE_CAP` is now `WEIGHT[severity] * CAP_MULTIPLE` with
-  `CAP_MULTIPLE = 2` for every severity, so firings-to-cap is the same
-  across the board: `breaking` 50, `deprecated` 16, `advisory` 6
-  (unchanged, since 3 × 2 was already 6).
-
-  This moves scores for any project whose penalty was sitting at the old
-  `breaking`/`deprecated` cap. The registry board is not re-verified in
-  this PR — that needs re-running `check` against each entry's upstream
-  source, which is a separate pass once the multiple itself is agreed.
-
 - **`check --json` gained two required keys, `suppressed` and
   `unused_suppressions`.** Both are always present, empty array included. A
   consumer validating against the 0.2.0 schema will reject 0.3.0 output until
@@ -143,18 +216,6 @@ All notable changes to this project are documented here.
   `--json` and never sees a console line.
 
 ### Fixed
-
-- **R007 and R018 no longer both report the same SDK symbol.**
-  ([#221](https://github.com/dheerajjha/mcp-migrate/issues/221))
-
-  `CreateMessageResultSchema` and a few other names sit at the intersection
-  of "Sampling is a deprecated core feature" (R007) and "server-initiated
-  sampling/createMessage was replaced by Multi Round-Trip Requests" (R018) —
-  both true, both firing on the same line, with two different severities. A
-  new `overlap.py` collapses a known-overlapping rule pair down to one
-  finding per location, keeping the more urgent rule's message and
-  appending the other's rather than dropping it. Only R007/R018 are in the
-  table today; two rules sharing a line by coincidence are left alone.
 
 - **Fixers no longer edit inside string literals.** A new
   `string_lines()` helper in `fixers/_textedit.py` marks every line that is
