@@ -6,188 +6,29 @@ All notable changes to this project are documented here.
 
 ### Added
 
-- **`check --rule`, `check --severity`, and `check --fail-on`.**
-  ([#178](https://github.com/dheerajjha/mcp-migrate/issues/178))
+- **Baseline: `check --write-baseline` / `--baseline`.** Lets an existing
+  project adopt `check` in CI without fixing every finding first — record
+  what's here today, and only findings introduced after that point can fail
+  the run. `check` picks up `.mcp-migrate-baseline.json` in the project root
+  automatically once it exists. A finding is matched across edits by its
+  rule and the content of the line it points at, not `path:line` alone, so
+  inserting a line above a baselined finding doesn't make it look new. A
+  baselined finding that stops showing up is reported as stale rather than
+  kept forever. The grade never reads the baseline — it counts every
+  finding regardless, same as before.
+  ([#181](https://github.com/dheerajjha/mcp-migrate/issues/181))
 
-  `--rule R001` (repeatable) restricts which rules run at all, matching
-  `fix --rule`, which is now also repeatable. A grade computed from part of
-  the rule set isn't a grade, so `--rule` suppresses `grade`/`score` rather
-  than reporting one; an unknown id is a usage error (exit `2`).
-
-  `--severity breaking` (repeatable, composes with `--rule`) only changes
-  what's displayed. The grade and the exit code are always computed from
-  every finding, so filtering the output can never change the answer to
-  "does this pass".
-
-  `--fail-on {breaking,deprecated,advisory,never}` (default `breaking`,
-  so nothing changes for existing users) replaces the previously-hardcoded
-  "fail only on breaking" exit logic. `never` still leaves exit `2`
-  ("could not check it") alone — that's a refusal, not a severity, and
-  `check || true` already threw it away by accident, which is the failure
-  this flag exists to let people avoid on purpose.
-
-  `check --json` gains `rule_filtered`, `filters`, and `fail_on` keys —
-  see the README's `check --json` contract section.
-
-- **A registry entry records the commit its grade was computed against.**
-  `mcp-migrate entry` emits an optional `sha:` when the scanned tree is a
-  git checkout, `registry/schema.yaml` accepts it, and
-  `validate_registry.py` enforces a 7-40 character hex string.
-  ([#223](https://github.com/dheerajjha/mcp-migrate/issues/223),
-  [#230](https://github.com/dheerajjha/mcp-migrate/pull/230), @waterlemonnn)
-
-  `repo:` names a repository, not a state — re-verifying all sixteen board
-  entries found four repos had moved upstream since the previous
-  verification a day earlier. All four still graded identically, but that
-  was luck: nothing on the board would have shown a reader that the thing
-  being claimed about had changed underneath the claim. With a SHA, a
-  drifted entry becomes something a re-verification script can catch
-  instead of something that just happens to still be true.
-
-  The sixteen existing entries are backfilled with the SHA they verify
-  against today, each noted as backfilled rather than original — they
-  predate this field and are not invalidated by its landing.
-
-### Changed
-
-- **`RULE_CAP` is now derived from `WEIGHT` instead of hand-picked, and two
-  published scores move up.**
-  ([#214](https://github.com/dheerajjha/mcp-migrate/issues/214),
-  [#227](https://github.com/dheerajjha/mcp-migrate/pull/227), @waterlemonnn)
-
-  `WEIGHT` and `RULE_CAP` were chosen independently and never checked
-  against each other. Expressed as firings-to-cap, that inverted severity:
-  `breaking` reached its cap after a single hit (weight 25, cap 25) while
-  `advisory` took two (weight 3, cap 6) — a server's second breaking
-  finding was already free while its second advisory finding still counted.
-  `RULE_CAP` is now `WEIGHT[severity] * CAP_MULTIPLE`, one multiple for
-  every severity, so the inversion cannot come back by hand-editing one
-  number.
-
-  `CAP_MULTIPLE` is **1**, and the reason is empirical rather than
-  aesthetic. Every multiple fixes the inversion equally; what it actually
-  selects is how harshly we grade. All 16 board servers were re-scanned at
-  each candidate — 14 do not move at any of them, and the two that do:
-
-  | multiple | caps (b/d/a) | mcp-atlassian | mcp-server-git |
-  | --- | --- | --- | --- |
-  | **1** | 25/8/3 | C 60 → **C 64** | D 54 → **D 58** |
-  | 2 | 50/16/6 | C 60 → **F 31** | D 54 → **F 25** |
-  | 3 | 75/24/9 | C 60 → **F 6** | D 54 → **F 25** |
-
-  Neither project changed; only our arithmetic would have. Publishing two
-  new F grades as a side effect of an internal cleanup is a claim about
-  somebody else's code that the cleanup does not earn — and the A–F
-  boundaries in `letter()` were tuned when caps were 25/12/6, so raising
-  caps without revisiting them shifts the whole distribution down rather
-  than fixing the inversion.
-
-  The cost, stated plainly: at 1 the cap binds immediately, so a rule's 2nd
-  firing is free and its 20th costs the same as its 2nd — repetition now
-  carries no signal at all. Whether it should, and whether the letter
-  boundaries want recalibrating alongside it, is a deliberate scoring
-  decision left to its own change.
-
-  `mcp-atlassian` (64) and `mcp-server-git` (58) are updated in the
-  registry. Both keep their letter, so the board table and all 27 badge
-  endpoints are byte-identical.
-
-### Fixed
-
-- **R020 and R005 no longer read an ordinary English identifier as proof a
-  file speaks MCP.**
-  ([#234](https://github.com/dheerajjha/mcp-migrate/issues/234))
-
-  `class ConnectionPool: def register_client(self, c)` reported RFC 7591
-  Dynamic Client Registration, and a config class named `ServerCapabilities`
-  reported a missing MCP `extensions` map. Neither file imported an SDK,
-  named a wire method, or touched MCP in any way.
-
-  R020's own comment was the thing that turned out to be wrong. It argued
-  the bare token was safe because "a generic *register a client* method in
-  an unrelated CRM/billing app wouldn't spell it exactly `register_client`".
-  It would, and does.
-
-  Fixed with a shared `mcp_surface_paths()` gate in `rules/base.py` —
-  the same move R011 already used for the equally overloaded `"ping"`.
-  Applied only to the overloaded tokens: `RegisterClientRequest` and
-  `DynamicClientRegistration` are names nobody writes by accident and stay
-  ungated, because gating them would add a way to miss a real finding and
-  buy nothing.
-
-  The gate's own wire method names go through `wire_method()`. Unbounded,
-  `logging/setLevel` also matches `logging/setLevelLatency` — a metric name
-  — which is [#88](https://github.com/dheerajjha/mcp-migrate/issues/88)'s
-  bug reappearing from the other side: there it invented findings, here it
-  would have *kept* ones that should be gated away. Pinned by a test.
-
-  `tests/fixtures/legacy_server/auth.py` was a bare module-level
-  `register_client` with no MCP import anywhere — indistinguishable from
-  the connection pool above, so no longer a fixture for this rule. Rebuilt
-  from the shape real code has: `mcp-atlassian`'s
-  `servers/oauth_proxy.py` overrides the SDK provider it imports.
-
-  **Board:** `mcp-atlassian` keeps both of its genuine R020 findings and
-  stays C 64 — verified, since that grade is what the gate most risked.
-  One entry does move: `mcp-server-tree-sitter` **B 94 → A 97**, because
-  its only R005 finding was matched on `from .server_capabilities import
-  register_capabilities` — a module name in an import, not a capabilities
-  declaration. The registry is deliberately **not** updated here: those
-  entries say `checked_with: mcp-migrate 0.3.0` and 0.3.0 genuinely does
-  produce B 94. It moves at the 0.4.0 board re-verification, with the rest.
-
-- **R007 and R018 no longer both report the same SDK symbol on one line.**
-  ([#221](https://github.com/dheerajjha/mcp-migrate/issues/221),
-  [#225](https://github.com/dheerajjha/mcp-migrate/pull/225), @waterlemonnn)
-
-  `CreateMessageResultSchema` and a few other names sit at the intersection
-  of "Sampling is a deprecated core feature" (R007) and "server-initiated
-  `sampling/createMessage` was replaced by Multi Round-Trip Requests"
-  (R018) — both true, both firing on the same line, at two different
-  severities. A new `overlap.py` collapses a known-overlapping rule pair to
-  one finding per location, keeping the more urgent rule's message and
-  appending the other's rather than dropping it. Only R007/R018 are in the
-  table; two rules sharing a line by coincidence are left alone.
-
-  Verified against real code rather than fixtures: `mcp-server-git` goes
-  from `R007 ×3` to `R007 ×2`. No board grade or score moved.
-
-  #221 stays **open**, deliberately. The merge keys on `(path, line)`, so
-  the pair still double-reports when the two rules describe the same
-  migration from different lines — which `mcp-server-git` also does. That
-  is the right conservative default (same-symbol-different-line is not
-  something a line number can assert) but it means the issue is narrowed,
-  not closed.
-
-- **One grade→colour map instead of two that disagreed.**
-  ([#224](https://github.com/dheerajjha/mcp-migrate/issues/224),
-  [#226](https://github.com/dheerajjha/mcp-migrate/pull/226), @Jah-yee)
-
-  `grade.py` rendered B as `green` and D as `orange`; `render_badges.py`
-  rendered them `brightgreen` and `red`. A B-graded maintainer was handed a
-  badge URL that did not match their own board row, and on the board A/B
-  and D/F were each a single colour — a five-value signal collapsed to
-  three. Both now import one map from `src/mcp_migrate/constants.py`,
-  keeping the five-step scale.
-
-  The 27 committed badge endpoints were regenerated to match; 15 changed.
-  `.github/workflows/board.yml` only triggered on `registry/**`, so a
-  change to the *renderer* regenerated nothing and the endpoints would have
-  gone on serving the old scheme with no diff and no failure — the
-  renderers, `constants.py` and the workflow itself are now in its path
-  list. A path list is only a reminder, so `test_badges.py` also compares
-  the committed endpoints against a fresh render and fails on any
-  difference; every other test there renders into a tmp dir, which proves
-  the generator works and says nothing about the files actually being
-  served on other people's READMEs.
-
-- **R004 no longer flags `tools/list` handlers that delegate sorting to a
-  helper.** `return { tools: alphabetize(registry) }` was reported as
-  missing an explicit sort even when `alphabetize` does sort — the
-  handler-body window scanned for `.sort(`/`sorted(` never sees inside the
-  helper. Resolving the call is a call graph, not a line scan, so R004 now
-  stays silent when the `tools` value is itself a call rather than guess.
-  ([#91](https://github.com/dheerajjha/mcp-migrate/issues/91))
+- **Baseline: `check --write-baseline` / `--baseline`.** Lets an existing
+  project adopt `check` in CI without fixing every finding first — record
+  what's here today, and only findings introduced after that point can fail
+  the run. `check` picks up `.mcp-migrate-baseline.json` in the project root
+  automatically once it exists. A finding is matched across edits by its
+  rule and the content of the line it points at, not `path:line` alone, so
+  inserting a line above a baselined finding doesn't make it look new. A
+  baselined finding that stops showing up is reported as stale rather than
+  kept forever. The grade never reads the baseline — it counts every
+  finding regardless, same as before.
+  ([#181](https://github.com/dheerajjha/mcp-migrate/issues/181))
 
 ## [0.3.0] - 2026-08-08
 

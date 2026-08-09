@@ -15,6 +15,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import __version__
+from . import baseline as baseline_mod
 from . import overlap as overlap_mod
 from . import sarif as sarif_mod
 from . import suppress as suppress_mod
@@ -367,6 +368,21 @@ def _report_suppressions(console, result, *, show: bool) -> None:
         console.print("[dim]Run with --show-suppressions to see each one and its reason.[/dim]")
 
 
+def _resolve_baseline_path(root: Path, explicit: str | None) -> Path | None:
+    """Which baseline file `check` should read against, if any.
+
+    `--baseline PATH` always wins. Otherwise fall back to the conventional
+    filename in the project root, but only if it is actually there --
+    projects that never ran `--write-baseline` have none, and `check` must
+    behave exactly as it always did for them.
+    """
+    if explicit:
+        p = Path(explicit)
+        return p if p.is_absolute() else root / p
+    candidate = root / baseline_mod.DEFAULT_FILENAME
+    return candidate if candidate.exists() else None
+
+
 def cmd_check(args) -> int:
     console = Console()
     root = Path(args.path).resolve()
@@ -381,6 +397,20 @@ def cmd_check(args) -> int:
     severities = frozenset(args.severity) if args.severity else None
     fail_on = args.fail_on
 
+    if getattr(args, "write_baseline", None):
+        if rule_ids is not None:
+            console.print("[bold red]Cannot write a baseline when --rule restricts the scan.[/bold red]")
+            console.print("A baseline records the project's current state. If you write one while")
+            console.print("hiding findings, they will show up as new regressions in the next full scan.")
+            return EXIT_UNSCANNABLE
+        result = run_check_detailed(root, include_tests=args.include_tests)
+        out_path = Path(args.write_baseline)
+        if not out_path.is_absolute():
+            out_path = root / out_path
+        n = baseline_mod.write(out_path, result.findings, result.project)
+        console.print(f"[bold green]recorded {n} finding(s)[/bold green] to {out_path}")
+        return EXIT_OK
+
     result = run_check_detailed(root, include_tests=args.include_tests, rule_ids=rule_ids)
     project, rules, all_findings = result.project, result.rules, result.findings
     value, grade = result.value, result.grade
@@ -394,10 +424,7 @@ def cmd_check(args) -> int:
     # exit code below both read `all_findings`, never this filtered list,
     # so two runs against the same code never disagree just because
     # someone chose to look at a narrower slice of the output.
-    findings = (
-        [f for f in all_findings if rules[f.rule_id].severity in severities]
-        if severities is not None else all_findings
-    )
+
     filters = {
         "rule": sorted(rule_ids) if rule_ids else [],
         "severity": sorted(severities) if severities else [],
@@ -405,6 +432,34 @@ def cmd_check(args) -> int:
     counts = survey(root)
     reason = unscannable_reason(root, project, counts, include_tests=args.include_tests)
     sdk_info = detect_sdk(root)
+
+    # A baseline only ever narrows *which findings can fail the run* -- it
+    # is not consulted by SDK detection, the unscannable check, or the
+    # grade above. Applied here, once, so every output format downstream
+    # sees the same `new_findings`/`stale_baseline` instead of each
+    # re-deriving it.
+    baseline_path = _resolve_baseline_path(root, getattr(args, "baseline", None))
+    baseline_entries = None
+    stale_baseline: list = []
+    all_new_findings = all_findings
+    if baseline_path is not None:
+        try:
+            baseline_entries = baseline_mod.load(baseline_path)
+        except baseline_mod.BaselineError as e:
+            if _output_format(args) == "json":
+                print(json.dumps({"tool": "mcp-migrate", "error": str(e)}, indent=2))
+            else:
+                console.print(f"[bold red]Could not read baseline:[/bold red] {e}")
+            return EXIT_UNSCANNABLE
+        all_new_findings, stale_baseline = baseline_mod.diff(all_findings, project, baseline_entries)
+        if rule_ids is not None:
+            stale_baseline = [s for s in stale_baseline if s["rule"] in rule_ids]
+
+    findings = (
+        [f for f in all_new_findings if rules[f.rule_id].severity in severities]
+        if severities is not None else all_new_findings
+    )
+    new_findings = findings
 
     if _output_format(args) == "sarif":
         # Emitted for every outcome, including the ungraded one: code
@@ -470,25 +525,35 @@ def cmd_check(args) -> int:
             }, indent=2))
             return _exit_for(all_findings, rules, fail_on) if _checked_something(project) \
                 else EXIT_UNSCANNABLE
-        print(json.dumps({
+        payload = {
             "tool": "mcp-migrate",
             "version": __version__,
             "spec": SPEC,
             "path": str(root),
             "scannable": True,
             "languages": dict(counts),
+            # The grade always reads every finding, baselined or not --
+            # see baseline.py's module docstring for why.
             "grade": grade,
             "score": value,
             "rule_filtered": rule_ids is not None,
             "filters": filters,
             "fail_on": fail_on,
             "files_scanned": len(project.files),
-            "counts": _severity_counts(findings, rules),
-            "findings": [_finding_dict(f, rules) for f in findings],
+            "counts": _severity_counts(new_findings, rules),
+            "findings": [_finding_dict(f, rules) for f in new_findings],
             "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
             "unused_suppressions": _unused_suppression_dicts(result),
-        }, indent=2))
-        return _exit_for(all_findings, rules, fail_on)
+        }
+        if baseline_entries is not None:
+            payload["baseline"] = {
+                "path": str(baseline_path),
+                "total": len(baseline_entries),
+                "new": len(all_new_findings),
+                "stale": len(stale_baseline),
+            }
+        print(json.dumps(payload, indent=2))
+        return _exit_for(all_new_findings, rules, fail_on)
 
     console.print()
     console.print(f"[bold]mcp-migrate[/bold] [dim]v{__version__}[/dim]  ->  {root.name}")
@@ -626,10 +691,22 @@ def cmd_check(args) -> int:
     if rule_ids is not None:
         console.print(
             f"[dim]Restricted to rule(s) {', '.join(sorted(rule_ids))} -- a grade computed "
-            "from part of the rule set isn't a grade, so none is shown here.[/dim]"
+                "from part of the rule set isn't a grade, so none is shown here.[/dim]"
         )
 
     console.print()
+
+    sev_counts = {"breaking": 0, "deprecated": 0, "advisory": 0}
+    for f in all_findings:
+        sev_counts[rules[f.rule_id].severity] += 1
+
+    if baseline_entries is not None and stale_baseline:
+        console.print(
+            f"[yellow]{len(stale_baseline)} baselined finding(s) no longer present[/yellow] "
+            "-- fixed, or the code moved? Refresh with "
+            f"`mcp-migrate check --write-baseline {baseline_path}`."
+        )
+        console.print()
 
     if not all_findings:
         if rule_ids is not None:
@@ -637,26 +714,24 @@ def cmd_check(args) -> int:
         else:
             console.print("[bold green]Grade A.[/bold green] Nothing to fix. Add your badge:")
             console.print(f"[dim]![MCP {SPEC}]({badge_url(grade)})[/dim]")
-        return _exit_for(all_findings, rules, fail_on)
+        return _exit_for(all_new_findings, rules, fail_on)
 
-    # The severity breakdown printed with the grade below is always the
-    # true one, from `all_findings` -- it has to match the score, which
-    # --severity never touches. `findings` (possibly narrower) only
-    # decides what the table above it lists.
-    sev_counts = {"breaking": 0, "deprecated": 0, "advisory": 0}
-    for f in all_findings:
-        sev_counts[rules[f.rule_id].severity] += 1
-
-    if severities is not None and not findings:
+    if baseline_entries is not None and not all_new_findings:
+        console.print(
+            f"[bold green]No new findings.[/bold green] {len(baseline_entries)} already "
+            "baselined -- not shown here, but still counted in the grade below."
+        )
+        console.print()
+    elif severities is not None and not findings:
         console.print(
             f"[yellow]0 finding(s) match --severity {', '.join(sorted(severities))}[/yellow] "
-            f"(of {len(all_findings)} total -- not shown, but still counted below)."
+            f"(of {len(all_new_findings)} total new -- not shown, but still counted below)."
         )
         console.print()
     else:
         if severities is not None:
             console.print(
-                f"[dim]{len(findings)} of {len(all_findings)} finding(s) shown "
+                f"[dim]{len(findings)} of {len(all_new_findings)} finding(s) shown "
                 f"(--severity {', '.join(sorted(severities))}).[/dim]"
             )
             console.print()
@@ -666,10 +741,7 @@ def cmd_check(args) -> int:
         table.add_column("rule", width=6)
         table.add_column("where", overflow="fold")
         table.add_column("what")
-        # `findings` is sorted by (severity-order-of-rule, rule_id), so every
-        # rule's findings are contiguous -- group them to cap how many rows
-        # any single rule can spam into the table. The JSON output above is
-        # unaffected; this only trims what prints to the terminal.
+        
         for rule_id, group in itertools.groupby(findings, key=lambda f: f.rule_id):
             group = list(group)
             sev = rules[rule_id].severity
@@ -688,6 +760,12 @@ def cmd_check(args) -> int:
             console.print(f"  {rule.fix}")
             console.print()
 
+        if baseline_entries is not None:
+            console.print(
+                f"[dim]{len(all_new_findings)} new finding(s) ({len(baseline_entries)} baselined)[/dim]"
+            )
+            console.print()
+
     if grade is not None:
         grade_style = "bold green" if grade in "AB" else "bold yellow" if grade == "C" else "bold red"
         console.print(
@@ -702,7 +780,7 @@ def cmd_check(args) -> int:
             f"{sev_counts['deprecated']} deprecated, {sev_counts['advisory']} advisory.[/dim]"
         )
     console.print()
-    return _exit_for(all_findings, rules, fail_on)
+    return _exit_for(all_new_findings, rules, fail_on)
 
 
 def cmd_rules(args) -> int:
@@ -1032,6 +1110,17 @@ def main(argv=None) -> int:
         "--include-tests", action="store_true",
         help="also scan tests/, fixtures/, examples/, docs/, and test_*.py files "
              "(skipped by default -- see README)",
+    )
+    p_check.add_argument(
+        "--baseline", metavar="PATH",
+        help=f"only fail on findings not recorded in PATH (default: "
+             f"{baseline_mod.DEFAULT_FILENAME} in the project root, if it exists)",
+    )
+    p_check.add_argument(
+        "--write-baseline", metavar="PATH", nargs="?",
+        const=baseline_mod.DEFAULT_FILENAME,
+        help=f"record every current finding to PATH (default: "
+             f"{baseline_mod.DEFAULT_FILENAME}) and exit, instead of checking",
     )
     p_check.set_defaults(func=cmd_check)
 
