@@ -94,6 +94,48 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- **R020 and R005 no longer read an ordinary English identifier as proof a
+  file speaks MCP.**
+  ([#234](https://github.com/dheerajjha/mcp-migrate/issues/234))
+
+  `class ConnectionPool: def register_client(self, c)` reported RFC 7591
+  Dynamic Client Registration, and a config class named `ServerCapabilities`
+  reported a missing MCP `extensions` map. Neither file imported an SDK,
+  named a wire method, or touched MCP in any way.
+
+  R020's own comment was the thing that turned out to be wrong. It argued
+  the bare token was safe because "a generic *register a client* method in
+  an unrelated CRM/billing app wouldn't spell it exactly `register_client`".
+  It would, and does.
+
+  Fixed with a shared `mcp_surface_paths()` gate in `rules/base.py` —
+  the same move R011 already used for the equally overloaded `"ping"`.
+  Applied only to the overloaded tokens: `RegisterClientRequest` and
+  `DynamicClientRegistration` are names nobody writes by accident and stay
+  ungated, because gating them would add a way to miss a real finding and
+  buy nothing.
+
+  The gate's own wire method names go through `wire_method()`. Unbounded,
+  `logging/setLevel` also matches `logging/setLevelLatency` — a metric name
+  — which is [#88](https://github.com/dheerajjha/mcp-migrate/issues/88)'s
+  bug reappearing from the other side: there it invented findings, here it
+  would have *kept* ones that should be gated away. Pinned by a test.
+
+  `tests/fixtures/legacy_server/auth.py` was a bare module-level
+  `register_client` with no MCP import anywhere — indistinguishable from
+  the connection pool above, so no longer a fixture for this rule. Rebuilt
+  from the shape real code has: `mcp-atlassian`'s
+  `servers/oauth_proxy.py` overrides the SDK provider it imports.
+
+  **Board:** `mcp-atlassian` keeps both of its genuine R020 findings and
+  stays C 64 — verified, since that grade is what the gate most risked.
+  One entry does move: `mcp-server-tree-sitter` **B 94 → A 97**, because
+  its only R005 finding was matched on `from .server_capabilities import
+  register_capabilities` — a module name in an import, not a capabilities
+  declaration. The registry is deliberately **not** updated here: those
+  entries say `checked_with: mcp-migrate 0.3.0` and 0.3.0 genuinely does
+  produce B 94. It moves at the 0.4.0 board re-verification, with the rest.
+
 - **R007 and R018 no longer both report the same SDK symbol on one line.**
   ([#221](https://github.com/dheerajjha/mcp-migrate/issues/221),
   [#225](https://github.com/dheerajjha/mcp-migrate/pull/225), @waterlemonnn)

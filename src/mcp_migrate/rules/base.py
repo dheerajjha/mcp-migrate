@@ -398,3 +398,50 @@ def wire_method(*names: str) -> str:
     joined = "|".join(re.escape(n) for n in names)
     return rf"\b(?:{joined})(?![\w/-])"
 
+
+# Evidence that a file speaks MCP at all, independent of the token a rule
+# matched. Some SDK names are distinctive enough to stand alone
+# (`RegisterClientRequest`, `ListToolsRequestSchema`); others are ordinary
+# words the SDK happens to also use (`register_client`, `capabilities`,
+# `ping`), and for those the token proves nothing on its own -- a
+# connection pool registering clients is not implementing RFC 7591.
+#
+# Deliberately broad, because it is used to *keep* findings rather than to
+# create them: an import of the SDK in either language, or a reference to
+# any of MCP's own wire method names, or a JSON-RPC envelope. Narrowing it
+# turns real findings into silence, which is the direction that costs a
+# user a broken server rather than three points on a grade.
+#
+# Language-agnostic on purpose. A Python file importing the TypeScript
+# package name is not a thing, so including both costs nothing, and it
+# means a rule does not have to pick a gate per language and get them
+# subtly out of step -- which is the failure #107 was about.
+# The wire names below go through wire_method() rather than being spelled
+# inline, and that is not tidiness. An unbounded `logging/setLevel` also
+# matches `logging/setLevelLatency` -- a metric name, not MCP surface --
+# which is #88's bug reappearing on the other side of the telescope: there
+# it invented findings, here it would *keep* ones that should be gated
+# away. The gate has to be at least as careful as the rules it gates.
+MCP_SURFACE_RX = re.compile(
+    r"@modelcontextprotocol"
+    r"|\bmcp\.server\b|\bmcp\.types\b|\bmcp\.client\b|\bfrom\s+mcp\b|\bimport\s+mcp\b"
+    r"|\bmodelcontextprotocol\b"
+    r"|\bjsonrpc\b"
+    "|" + wire_method(
+        "tools/call", "tools/list", "resources/read", "resources/list",
+        "prompts/get", "prompts/list", "sampling/createMessage", "roots/list",
+        "logging/setLevel", "server/discover",
+    ),
+    re.IGNORECASE,
+)
+
+
+def mcp_surface_paths(project: "Project") -> set:
+    """Paths of files in `project` that show any independent MCP surface.
+
+    Use to gate a token that is only suspicious *because* the SDK also uses
+    it. Do not use to gate a token that is already distinctive -- that adds
+    a way to miss a real finding and buys nothing.
+    """
+    return {f.path for f in project.files if MCP_SURFACE_RX.search(f.text)}
+

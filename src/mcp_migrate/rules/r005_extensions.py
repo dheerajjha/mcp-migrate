@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, mcp_surface_paths
 
 # Only the SDK's own names. A bare `capabilities = ...` used to be in
 # here and it is simply too ordinary an identifier to carry any MCP
@@ -53,10 +53,20 @@ class NoExtensionsDeclared(Rule):
     def _check_python(self, project: Project) -> list[Finding]:
         out: list[Finding] = []
         seen_files = set()
+        # The TS path below already gates its weaker signal on an SDK
+        # import; this one had no gate at all, so a class of one's own
+        # named `ServerCapabilities` in a file that never mentions MCP read
+        # as an MCP capabilities declaration. Less overloaded than
+        # `register_client`, but the asymmetry is the point: R005 reports
+        # at most one finding per file, so a wrong hit silences the rule
+        # for that whole file as well as costing points. See #234.
+        surface = mcp_surface_paths(project)
         # search_code: a comment/docstring that merely mentions
         # ServerCapabilities isn't a real capabilities declaration.
         for f, line, text in project.search_code(CAPS_RX.pattern):
             if f.path in seen_files:
+                continue
+            if f.path not in surface:
                 continue
             # Scoped to the file that declares capabilities, not the whole
             # project -- an unrelated module elsewhere that happens to

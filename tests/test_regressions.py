@@ -861,3 +861,78 @@ def test_r004_still_fires_on_every_real_handler_shape_python(tmp_path):
     )
     lines = {f.line for f in NondeterministicToolOrder().check(load_project(tmp_path))}
     assert lines == {5, 10}, lines
+
+
+# --- 11. an overloaded token is not evidence the file speaks MCP (#234) ----
+#
+# R011 already gated its `"ping"` signal this way. R020's `register_client`
+# and R005's `ServerCapabilities` did not, so an ordinary connection pool
+# and an ordinary config class read as MCP code. Both directions matter
+# here: the gate must silence the impostors *and* keep every real hit,
+# including `mcp-atlassian`'s two genuine R020 findings, which is what the
+# board depends on.
+
+NON_MCP_POOL = 'class ConnectionPool:\n    def register_client(self, c): ...\n'
+NON_MCP_CAPS = 'class ServerCapabilities:\n    max_connections: int = 4\n'
+
+
+@pytest.mark.parametrize(
+    "rule_id,source",
+    [("R020", NON_MCP_POOL), ("R005", NON_MCP_CAPS)],
+    ids=["r020-connection-pool", "r005-config-class"],
+)
+def test_an_overloaded_token_alone_does_not_fire(tmp_path, rule_id, source):
+    (tmp_path / "mod.py").write_text(source)
+    by_rule = _findings_by_rule(tmp_path)
+    assert rule_id not in by_rule, (
+        f"{rule_id} fired on a file with no MCP surface at all: {by_rule.get(rule_id)}"
+    )
+
+
+def test_a_distinctive_sdk_name_still_fires_without_any_other_surface(tmp_path):
+    """`RegisterClientRequest` is not gated, and must not become gated.
+
+    The gate exists for tokens that are ordinary English as well as SDK
+    names. Applying it to a name nobody writes by accident would only add
+    a way to miss real findings.
+    """
+    (tmp_path / "mod.py").write_text(
+        "class X:\n    def go(self, r: RegisterClientRequest): ...\n"
+    )
+    assert "R020" in _findings_by_rule(tmp_path)
+
+
+def test_the_real_sdk_auth_hook_still_fires(tmp_path):
+    """The shape mcp-atlassian actually has -- overriding the SDK provider."""
+    (tmp_path / "auth.py").write_text(
+        "from mcp.server.auth.provider import OAuthClientInformationFull\n"
+        "\n"
+        "class P:\n"
+        "    async def register_client(self, info: OAuthClientInformationFull): ...\n"
+    )
+    assert "R020" in _findings_by_rule(tmp_path)
+
+
+def test_a_real_capabilities_declaration_still_fires(tmp_path):
+    (tmp_path / "srv.py").write_text(
+        "from mcp.types import ServerCapabilities\n\ncaps = ServerCapabilities(tools={})\n"
+    )
+    assert "R005" in _findings_by_rule(tmp_path)
+
+
+def test_the_surface_gate_is_not_fooled_by_a_longer_wire_name(tmp_path):
+    """`logging/setLevelLatency` is a metric name, not MCP surface.
+
+    The gate's wire names go through `wire_method()` for exactly this
+    reason. Unbounded, this file would count as MCP and the R020 finding
+    below would be kept -- #88's bug, reappearing as a failure to gate
+    rather than as a false finding.
+    """
+    (tmp_path / "mod.py").write_text(
+        'METRIC = "logging/setLevelLatency"\n'
+        "\n"
+        "class ConnectionPool:\n"
+        "    def register_client(self, c): ...\n"
+    )
+    by_rule = _findings_by_rule(tmp_path)
+    assert "R020" not in by_rule, by_rule.get("R020")
