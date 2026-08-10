@@ -35,8 +35,21 @@ def main() -> int:
         suppression_note = (
             f" ({e['suppressed']} suppressed)" if (e.get("suppressed") or 0) > 0 else ""
         )
+        # A disabled rule never ran, so the grade is computed as though the
+        # full rule set had passed. Recording that in the YAML and not here
+        # would be disclosure nobody reads: the whole question a board answers
+        # is whether two A grades mean the same thing, and they do not when
+        # one of them switched a breaking rule off. Same `or []` reasoning as
+        # above -- an empty `disabled_rules:` key parses as None.
+        disabled = e.get("disabled_rules") or []
+        disabled_note = (
+            f" ({len(disabled)} rule{'s' if len(disabled) > 1 else ''} off: "
+            f"{', '.join(sorted(disabled))})"
+            if disabled
+            else ""
+        )
         rows.append(
-            f"| [{e.get('name')}](https://github.com/{repo}) | **{e.get('grade')}**{suppression_note} "
+            f"| [{e.get('name')}](https://github.com/{repo}) | **{e.get('grade')}**{suppression_note}{disabled_note} "
             f"| {EMOJI.get(e.get('status'), e.get('status'))} | {e.get('language')} | {notes} |"
         )
 

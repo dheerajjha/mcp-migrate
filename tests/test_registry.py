@@ -286,3 +286,90 @@ def test_render_board_survives_a_suppressed_key_with_no_value(tmp_path, monkeypa
     text = (tmp_path / "README.md").read_text(encoding="utf-8")
     assert "acme-notes" in text
     assert "suppressed)" not in text
+
+
+# --- disabled_rules: recorded, validated, and visible on the board --------
+#
+# A suppression silences one finding; a disabled rule silences a whole class
+# of them, and the grade is still published as though the full set had run.
+# So the disclosure has to survive all the way to the rendered board -- a
+# field recorded in YAML that nobody renders is disclosure nobody reads, and
+# the question a board exists to answer is whether two A grades mean the
+# same thing.
+
+
+def test_render_board_shows_which_rules_an_entry_switched_off(tmp_path, monkeypatch):
+    servers_dir = tmp_path / "servers"
+    servers_dir.mkdir()
+    (servers_dir / "acme-notes.yaml").write_text(
+        VALID_ENTRY.replace("score: 97", "score: 97\ndisabled_rules: [R001, R008]")
+    )
+    (servers_dir / "plain.yaml").write_text(
+        VALID_ENTRY.replace("name: acme-notes", "name: plain")
+    )
+
+    readme = tmp_path / "README.md"
+    readme.write_text("<!-- BOARD:START -->\n<!-- BOARD:END -->\n")
+    monkeypatch.setattr(rb, "SERVERS", servers_dir)
+    monkeypatch.setattr(rb, "README", readme)
+
+    assert rb.main() == 0
+    text = readme.read_text()
+    acme_row = next(line for line in text.splitlines() if "acme-notes" in line)
+    plain_row = next(line for line in text.splitlines() if "plain" in line)
+    assert "**A** (2 rules off: R001, R008)" in acme_row
+    assert "off" not in plain_row
+
+
+def test_render_board_survives_a_disabled_rules_key_with_no_value(tmp_path, monkeypatch):
+    """`disabled_rules:` with nothing after it parses as None, not [].
+
+    validate_registry rejects that entry, but this script runs independently
+    of it and a traceback is a worse answer than a rendered board -- the same
+    reasoning as the `suppressed:` case above.
+    """
+    servers_dir = tmp_path / "servers"
+    servers_dir.mkdir()
+    (servers_dir / "acme-notes.yaml").write_text(
+        VALID_ENTRY.replace("score: 97", "score: 97\ndisabled_rules:")
+    )
+    readme = tmp_path / "README.md"
+    readme.write_text("<!-- BOARD:START -->\n<!-- BOARD:END -->\n")
+    monkeypatch.setattr(rb, "SERVERS", servers_dir)
+    monkeypatch.setattr(rb, "README", readme)
+
+    assert rb.main() == 0
+    assert "off" not in readme.read_text()
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ('disabled_rules: "R001"', "must be a list of rule id strings"),
+        ("disabled_rules: [R1]", "malformed rule id"),
+        ("disabled_rules: [R001, R001]", "duplicates"),
+    ],
+    ids=["bare-string", "malformed-id", "duplicate"],
+)
+def test_validate_rejects_a_disabled_rules_value_it_cannot_read(
+    tmp_path, monkeypatch, value, expected
+):
+    servers_dir = tmp_path / "servers"
+    servers_dir.mkdir()
+    (servers_dir / "acme-notes.yaml").write_text(f"{VALID_ENTRY}\n{value}\n")
+    monkeypatch.setattr(vr, "SERVERS", servers_dir)
+
+    errs = vr.validate(servers_dir / "acme-notes.yaml")
+    assert any(expected in e for e in errs), errs
+
+
+def test_validate_accepts_a_well_formed_disabled_rules_list(tmp_path, monkeypatch):
+    servers_dir = tmp_path / "servers"
+    servers_dir.mkdir()
+    (servers_dir / "acme-notes.yaml").write_text(
+        f"{VALID_ENTRY}\ndisabled_rules: [R001, R008]\n"
+    )
+    monkeypatch.setattr(vr, "SERVERS", servers_dir)
+
+    errs = vr.validate(servers_dir / "acme-notes.yaml")
+    assert not [e for e in errs if "disabled_rules" in e], errs

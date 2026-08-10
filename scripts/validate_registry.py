@@ -34,6 +34,7 @@ ENUMS = {
 }
 REPO_RX = re.compile(r"^[\w.-]+/[\w.-]+$")
 SHA_RX = re.compile(r"^[0-9a-f]{7,40}$")
+RULE_ID_RX = re.compile(r"^R\d{3}$")
 
 # Our language values spelled the way GitHub's linguist spells them.
 # `other` is deliberately absent: it claims nothing, so there is nothing
@@ -129,6 +130,25 @@ def validate(path: Path) -> list[str]:
         and data["suppressed"] >= 0
     ):
         errs.append(f"{path.name}: `suppressed` must be a non-negative int")
+    # `disabled_rules` is load-bearing in a way `suppressed` is not: a
+    # suppression silences one finding, a disabled rule silences a whole
+    # class of them, and the grade is still published as though the full
+    # set had run. So it gets the stricter check of the two -- a rule id
+    # that does not exist means the entry is disclosing something
+    # unreadable, which is no better than not disclosing it.
+    if "disabled_rules" in data:
+        value = data["disabled_rules"]
+        if not (isinstance(value, list) and all(isinstance(r, str) for r in value)):
+            errs.append(f"{path.name}: `disabled_rules` must be a list of rule id strings")
+        else:
+            bad = [r for r in value if not RULE_ID_RX.match(r)]
+            if bad:
+                errs.append(
+                    f"{path.name}: `disabled_rules` contains malformed rule id(s): "
+                    f"{', '.join(bad)} (expected e.g. R001)"
+                )
+            if len(set(value)) != len(value):
+                errs.append(f"{path.name}: `disabled_rules` contains duplicates")
     if "repo" in data and isinstance(data["repo"], str) and not REPO_RX.match(data["repo"]):
         errs.append(f"{path.name}: `repo` must look like owner/name")
     if "sha" in data and not (isinstance(data["sha"], str) and SHA_RX.match(data["sha"])):
