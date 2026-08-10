@@ -862,6 +862,14 @@ def cmd_fix(args) -> int:
         return 2
 
     root = Path(args.path).resolve()
+
+    if not root.exists():
+        # rglob over a path that isn't there yields nothing, which would
+        # otherwise fall through to the "Nothing to fix" branch and exit 0,
+        # making a stale CI path look clean forever (#237).
+        console.print(f"[bold red]No such path:[/bold red] {root}")
+        return EXIT_UNSCANNABLE
+
     cfg = load_config(root)
     for warning in cfg.warnings:
         console.print(f"[yellow]config warning[/yellow]  {warning}")
