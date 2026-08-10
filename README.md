@@ -179,6 +179,56 @@ file**, not just that line. Every other rule reports each occurrence
 separately, and there suppression really is per line. If you suppress one of
 these three, you are accepting the rule's verdict on that file.
 
+### Adopting on an existing project
+
+Suppression is "this one finding is wrong." A baseline is the other half:
+"not yet." A mature server hitting this tool for the first time can have
+dozens of `breaking` findings, and fixing every one before `check` can go
+into CI is exactly the all-or-nothing story that keeps a tool like this
+from ever getting adopted.
+
+```bash
+mcp-migrate check --write-baseline    # snapshot what's here today
+mcp-migrate check                     # exits 0 -- nothing new
+```
+
+`--write-baseline` records every current finding to
+`.mcp-migrate-baseline.json` in the project root (or wherever `--baseline`
+points, if you pass one) and exits. From then on, a plain `check` picks
+that file up automatically, and only findings **not** in it can fail the
+run:
+
+```
+$ mcp-migrate check
+  breaking  R001  server.ts:14  Mcp-Session-Id was removed from the Streamable HTTP transport.
+
+1 new finding(s) (27 baselined)
+
+Grade F (…)
+```
+
+A finding is identified by its rule and the *content* of the line it
+points at, not by `path:line` alone — inserting a line above a baselined
+finding would otherwise make every entry below it look brand new the next
+time `check` runs. If a baselined finding stops showing up at all, `check`
+says so instead of letting it sit in the file forever:
+
+```
+1 baselined finding(s) no longer present -- fixed, or the code moved?
+Refresh with `mcp-migrate check --write-baseline`.
+```
+
+**The grade never reads the baseline.** `Grade F (…)` above still counts
+every finding, baselined or not — the letter is a claim about the code,
+not about what a team has agreed to tolerate for now. Only the exit code
+and what gets printed as actionable are narrowed. A baseline that could
+turn a D into an A would make the board fiction.
+
+`--json` carries the same split: `findings` and `counts` exclude anything
+in the baseline, `grade`/`score` don't, and a `baseline` object
+(`path`/`total`/`new`/`stale`) is added so a CI script doesn't have to
+diff the two itself.
+
 Exit codes, so it drops straight into CI:
 
 | code | meaning |
