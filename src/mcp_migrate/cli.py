@@ -943,10 +943,10 @@ def cmd_fix(args) -> int:
     for f in project.files:
         text = fixed_by_path.get(f.path, f.text)
         try:
-            tree = ast.parse(text, filename=str(f.path))
+            tree = ast.parse(text, filename=str(f.path)) if f.language == "python" else None
         except SyntaxError:
             tree = None
-        post_fix_files.append(SourceFile(path=f.path, text=text, tree=tree))
+        post_fix_files.append(SourceFile(path=f.path, text=text, tree=tree, language=f.language))
     remaining = _findings_for(root, post_fix_files, disabled=cfg.disabled_rules)
     if remaining:
         console.print(f"[yellow]{len(remaining)} finding(s) still need a human after this fix "
