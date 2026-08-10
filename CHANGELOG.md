@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-10
+
 ### Added
 
 - **`check --rule`, `check --severity`, and `check --fail-on`.**
@@ -49,6 +51,19 @@ All notable changes to this project are documented here.
   predate this field and are not invalidated by its landing.
 
 ### Changed
+
+- **`check --json` gained three required keys: `rule_filtered`, `filters`
+  and `fail_on`.** Reading this before upgrading a CI integration.
+
+  All three are always present. A consumer validating against the 0.3.0
+  schema will reject 0.4.0 output until it is updated, exactly as 0.3.0 did
+  to 0.2.0 with `suppressed`/`unused_suppressions`. This is the second
+  consecutive release to break the contract; `schemas/check-json.schema.json`
+  is the executable version of it and is the thing to validate against.
+
+  `grade` and `score` are schema-required to be `null` whenever
+  `rule_filtered` is `true` — a grade computed from part of the rule set is
+  not a grade, so it is withheld rather than reported small.
 
 - **`RULE_CAP` is now derived from `WEIGHT` instead of hand-picked, and two
   published scores move up.**

@@ -486,7 +486,7 @@ color using the table above):
 
 <!-- BOARD:START -->
 
-**16 servers checked** (6x A, 8x B, 1x C, 1x D)
+**16 servers checked** (7x A, 7x B, 1x C, 1x D)
 
 All of these were checked by this project, not submitted by the servers' maintainers -- so read it as a survey, not as adoption. If you maintain one of these, [submit your own entry](registry/README.md) and it becomes yours.
 
@@ -498,7 +498,7 @@ All of these were checked by this project, not submitted by the servers' maintai
 | [dynamodb-mcp-server](https://github.com/awslabs/mcp) | **A** | ready | python | Official AWS DynamoDB MCP server providing expert data modeling guidance, validation, and cost analysis tools. |
 | [mcp-server-motherduck](https://github.com/motherduckdb/mcp-server-motherduck) | **A** | ready | python | Local MCP server connecting AI assistants to DuckDB and MotherDuck for SQL analytics and data engineering. |
 | [mcp-server-qdrant](https://github.com/qdrant/mcp-server-qdrant) | **A** | ready | python | Official MCP server for Qdrant that acts as a semantic memory layer for keeping and retrieving memories in the vector search engine. |
-| [mcp-server-tree-sitter](https://github.com/wrale/mcp-server-tree-sitter) | **B** | ready | python | MCP server providing tree-sitter code analysis so AI assistants get structure-aware access to codebases in many languages. |
+| [mcp-server-tree-sitter](https://github.com/wrale/mcp-server-tree-sitter) | **A** | ready | python | MCP server providing tree-sitter code analysis so AI assistants get structure-aware access to codebases in many languages. |
 | [arxiv-mcp-server](https://github.com/blazickjp/arxiv-mcp-server) | **B** | ready | python | Search, download, and read arXiv papers, with semantic search and citation tools, over MCP. |
 | [mcp-server-fetch](https://github.com/modelcontextprotocol/servers) | **B** | ready | python | Reference MCP server that fetches web pages and converts HTML to markdown so LLMs can read them in chunks. |
 | [mcp-server-sentry](https://github.com/modelcontextprotocol/servers-archived) | **B** | ready | python | Archived reference MCP server for retrieving and analyzing issues, stacktraces, and debugging info from Sentry.io. |

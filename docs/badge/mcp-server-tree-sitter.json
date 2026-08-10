@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "label": "MCP 2026-07-28 (0.3.0)",
-  "message": "B",
-  "color": "green",
+  "label": "MCP 2026-07-28 (0.4.0)",
+  "message": "A",
+  "color": "brightgreen",
   "isError": false
 }
