@@ -125,6 +125,36 @@ R001 = "off -- deliberate"
     assert result.disabled_rules == {"R001": "deliberate"}
 
 
+def test_unknown_rule_id_warns_and_is_not_disabled(tmp_path):
+    _write(tmp_path, "server.py", PY_TRIGGER)
+    _write(tmp_path, "pyproject.toml", """
+[tool.mcp-migrate.rules]
+R999 = "off -- typo"
+""")
+
+    result = run_check_detailed(tmp_path)
+
+    assert result.disabled_rules == {}
+    assert result.config.disabled_rules == {"R999": "typo"}
+    assert result.config.warnings == [
+        f"{tmp_path / 'pyproject.toml'}: no rule R999 -- "
+        "see `mcp-migrate rules` for the 21 that exist"
+    ]
+
+
+def test_registered_rule_id_does_not_warn(tmp_path):
+    _write(tmp_path, "server.py", PY_TRIGGER)
+    _write(tmp_path, "pyproject.toml", """
+[tool.mcp-migrate.rules]
+R001 = "off"
+""")
+
+    result = run_check_detailed(tmp_path)
+
+    assert result.disabled_rules == {"R001": ""}
+    assert result.config.warnings == []
+
+
 def test_a_disabled_rule_does_not_cost_the_grade(tmp_path):
     """The whole point: disabling a rule must not merely hide its findings
     from the report while still charging the score for them."""
