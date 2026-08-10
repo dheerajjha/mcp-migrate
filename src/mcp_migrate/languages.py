@@ -55,18 +55,20 @@ DISPLAY = {
 }
 
 
-def survey(root: Path) -> Counter:
+def survey(root: Path, *, extra_skip: frozenset[str] = frozenset()) -> Counter:
     """Count source files per language under `root`.
 
     Walks with `os.walk` rather than `rglob` so vendored directories can be
     pruned before descending: `node_modules` alone can hold six figures of
     `.js` files, which would both dominate the count and cost real time to
-    walk. Uses the same skip list as the scanner, so what this reports and
-    what the scanner reads stay in agreement.
+    walk. Uses the same skip list as the scanner (plus any project-config
+    `skip` entries, #183), so what this reports and what the scanner reads
+    stay in agreement.
     """
+    skip_dirs = SKIP_DIRS | extra_skip
     counts: Counter = Counter()
     for _dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        dirnames[:] = [d for d in dirnames if d not in skip_dirs]
         for name in filenames:
             lang = EXTENSIONS.get(Path(name).suffix.lower())
             if lang is not None:

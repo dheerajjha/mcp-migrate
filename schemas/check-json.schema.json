@@ -19,7 +19,9 @@
     "counts",
     "findings",
     "suppressed",
-    "unused_suppressions"
+    "unused_suppressions",
+    "disabled_rules",
+    "config_warnings"
   ],
   "additionalProperties": false,
   "properties": {
@@ -260,6 +262,35 @@
             "description": "the text after `--` in the ignore comment; empty if none was given"
           }
         }
+      }
+    },
+    "disabled_rules": {
+      "type": "array",
+      "description": "rules switched off by project config (`[tool.mcp-migrate.rules]` in pyproject.toml, or a standalone .mcp-migrate.toml). These never run, so they contribute no findings and cost nothing against the grade.",
+      "items": {
+        "type": "object",
+        "required": [
+          "rule",
+          "reason"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "rule": {
+            "type": "string",
+            "pattern": "^R[0-9]{3}$"
+          },
+          "reason": {
+            "type": "string",
+            "description": "the reason given in config, e.g. `R008 = \"off -- reason\"`; empty if none was given"
+          }
+        }
+      }
+    },
+    "config_warnings": {
+      "type": "array",
+      "description": "problems found while reading project config -- malformed TOML, an unrecognised rule id, a value that isn't understood. Config that couldn't be read falls back to defaults rather than failing the run, so these are surfaced here instead.",
+      "items": {
+        "type": "string"
       }
     }
   },

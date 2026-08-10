@@ -5,6 +5,7 @@ language:      {required: true,  type: str,  enum: [python, typescript, go, rust
 grade:         {required: true,  type: str,  enum: [A, B, C, D, F]}
 score:         {required: true,  type: int,  range: [0, 100]}
 suppressed:    {required: false, type: int,  desc: "non-negative count of findings suppressed when the grade was computed"}
+disabled_rules:{required: false, type: list, desc: "list of rule IDs switched off by project config"}
 checked_with:  {required: true,  type: str,  desc: "mcp-migrate <version>"}
 spec:          {required: true,  type: str,  desc: "spec revision checked against"}
 # The commit `repo` was at when this entry was graded. Without it, `repo`

@@ -18,6 +18,7 @@ from . import __version__
 from . import overlap as overlap_mod
 from . import sarif as sarif_mod
 from . import suppress as suppress_mod
+from .config import Config, load_config
 from .fixers import all_fixers
 from .grade import badge_url, letter, score
 from .languages import DISPLAY, PARTIAL, SUPPORTED, describe, primary, survey
@@ -66,13 +67,23 @@ class CheckResult:
     suppressed: list
     suppressions: list
     suppression_problems: list
+    config: Config
+    disabled_rules: dict  # rule id -> reason, for rules a project config switched off
 
 
 def run_check_detailed(
-    root: Path, *, include_tests: bool = False, rule_ids: frozenset[str] | None = None,
+    root: Path, *, include_tests: bool = False, rule_ids: frozenset[str] | None = None, config: Config | None = None,
 ) -> "CheckResult":
-    project = load_project(root, include_tests=include_tests)
+    if config is None:
+        config = load_config(root)
+    # A flag beats config: `include_tests` here is whatever the caller
+    # already decided from `--include-tests`, and config can only turn it
+    # on when the flag didn't -- there's no flag to turn it back off, so
+    # there's nothing for config to lose to in that direction.
+    effective_include_tests = include_tests or config.include_tests
+    project = load_project(root, include_tests=effective_include_tests, extra_skip=config.skip)
     rules = {r.id: r for r in all_rules()}
+    disabled_rules = {rid: reason for rid, reason in config.disabled_rules.items() if rid in rules}
     findings = []
     # One pass per (rule, language it declares), against a project view
     # filtered to that language. Views are cached because building one
@@ -81,6 +92,12 @@ def run_check_detailed(
     views: dict[str, Project] = {}
     for rule in rules.values():
         if rule_ids is not None and rule.id not in rule_ids:
+            continue
+        if rule.id in disabled_rules:
+            # Never run, not run-then-discarded: a disabled rule costs
+            # nothing against the grade because it produces no findings to
+            # subtract, which is different from producing findings and
+            # having them waved away after scoring. See config.py.
             continue
         for language in rule.languages:
             if language not in views:
@@ -103,6 +120,7 @@ def run_check_detailed(
         project=project, rules=rules, findings=findings, value=value,
         grade=letter(value), suppressed=suppressed,
         suppressions=suppressions, suppression_problems=problems,
+        config=config, disabled_rules=disabled_rules,
     )
 
 
@@ -367,6 +385,36 @@ def _report_suppressions(console, result, *, show: bool) -> None:
         console.print("[dim]Run with --show-suppressions to see each one and its reason.[/dim]")
 
 
+def _disabled_rule_dicts(result) -> list[dict]:
+    return [
+        {"rule": rid, "reason": reason}
+        for rid, reason in sorted(result.disabled_rules.items())
+    ]
+
+
+def _report_config(console, result: "CheckResult") -> None:
+    """Say what project config changed -- always, not behind a flag.
+
+    A rule disabled from a config file nobody reads is how a project
+    convinces itself it's compliant; the same argument `_report_suppressions`
+    makes for inline `ignore` comments applies here, one config-load earlier.
+    """
+    for warning in result.config.warnings:
+        console.print(f"[yellow]config warning[/yellow]  {warning}")
+
+    if not result.disabled_rules:
+        return
+
+    named = ", ".join(
+        f"{rid} ({reason})" if reason else rid
+        for rid, reason in sorted(result.disabled_rules.items())
+    )
+    console.print(
+        f"[dim]{len(result.disabled_rules)} rule(s) disabled by config "
+        f"({result.config.source}): {named}[/dim]"
+    )
+
+
 def cmd_check(args) -> int:
     console = Console()
     root = Path(args.path).resolve()
@@ -377,11 +425,12 @@ def cmd_check(args) -> int:
         console.print(f"[bold red]No such path:[/bold red] {root}")
         return EXIT_UNSCANNABLE
 
+    cfg = load_config(root)
     rule_ids = frozenset(args.rule) if args.rule else None
     severities = frozenset(args.severity) if args.severity else None
     fail_on = args.fail_on
 
-    result = run_check_detailed(root, include_tests=args.include_tests, rule_ids=rule_ids)
+    result = run_check_detailed(root, include_tests=args.include_tests, rule_ids=rule_ids, config=cfg)
     project, rules, all_findings = result.project, result.rules, result.findings
     value, grade = result.value, result.grade
     # A grade computed from a subset of the rule set isn't a grade -- #178.
@@ -402,8 +451,9 @@ def cmd_check(args) -> int:
         "rule": sorted(rule_ids) if rule_ids else [],
         "severity": sorted(severities) if severities else [],
     }
-    counts = survey(root)
-    reason = unscannable_reason(root, project, counts, include_tests=args.include_tests)
+    counts = survey(root, extra_skip=cfg.skip)
+    effective_include_tests = args.include_tests or cfg.include_tests
+    reason = unscannable_reason(root, project, counts, include_tests=effective_include_tests)
     sdk_info = detect_sdk(root)
 
     if _output_format(args) == "sarif":
@@ -443,6 +493,8 @@ def cmd_check(args) -> int:
                 "findings": [_finding_dict(f, rules) for f in findings],
                 "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
                 "unused_suppressions": _unused_suppression_dicts(result),
+                "disabled_rules": _disabled_rule_dicts(result),
+                "config_warnings": list(result.config.warnings),
             }, indent=2))
             return EXIT_OK
         if reason:
@@ -467,6 +519,8 @@ def cmd_check(args) -> int:
                 "findings": [_finding_dict(f, rules) for f in findings],
                 "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
                 "unused_suppressions": _unused_suppression_dicts(result),
+                "disabled_rules": _disabled_rule_dicts(result),
+                "config_warnings": list(result.config.warnings),
             }, indent=2))
             return _exit_for(all_findings, rules, fail_on) if _checked_something(project) \
                 else EXIT_UNSCANNABLE
@@ -487,6 +541,8 @@ def cmd_check(args) -> int:
             "findings": [_finding_dict(f, rules) for f in findings],
             "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
             "unused_suppressions": _unused_suppression_dicts(result),
+            "disabled_rules": _disabled_rule_dicts(result),
+            "config_warnings": list(result.config.warnings),
         }, indent=2))
         return _exit_for(all_findings, rules, fail_on)
 
@@ -534,6 +590,7 @@ def cmd_check(args) -> int:
 
     if reason:
         console.print()
+        _report_config(console, result)
         # Not .capitalize() -- that lowercases the rest, turning "24
         # TypeScript" into "24 typescript".
         # "Nothing scannable" is only true when we opened nothing. A clean
@@ -594,6 +651,7 @@ def cmd_check(args) -> int:
         return _exit_for(all_findings, rules, fail_on) if _checked_something(project) \
             else EXIT_UNSCANNABLE
 
+    _report_config(console, result)
     _report_suppressions(console, result, show=args.show_suppressions)
 
     n_python = sum(1 for f in project.files if f.language == "python")
@@ -718,16 +776,21 @@ def cmd_rules(args) -> int:
     return 0
 
 
-def _select_fixers(*, safe_only: bool = False, rule_ids: frozenset[str] | None = None):
+def _select_fixers(*, safe_only: bool = False, rule_ids: frozenset[str] | None = None, disabled: dict | None = None):
     fixers = all_fixers()
     if rule_ids is not None:
         fixers = [fx for fx in fixers if fx.rule_id in rule_ids]
     if safe_only:
         fixers = [fx for fx in fixers if fx.confidence == "safe"]
+    if disabled:
+        # A rule turned off in project config (#183) shouldn't get
+        # auto-fixed either -- if `check` won't flag it, `fix` writing a
+        # change for it anyway would be stranger than skipping it.
+        fixers = [fx for fx in fixers if fx.rule_id not in disabled]
     return fixers
 
 
-def _findings_for(root: Path, files: list[SourceFile]):
+def _findings_for(root: Path, files: list[SourceFile], *, disabled: dict | None = None):
     """Run every rule against an in-memory set of files (some possibly
     edited, not yet written to disk) instead of re-reading from disk.
 
@@ -739,6 +802,8 @@ def _findings_for(root: Path, files: list[SourceFile]):
     findings = []
     views: dict[str, Project] = {}
     for rule in rules.values():
+        if disabled and rule.id in disabled:
+            continue
         for language in rule.languages:
             if language not in views:
                 views[language] = project.for_language(language)
@@ -748,15 +813,20 @@ def _findings_for(root: Path, files: list[SourceFile]):
     return findings
 
 
-def run_fix(root: Path, *, include_tests: bool = False, safe_only: bool = False,
-            rule_ids: frozenset[str] | None = None):
+def run_fix(
+    root: Path, *, include_tests: bool = False, safe_only: bool = False,
+    rule_ids: frozenset[str] | None = None, config: Config | None = None,
+):
     """Compute fixes for every file under `root`, without touching disk.
 
     Returns (project, list of (SourceFile, new_text, [change descriptions])
     for files that actually changed, sorted fixers actually available).
     """
-    project = load_project(root, include_tests=include_tests)
-    fixers = _select_fixers(safe_only=safe_only, rule_ids=rule_ids)
+    if config is None:
+        config = load_config(root)
+    effective_include_tests = include_tests or config.include_tests
+    project = load_project(root, include_tests=effective_include_tests, extra_skip=config.skip)
+    fixers = _select_fixers(safe_only=safe_only, rule_ids=rule_ids, disabled=config.disabled_rules)
     results = []
     for f in project.files:
         text = f.text
@@ -792,14 +862,30 @@ def cmd_fix(args) -> int:
         return 2
 
     root = Path(args.path).resolve()
+    cfg = load_config(root)
+    for warning in cfg.warnings:
+        console.print(f"[yellow]config warning[/yellow]  {warning}")
+
     rule_ids = frozenset(args.rule) if args.rule else None
-    fixers = _select_fixers(safe_only=args.safe_only, rule_ids=rule_ids)
+    fixers = _select_fixers(safe_only=args.safe_only, rule_ids=rule_ids, disabled=cfg.disabled_rules)
+    skipped = {fx.rule_id for fx in all_fixers()} & set(cfg.disabled_rules)
+    if skipped and not rule_ids:
+        console.print(
+            f"[dim]{len(skipped)} fixer(s) skipped, disabled by config ({cfg.source}): "
+            f"{', '.join(sorted(skipped))}[/dim]"
+        )
     if not fixers:
-        console.print("[yellow]No fixers match the given filters (--rule / --safe-only).[/yellow]")
+        disabled_requested = [r for r in (args.rule or []) if r in cfg.disabled_rules]
+        if disabled_requested:
+            console.print(
+                f"[yellow]{', '.join(disabled_requested)} disabled by project config, so there's no fixer to run.[/yellow]"
+            )
+        else:
+            console.print("[yellow]No fixers match the given filters (--rule / --safe-only).[/yellow]")
         return 0
 
     project, _, results = run_fix(
-        root, include_tests=args.include_tests, safe_only=args.safe_only, rule_ids=rule_ids,
+        root, include_tests=args.include_tests, safe_only=args.safe_only, rule_ids=rule_ids, config=cfg,
     )
 
     if not results:
@@ -861,7 +947,7 @@ def cmd_fix(args) -> int:
         except SyntaxError:
             tree = None
         post_fix_files.append(SourceFile(path=f.path, text=text, tree=tree))
-    remaining = _findings_for(root, post_fix_files)
+    remaining = _findings_for(root, post_fix_files, disabled=cfg.disabled_rules)
     if remaining:
         console.print(f"[yellow]{len(remaining)} finding(s) still need a human after this fix "
                        f"-- run `mcp-migrate check{' --include-tests' if args.include_tests else ''} "
@@ -918,9 +1004,10 @@ def cmd_entry(args) -> int:
         err.print(f"[bold red]No such path:[/bold red] {root}")
         return EXIT_UNSCANNABLE
 
-    result = run_check_detailed(root)
+    cfg = load_config(root)
+    result = run_check_detailed(root, config=cfg)
     project, value, grade = result.project, result.value, result.grade
-    counts = survey(root)
+    counts = survey(root, extra_skip=cfg.skip)
 
     sdk_info = detect_sdk(root)
     if sdk_info.is_sdk:
@@ -937,7 +1024,7 @@ def cmd_entry(args) -> int:
             )
         return EXIT_UNSCANNABLE
 
-    reason = unscannable_reason(root, project, counts, include_tests=False)
+    reason = unscannable_reason(root, project, counts, include_tests=cfg.include_tests)
     if reason:
         err.print(f"[bold red]Refusing to generate an entry:[/bold red] {reason}.")
         _print_language_hint(err, counts)
@@ -968,13 +1055,17 @@ def cmd_entry(args) -> int:
     )
     sha = _git_sha(root)
     sha_line = f"sha: {sha}\n" if sha else ""
+    disabled_line = (
+        f"disabled_rules: [{', '.join(sorted(result.disabled_rules))}]\n"
+        if result.disabled_rules else ""
+    )
     body = f"""# registry/servers/{slug}.yaml
 name: {slug}
 repo: {repo}
 language: {language}
 grade: {grade}
 score: {value}
-{suppressed_line}checked_with: mcp-migrate {__version__}
+{suppressed_line}{disabled_line}checked_with: mcp-migrate {__version__}
 spec: "{SPEC}"
 {sha_line}status: {"ready" if grade in "AB" else "migrating"}
 notes: >-

@@ -237,6 +237,54 @@ posts a literal `{"method": "tools/list"}` payload, is evidence your project
 is well tested -- not evidence the server itself is broken. Pass
 `--include-tests` to scan those paths too.
 
+### Project config
+
+Everything above is a flag, which means it has to be retyped on every
+invocation and can't be shared with a team or with CI. Put it in
+`[tool.mcp-migrate]` in `pyproject.toml` instead:
+
+```toml
+[tool.mcp-migrate]
+skip = ["vendor/", "generated/"]
+include-tests = false
+
+[tool.mcp-migrate.rules]
+R008 = "off"                                          # no reason recorded
+R016 = "off -- ttl is enforced by the gateway in front of this"
+```
+
+No `pyproject.toml`? Which, given this tool targets MCP servers, is most
+JavaScript and TypeScript projects -- put the same keys in a standalone
+`.mcp-migrate.toml` at the project root instead:
+
+```toml
+skip = ["vendor/"]
+
+[rules]
+R008 = "off -- we propagate trace context out of band"
+```
+
+If a `pyproject.toml` exists at all, it wins, whether or not it actually
+sets `[tool.mcp-migrate]` -- the standalone file is only read for projects
+that have no `pyproject.toml` in the first place, so the two never end up
+silently disagreeing about which one applies.
+
+**Precedence: a flag beats config, config beats the built-in default.**
+`--include-tests` on the command line always wins; config can turn it on
+project-wide when the flag doesn't.
+
+**A disabled rule never runs, rather than running and being discarded.**
+It costs nothing against the grade, and it is never mistaken for a pass --
+`check` reports how many rules config switched off (`N rule(s) disabled by
+config`, with each rule id and its reason) in every run, not behind a flag,
+same as suppressions. `--json` carries the same list under `disabled_rules`.
+`fix` skips the fixer for a disabled rule too.
+
+Malformed config (bad TOML, an unrecognised rule id, `rules.R008 = "sometimes"`)
+doesn't fail the run -- it falls back to defaults and reports what it
+couldn't understand, under `config_warnings` in `--json` output and as a
+`config warning` line in text output.
+
 ## `mcp-migrate fix`
 
 ```
