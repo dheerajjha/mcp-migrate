@@ -288,3 +288,76 @@ def test_readme_grade_table_matches_the_code():
                 f"letter({low - 1}) is also {grade} -- the band starts lower "
                 "than the table claims"
             )
+
+
+def test_readme_precommit_rev_is_the_current_version():
+    """The `rev:` in README's pre-commit example, against `__version__`.
+
+    It had drifted to `v0.2.0` while the project shipped 0.3.0 and 0.4.0.
+    A stale `rev` is quieter than a wrong one: pre-commit resolves it
+    happily, so the user gets a working hook running two releases of rules
+    behind, with nothing anywhere saying so -- including in this repo,
+    where the natural place to notice would have been a release checklist
+    that does not exist.
+
+    Pinning it to `__version__` rather than to the newest git tag is
+    deliberate: tags are not always present in a CI checkout, and the
+    version in the package is the thing a release has to bump anyway. The
+    cost is that bumping the version turns this red until the README is
+    updated in the same change, which is exactly the reminder that was
+    missing.
+    """
+    from mcp_migrate import __version__
+
+    readme = (ROOT / "README.md").read_text()
+    revs = re.findall(r"^\s*rev:\s*(\S+)\s*$", readme, re.MULTILINE)
+
+    assert revs, "README's pre-commit example has no `rev:` line any more"
+    for rev in revs:
+        assert rev == f"v{__version__}", (
+            f"README pins the pre-commit hook at `{rev}` but this is "
+            f"version {__version__} -- anyone copying that block gets an "
+            "older release of the rules than the one they just read about."
+        )
+
+
+def test_readme_cost_and_cap_table_matches_the_code():
+    """README's `Cost per finding | Cap per rule` table, against WEIGHT and
+    RULE_CAP.
+
+    The test above pinned the *score to letter* half of the grade and left
+    the *finding to score* half unchecked, and the gap did exactly what an
+    unchecked table does. `CAP_MULTIPLE` went to 1, which by construction
+    makes every cap equal its weight, and the README went on claiming -12
+    and -6 for the two smaller severities. Nothing failed, because nothing
+    was looking.
+
+    Reading the caps out of `RULE_CAP` rather than restating them is the
+    point: `RULE_CAP` is derived from `WEIGHT * CAP_MULTIPLE`, so if the
+    multiple is ever changed again this test fails until the README is
+    changed too, which is the only mechanism that has ever kept these two
+    in step.
+    """
+    from mcp_migrate.grade import RULE_CAP, WEIGHT
+
+    readme = (ROOT / "README.md").read_text()
+    _header, rows = _table_after(
+        readme, "| Severity     | Cost per finding | Cap per rule | Meaning                                     |"
+    )
+
+    documented_cost, documented_cap = {}, {}
+    for severity, cost, cap, _meaning in rows:
+        name = severity.strip("`")
+        documented_cost[name] = -int(cost)
+        documented_cap[name] = -int(cap)
+
+    assert documented_cost == WEIGHT, (
+        "README's `Cost per finding` column disagrees with WEIGHT in "
+        f"src/mcp_migrate/grade.py.\n  README: {documented_cost}\n  code:   {WEIGHT}"
+    )
+    assert documented_cap == RULE_CAP, (
+        "README's `Cap per rule` column disagrees with RULE_CAP in "
+        "src/mcp_migrate/grade.py -- a maintainer reading it would predict "
+        "the wrong grade for a repeated finding.\n"
+        f"  README: {documented_cap}\n  code:   {RULE_CAP}"
+    )

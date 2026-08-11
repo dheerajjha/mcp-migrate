@@ -387,7 +387,7 @@ nothing.
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/dheerajjha/mcp-migrate
-    rev: v0.2.0
+    rev: v0.4.0
     hooks:
       - id: mcp-migrate
 ```
@@ -459,8 +459,8 @@ points -- over 4x what one rule is now allowed to cost.
 | Severity     | Cost per finding | Cap per rule | Meaning                                     |
 | ------------ | ----------------- | ------------ | -------------------------------------------- |
 | `breaking`   | -25                | -25          | Your server stops working under 2026-07-28.   |
-| `deprecated` | -8                 | -12          | Still works today, on a 12+ month clock.      |
-| `advisory`   | -3                 | -6           | Best practice, not a compatibility risk.      |
+| `deprecated` | -8                 | -8           | Still works today, on a 12+ month clock.      |
+| `advisory`   | -3                 | -3           | Best practice, not a compatibility risk.      |
 
 **The letter counts kinds of problem, not amount of work.** Because every
 rule is capped, one `Mcp-Session-Id` read and fourteen of them across four
