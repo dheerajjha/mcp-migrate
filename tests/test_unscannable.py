@@ -129,6 +129,17 @@ def test_check_refuses_a_path_that_does_not_exist(tmp_path, capsys):
     assert "Grade" not in out
 
 
+def test_fix_refuses_a_path_that_does_not_exist(tmp_path, capsys):
+    # Same failure mode as `check`: `fix` on a missing directory used to
+    # fall through to "Nothing to fix" and exit 0, so a stale path in a
+    # CI invocation reported success forever (#237).
+    exit_code = main(["fix", str(tmp_path / "no-such-dir")])
+    out = capsys.readouterr().out
+    assert exit_code == 2
+    assert "No such path" in out
+    assert "Nothing to fix" not in out
+
+
 def test_check_still_grades_a_real_python_project(python_tree, capsys):
     exit_code = main(["check", str(python_tree), "--json"])
     data = json.loads(capsys.readouterr().out)
