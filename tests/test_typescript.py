@@ -1827,3 +1827,22 @@ export const STACK = "mcp";
 """
     project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
     assert PerConnectionState().check(project) == []
+
+def test_fix_preserves_typescript_language_for_remaining_findings(tmp_path, capsys):
+    path = _write(tmp_path, "transport.ts", LEGACY_TS)
+
+    fix_exit = main(["fix", str(tmp_path), "--write"])
+    fix_output = capsys.readouterr().out
+
+    check_exit = main(["check", str(tmp_path), "--json"])
+    check_data = json.loads(capsys.readouterr().out)
+
+    remaining_line = next(
+        line
+        for line in fix_output.splitlines()
+        if "finding(s) still need a human after this fix" in line
+    )
+    remaining = int(remaining_line.split()[0])
+
+    assert remaining == len(check_data["findings"])
+    assert fix_exit == 0
