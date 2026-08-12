@@ -1822,3 +1822,100 @@ def test_r001_fixer_skips_docstring_and_comments_code_line():
     lines = result.text.splitlines()
     assert lines[1] == 'request.headers.get("Mcp-Session-Id")'
     assert any('TODO(mcp-migrate)' in ln for ln in lines)
+
+
+# --- 12. `fix --write` must never leave a parseable file unparseable (#244) ---
+#
+# Fixers edit line by line with no model of what a line holds up. Commenting
+# out the only names in a parenthesised import, or the only statement in a
+# function body, leaves source that will not import -- and the tool used to
+# write it, print "No findings remain." and exit 0, after which `check`
+# graded the wreckage A because the findings were now inside comments.
+#
+# The guard lives in `cmd_fix` rather than in each fixer on purpose: it is
+# the one place where "did I just break this file" is cheap and certain to
+# answer, and it cannot be forgotten by the next fixer someone writes. The
+# per-fixer cure is a separate and larger job.
+
+STRUCTURAL_ONLY_IMPORT = '''"""Thin protocol shim over the MCP SDK."""
+from mcp.types import (
+    PingRequest,
+    SetLevelRequest,
+)
+
+
+def handlers():
+    return {"ping": PingRequest, "setLevel": SetLevelRequest}
+'''
+
+
+def test_fix_refuses_an_edit_that_would_break_the_file(tmp_path, capsys):
+    target = tmp_path / "shim.py"
+    target.write_text(STRUCTURAL_ONLY_IMPORT)
+
+    exit_code = main(["fix", str(tmp_path), "--write"])
+    out = capsys.readouterr().out
+
+    assert target.read_text() == STRUCTURAL_ONLY_IMPORT, (
+        "fix --write rewrote a file into source that does not parse"
+    )
+    ast.parse(target.read_text())
+    assert "refused" in out
+    assert exit_code == 1, "a refused fix is not a clean run"
+
+
+def test_a_refusal_does_not_block_the_files_that_are_fine(tmp_path, capsys):
+    """One bad file must not cost the user every other fix in the tree."""
+    (tmp_path / "bad.py").write_text(STRUCTURAL_ONLY_IMPORT)
+    (tmp_path / "good.py").write_text("RESOURCE_NOT_FOUND = -32002\n")
+
+    exit_code = main(["fix", str(tmp_path), "--write"])
+
+    assert "-32602" in (tmp_path / "good.py").read_text(), "good.py was not fixed"
+    assert (tmp_path / "bad.py").read_text() == STRUCTURAL_ONLY_IMPORT
+    assert exit_code == 1
+
+
+def test_a_file_that_was_already_broken_is_not_our_fault(tmp_path, capsys):
+    """Refusing here would strand the person most likely to need the tool:
+    someone mid-migration whose tree does not currently parse."""
+    broken = "def broken(:\n    RESOURCE_NOT_FOUND = -32002\n"
+    (tmp_path / "b.py").write_text(broken)
+
+    main(["fix", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert "refused" not in out
+
+
+def test_the_dry_run_refuses_too(tmp_path, capsys):
+    """A diff we would decline to write is its own kind of lie -- the whole
+    point of the dry run is that it shows what --write would do."""
+    (tmp_path / "shim.py").write_text(STRUCTURAL_ONLY_IMPORT)
+
+    main(["fix", str(tmp_path)])
+    out = capsys.readouterr().out
+
+    assert "refused" in out
+    assert "Nothing was written" in out
+
+
+@pytest.mark.parametrize("name", sorted(p.name for p in (FIXTURES / "legacy_server").glob("*.py")))
+def test_fix_write_never_makes_a_fixture_unparseable(tmp_path, name):
+    """The invariant, over the corpus this repo already maintains.
+
+    Parametrised per file so a failure names the file rather than the suite,
+    and driven off `glob` so a fixture added later is covered without anyone
+    remembering to add it here -- which is the failure mode that let this
+    ship in the first place.
+    """
+    src = (FIXTURES / "legacy_server" / name).read_text()
+    try:
+        ast.parse(src)
+    except SyntaxError:
+        pytest.skip(f"{name} does not parse before we touch it")
+
+    shutil.copy(FIXTURES / "legacy_server" / name, tmp_path / name)
+    main(["fix", str(tmp_path), "--include-tests", "--write"])
+
+    ast.parse((tmp_path / name).read_text())

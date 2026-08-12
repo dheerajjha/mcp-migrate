@@ -381,6 +381,14 @@ correct, it leaves the source untouched rather than guess. A wrong fix that
 silently corrupts your server is worse than reporting the finding and doing
 nothing.
 
+That promise is also enforced rather than merely stated. Before a Python
+file is written, the result has to still parse: if applying a fix would turn
+a file that parsed into one that doesn't, that file is **refused** and left
+exactly as it was, named on the console, and `fix` exits `1`. Other files in
+the same run are still fixed. A file that already didn't parse before the run
+is never counted against us -- a tree mid-migration is exactly when you need
+this most.
+
 ## Catch it before it is committed
 
 ```yaml

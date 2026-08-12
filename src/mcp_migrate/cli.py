@@ -830,6 +830,46 @@ def _findings_for(root: Path, files: list[SourceFile], *, disabled: dict | None 
     return findings
 
 
+def _would_break_python(f: "SourceFile", new_text: str) -> bool:
+    """True when applying `new_text` would make a parseable file unparseable.
+
+    Conditioned on the original parsing, deliberately. A file that was already
+    broken before we touched it is not evidence about our edit, and refusing
+    to fix it would strand exactly the person most in need of the tool --
+    someone mid-migration with a half-edited server.
+
+    Python only. TypeScript has no parser here, and guessing at one to answer
+    this question would be a worse failure than the one it guards against.
+    """
+    if f.language != "python":
+        return False
+    try:
+        ast.parse(f.text)
+    except SyntaxError:
+        return False
+    try:
+        ast.parse(new_text)
+    except SyntaxError:
+        return True
+    return False
+
+
+def _partition_unparseable(results):
+    """Split fix results into (safe to apply, refused).
+
+    Refused entries are `(SourceFile, [rule ids that touched it])` -- the ids
+    are for the message, since the user's next question is always which fixer
+    to blame.
+    """
+    safe, refused = [], []
+    for f, new_text, file_changes in results:
+        if _would_break_python(f, new_text):
+            refused.append((f, sorted({fixer.rule_id for fixer, _desc in file_changes})))
+        else:
+            safe.append((f, new_text, file_changes))
+    return safe, refused
+
+
 def run_fix(
     root: Path, *, include_tests: bool = False, safe_only: bool = False,
     rule_ids: frozenset[str] | None = None, config: Config | None = None,
@@ -914,7 +954,37 @@ def cmd_fix(args) -> int:
         root, include_tests=args.include_tests, safe_only=args.safe_only, rule_ids=rule_ids, config=cfg,
     )
 
+    # Refuse any result that would turn parseable Python into unparseable
+    # Python (#244). Fixers edit line by line, so a line that is structurally
+    # load-bearing -- the only body of a function, the only names in a
+    # parenthesised import -- can be commented out and leave a file that will
+    # not import. This is the backstop for that whole class, not a cure for
+    # any one fixer: `fixers/base.py` already says a fixer that cannot be sure
+    # must return the source unchanged, and this enforces it at the one point
+    # where the answer is cheap and certain.
+    #
+    # Dry runs refuse too. Printing a diff we would decline to write is a
+    # different kind of lie, and the point of the dry run is that it tells you
+    # what `--write` would do.
+    results, refused = _partition_unparseable(results)
+    for f, fixer_ids in refused:
+        console.print(
+            f"[bold red]refused[/bold red] {f.path}: applying "
+            f"{', '.join(fixer_ids)} would leave this file unparseable, so it "
+            "was left alone. This is a bug in the fixer -- please report it "
+            "with the file if you can."
+        )
+    if refused:
+        console.print()
+
     if not results:
+        if refused:
+            # Not "nothing to fix": there was something, and we declined it.
+            console.print(
+                f"[yellow]{len(refused)} file(s) had fixes available that were refused.[/yellow] "
+                "Nothing was written."
+            )
+            return EXIT_FINDINGS
         console.print("[bold green]Nothing to fix.[/bold green] "
                        "(either the project is clean, or no fixer covers what's here -- see `mcp-migrate check`)")
         return 0
@@ -985,7 +1055,10 @@ def cmd_fix(args) -> int:
         console.print("[bold green]Changes written.[/bold green]")
     else:
         console.print("[dim]Dry run -- nothing was written. Re-run with --write to apply.[/dim]")
-    return 0
+    # A refusal is not a clean run even when other files were fixed, or the
+    # one file we declined to touch scrolls past above a green summary and a
+    # zero exit.
+    return EXIT_FINDINGS if refused else 0
 
 
 def _git_sha(root: Path) -> str | None:

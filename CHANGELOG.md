@@ -4,6 +4,33 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`fix --write` could write Python that doesn't parse.**
+  ([#244](https://github.com/dheerajjha/mcp-migrate/issues/244))
+
+  Fixers edit line by line, so a line that is structurally load-bearing --
+  the only names in a parenthesised `from x import (...)`, the only statement
+  in a function body -- could be commented out, leaving source that won't
+  import. The tool then printed `No findings remain.` and exited `0`, and a
+  following `check` graded the wreckage **A**, because the findings were now
+  inside comments where `search_code` correctly ignores them.
+
+  Before any Python file is written, the result must still parse. A fix that
+  would break a file that previously parsed is refused: the file is left
+  untouched, named on the console, and `fix` exits `1`. Other files in the
+  run are still fixed, and a file that already didn't parse beforehand is
+  never blamed on us.
+
+  This is a backstop, not a cure -- the individual fixers still make the bad
+  edit, and that is tracked separately.
+
+### Changed
+
+- **`fix` can now exit `1`.** It previously only ever exited `0` (or `2` for
+  an unreadable path). It exits `1` when a fix had to be refused, so CI
+  notices. A clean run is still `0`.
+
 ## [0.4.0] - 2026-08-10
 
 ### Added
