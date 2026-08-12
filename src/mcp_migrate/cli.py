@@ -71,6 +71,23 @@ class CheckResult:
     disabled_rules: dict  # rule id -> reason, for rules a project config switched off
 
 
+def _validate_configured_rules(config: Config, known_rule_ids) -> dict[str, str]:
+    """Return configured rule disables that name a registered rule."""
+    known = sorted(known_rule_ids)
+    known_set = set(known)
+    for rule_id in sorted(set(config.disabled_rules) - known_set):
+        suggestion = difflib.get_close_matches(rule_id, known, n=1)
+        if suggestion:
+            guidance = f"did you mean {suggestion[0]}?"
+        else:
+            guidance = f"see `mcp-migrate rules` for the {len(known)} that exist"
+        source = config.source or "config"
+        warning = f"{source}: no rule {rule_id} -- {guidance}"
+        if warning not in config.warnings:
+            config.warnings.append(warning)
+    return {rid: reason for rid, reason in config.disabled_rules.items() if rid in known_set}
+
+
 def run_check_detailed(
     root: Path, *, include_tests: bool = False, rule_ids: frozenset[str] | None = None, config: Config | None = None,
 ) -> "CheckResult":
@@ -83,7 +100,7 @@ def run_check_detailed(
     effective_include_tests = include_tests or config.include_tests
     project = load_project(root, include_tests=effective_include_tests, extra_skip=config.skip)
     rules = {r.id: r for r in all_rules()}
-    disabled_rules = {rid: reason for rid, reason in config.disabled_rules.items() if rid in rules}
+    disabled_rules = _validate_configured_rules(config, rules)
     findings = []
     # One pass per (rule, language it declares), against a project view
     # filtered to that language. Views are cached because building one
@@ -871,12 +888,13 @@ def cmd_fix(args) -> int:
         return EXIT_UNSCANNABLE
 
     cfg = load_config(root)
+    disabled_rules = _validate_configured_rules(cfg, (rule.id for rule in all_rules()))
     for warning in cfg.warnings:
         console.print(f"[yellow]config warning[/yellow]  {warning}")
 
     rule_ids = frozenset(args.rule) if args.rule else None
-    fixers = _select_fixers(safe_only=args.safe_only, rule_ids=rule_ids, disabled=cfg.disabled_rules)
-    skipped = {fx.rule_id for fx in all_fixers()} & set(cfg.disabled_rules)
+    fixers = _select_fixers(safe_only=args.safe_only, rule_ids=rule_ids, disabled=disabled_rules)
+    skipped = {fx.rule_id for fx in all_fixers()} & set(disabled_rules)
     if skipped and not rule_ids:
         console.print(
             f"[dim]{len(skipped)} fixer(s) skipped, disabled by config ({cfg.source}): "
