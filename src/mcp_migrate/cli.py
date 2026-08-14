@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from . import __version__
@@ -417,7 +418,7 @@ def _report_config(console, result: "CheckResult") -> None:
     makes for inline `ignore` comments applies here, one config-load earlier.
     """
     for warning in result.config.warnings:
-        console.print(f"[yellow]config warning[/yellow]  {warning}")
+        console.print(f"[yellow]config warning[/yellow]  {escape(warning)}")
 
     if not result.disabled_rules:
         return
@@ -930,7 +931,7 @@ def cmd_fix(args) -> int:
     cfg = load_config(root)
     disabled_rules = _validate_configured_rules(cfg, (rule.id for rule in all_rules()))
     for warning in cfg.warnings:
-        console.print(f"[yellow]config warning[/yellow]  {warning}")
+        console.print(f"[yellow]config warning[/yellow]  {escape(warning)}")
 
     rule_ids = frozenset(args.rule) if args.rule else None
     fixers = _select_fixers(safe_only=args.safe_only, rule_ids=rule_ids, disabled=disabled_rules)
