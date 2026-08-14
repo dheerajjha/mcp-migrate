@@ -129,18 +129,20 @@ def _load_toml(path: Path) -> dict | None | list[str]:
         return [f"{path}: invalid TOML, ignoring config ({e})"]
 
 
-def load_config(root: Path) -> Config:
-    """Load project config, or an empty one carrying only its warnings.
+def _load_config_at(level: Path) -> Config | None:
+    """Load config from one directory, or None if nothing there decides.
 
-    `pyproject.toml` wins if it exists at all, whether or not it actually
-    configures anything -- a project that has one and simply doesn't use
-    `[tool.mcp-migrate]` has given a complete answer ("nothing"), and going
-    on to also read a standalone file next to it would make the two files
-    silently fight over precedence. The standalone file is for projects
-    that have no `pyproject.toml` in the first place, which given what this
-    tool targets is most JavaScript and TypeScript ones.
+    `pyproject.toml` wins at a level if it exists at all, whether or not it
+    actually configures anything -- a project that has one and simply
+    doesn't use `[tool.mcp-migrate]` has given a complete answer
+    ("nothing") for that level, and going on to also read a standalone file
+    next to it would make the two files silently fight over precedence.
+    A section-less `pyproject.toml` returns None rather than an empty
+    config: in a monorepo the inner `pyproject.toml` is a packaging file
+    that says nothing about this tool, and treating its silence as an
+    answer would make `check src/` silently ignore the repo's real config.
     """
-    pyproject_path = root / "pyproject.toml"
+    pyproject_path = level / "pyproject.toml"
     if pyproject_path.is_file():
         data = _load_toml(pyproject_path)
         if isinstance(data, list):
@@ -151,9 +153,9 @@ def load_config(root: Path) -> Config:
             section = tool_table.get("mcp-migrate") or tool_table.get("mcp_migrate")
         if isinstance(section, dict):
             return _parse_table(section, source=pyproject_path)
-        return _empty()
+        return None
 
-    standalone_path = root / STANDALONE_FILENAME
+    standalone_path = level / STANDALONE_FILENAME
     if standalone_path.is_file():
         data = _load_toml(standalone_path)
         if isinstance(data, list):
@@ -162,4 +164,24 @@ def load_config(root: Path) -> Config:
             return _parse_table(data, source=standalone_path)
         return _empty()
 
-    return _empty()
+    return None
+
+
+def load_config(root: Path) -> Config:
+    """Load project config, or an empty one carrying only its warnings.
+
+    The config is searched for by walking up from `root`, so `check src/`
+    finds the repo's config at the repo root the way ruff, mypy, eslint, and
+    black all do. The walk stops at the first directory containing a `.git`
+    (the repo root), with the filesystem root as the backstop -- a stray
+    file in a parent directory outside the repo must never quietly change
+    someone's grade.
+    """
+    current = root.resolve()
+    while True:
+        found = _load_config_at(current)
+        if found is not None:
+            return found
+        if (current / ".git").exists() or current.parent == current:
+            return _empty()
+        current = current.parent

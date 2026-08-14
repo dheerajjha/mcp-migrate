@@ -419,6 +419,9 @@ def _report_config(console, result: "CheckResult") -> None:
     for warning in result.config.warnings:
         console.print(f"[yellow]config warning[/yellow]  {warning}")
 
+    if result.config.source is not None:
+        console.print(f"[dim]config: {result.config.source}[/dim]")
+
     if not result.disabled_rules:
         return
 

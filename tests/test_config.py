@@ -95,6 +95,75 @@ def test_malformed_toml_falls_back_to_defaults_with_a_warning(tmp_path):
     assert "invalid TOML" in cfg.warnings[0]
 
 
+# --- config discovery walks up from the scan root -------------------------
+
+def test_walks_up_to_repo_root_pyproject(tmp_path):
+    """`check src/` must find the repo's config at the repo root."""
+    _write(tmp_path, "pyproject.toml", """
+[tool.mcp-migrate.rules]
+R001 = "off"
+""")
+    cfg = load_config(tmp_path / "src")
+    assert cfg.disabled_rules == {"R001": ""}
+    assert cfg.source == tmp_path / "pyproject.toml"
+
+
+def test_walks_up_past_a_sectionless_inner_pyproject(tmp_path):
+    """A monorepo inner pyproject.toml that says nothing about this tool must
+    not stop the walk -- `check src/` still finds the repo root's config."""
+    _write(tmp_path, "pyproject.toml", """
+[tool.mcp-migrate.rules]
+R001 = "off"
+""")
+    _write(tmp_path / "src", "pyproject.toml", '[project]\nname = "inner-pkg"\n')
+    cfg = load_config(tmp_path / "src")
+    assert cfg.disabled_rules == {"R001": ""}
+    assert cfg.source == tmp_path / "pyproject.toml"
+
+
+def test_walks_up_to_standalone_file_in_parent(tmp_path):
+    _write(tmp_path, ".mcp-migrate.toml", 'skip = ["vendor"]\n')
+    cfg = load_config(tmp_path / "src")
+    assert cfg.skip == frozenset({"vendor"})
+    assert cfg.source == tmp_path / ".mcp-migrate.toml"
+
+
+def test_walk_stops_at_git_ceiling(tmp_path):
+    """A stray config above the repo root must never change the grade."""
+    _write(tmp_path, ".mcp-migrate.toml", 'skip = ["stray"]\n')
+    repo = tmp_path / "repo"
+    _write(repo, ".git", "")
+    cfg = load_config(repo / "src")
+    assert cfg.skip == frozenset()
+    assert cfg.source is None
+
+
+def test_walk_stops_at_filesystem_root_backstop(tmp_path):
+    """Even without a .git ceiling, the walk must terminate."""
+    _write(tmp_path, "pyproject.toml", '[tool.mcp-migrate]\nskip = ["top"]\n')
+    # No .git anywhere; walk from a deep dir up to the filesystem root and
+    # the config at tmp_path is between them, so it must still be found.
+    cfg = load_config(tmp_path / "a" / "b" / "c")
+    assert cfg.skip == frozenset({"top"})
+
+
+def test_check_text_reports_walked_up_config_source(tmp_path, capsys):
+    """The check output must say where the config came from when it was
+    found above the scan root, per the issue."""
+    _write(tmp_path, "pyproject.toml", """
+[tool.mcp-migrate.rules]
+R001 = "off"
+""")
+    _write(tmp_path / "src", "server.py", "x = 1\n")
+    rc = main(["check", str(tmp_path / "src")])
+    assert rc == 0
+    out = capsys.readouterr().out
+    # Rich wraps/truncates long paths across lines, so assert the line exists
+    # and that it names the walked-up config file rather than the exact path.
+    assert "config:" in out
+    assert "pyproject.toml" in out
+
+
 def test_unrecognised_rule_value_is_reported_not_silently_dropped(tmp_path):
     _write(tmp_path, ".mcp-migrate.toml", '[rules]\nR001 = "sometimes"\n')
     cfg = load_config(tmp_path)
