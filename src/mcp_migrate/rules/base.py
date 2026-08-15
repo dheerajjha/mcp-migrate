@@ -351,6 +351,14 @@ class Finding:
     # Nothing else reads these; the text and JSON outputs are unchanged.
     evidence_path: Path | None = None
     evidence_line: int | None = None
+    # The named feature this finding is about ("Sampling", "roots/list",
+    # ...), set by rules that classify their matches. overlap.py groups known
+    # rule pairs on this instead of on the line number, so two rules that
+    # describe the same underlying fact merge even when they matched
+    # different symbols on different lines. Optional: rules without a
+    # feature classification leave it unset and dedupe falls back to the
+    # line key.
+    feature: str | None = None
 
     def location(self) -> str:
         if self.path is None:
@@ -388,7 +396,8 @@ class Rule:
     def finding(self, message: str, f: SourceFile | None = None,
                 line: int | None = None, snippet: str | None = None,
                 evidence: SourceFile | None = None,
-                evidence_line: int | None = None) -> Finding:
+                evidence_line: int | None = None,
+                feature: str | None = None) -> Finding:
         """Build a Finding.
 
         `f` is the file the finding is *about*; passing none makes it a
@@ -397,6 +406,10 @@ class Rule:
         `evidence` is for project-level findings only: the file that made
         the rule fire, used to anchor the SARIF result. It does not change
         what the text or JSON outputs say. See Finding.evidence_path.
+
+        `feature` names what the finding is about, for rules that classify
+        their matches. `overlap.py` merges a known rule pair on it instead
+        of on the line number. See Finding.feature.
         """
         return Finding(
             rule_id=self.id,
@@ -406,6 +419,7 @@ class Rule:
             snippet=snippet,
             evidence_path=evidence.path if evidence else None,
             evidence_line=evidence_line,
+            feature=feature,
         )
 
 

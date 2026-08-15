@@ -74,6 +74,7 @@ class MultiRoundTripReplacesServerInitiated(Rule):
                         f,
                         line,
                         text,
+                        feature=name,
                     ))
             for pattern, name in FEATURES_LITERAL.items():
                 for f, line, text in project.search_wire(pattern):
@@ -83,6 +84,7 @@ class MultiRoundTripReplacesServerInitiated(Rule):
                         f,
                         line,
                         text,
+                        feature=name,
                     ))
             return out
 
@@ -96,6 +98,7 @@ class MultiRoundTripReplacesServerInitiated(Rule):
                     f"{name} was replaced by Multi Round-Trip Requests (InputRequiredResult "
                     "+ inputResponses).",
                     f, line, text,
+                    feature=name,
                 ))
         for pattern, name in FEATURES_LITERAL.items():
             # Already bounded at the definition, so both this path and the
@@ -107,5 +110,6 @@ class MultiRoundTripReplacesServerInitiated(Rule):
                     f"{name} was replaced by Multi Round-Trip Requests (InputRequiredResult "
                     "+ inputResponses).",
                     f, line, text,
+                    feature=name,
                 ))
         return out
