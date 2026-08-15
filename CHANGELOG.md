@@ -25,6 +25,17 @@ All notable changes to this project are documented here.
   This is a backstop, not a cure -- the individual fixers still make the bad
   edit, and that is tracked separately.
 
+- **Comment-out fixers no longer comment out import members.**
+  ([#245](https://github.com/dheerajjha/mcp-migrate/issues/245))
+
+  R009, R011, R012, R013 and R019 flag SDK type names that arrive in
+  parenthesised `from x import (A, B)` lists. Commenting each flagged member
+  line out left `from x import ( )`, which does not parse -- so the #244
+  guard refused the whole file and nothing got fixed. These fixers now
+  remove the flagged name from the list (a shared `strip_import_members`
+  helper), dropping the whole statement with its TODO when the list
+  empties, so the file stays parseable at every intermediate state.
+
 ### Changed
 
 - **`fix` can now exit `1`.** It previously only ever exited `0` (or `2` for

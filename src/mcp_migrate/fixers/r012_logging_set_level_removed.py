@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ._textedit import strip_import_members
 from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://modelcontextprotocol.io/specification/2026-07-28/changelog"
@@ -63,9 +64,11 @@ class LoggingSetLevelRemovedFixer(Fixer):
     def fix(self, source: str, path: Path) -> FixResult:
         lines = source.splitlines(keepends=True)
         out: list[str] = []
-        changes: list[str] = []
         prefix = comment_prefix(path)
         todo = f"{prefix}{TODO_BODY}"
+        # Remove import members from a parenthesised list rather than
+        # commenting them out, so `from x import ( )` is never produced (#245).
+        lines, changes = strip_import_members(lines, _set_level_hit, todo, "SetLevelRequest/logging/setLevel")
 
         for i, raw_line in enumerate(lines, start=1):
             stripped = raw_line.lstrip(" \t")
