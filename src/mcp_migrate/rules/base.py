@@ -342,6 +342,14 @@ class Finding:
     path: Path | None = None
     line: int | None = None
     snippet: str | None = None
+    # The named feature this finding is about ("Sampling", "roots/list",
+    # ...), set by rules that classify their matches. overlap.py groups known
+    # rule pairs on this instead of on the line number, so two rules that
+    # describe the same underlying fact merge even when they matched
+    # different symbols on different lines. Optional: rules without a
+    # feature classification leave it unset and dedupe falls back to the
+    # line key.
+    feature: str | None = None
 
     def location(self) -> str:
         if self.path is None:
@@ -377,13 +385,15 @@ class Rule:
 
     # convenience for subclasses
     def finding(self, message: str, f: SourceFile | None = None,
-                line: int | None = None, snippet: str | None = None) -> Finding:
+                line: int | None = None, snippet: str | None = None,
+                feature: str | None = None) -> Finding:
         return Finding(
             rule_id=self.id,
             message=message,
             path=f.path if f else None,
             line=line,
             snippet=snippet,
+            feature=feature,
         )
 
 

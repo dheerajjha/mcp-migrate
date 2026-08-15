@@ -103,7 +103,9 @@ class DeprecatedCoreFeatures(Rule):
             # "roots/list" isn't a real dependency on the deprecated
             # feature.
             for f, line, text in project.search_code(pattern):
-                out.append(self.finding(f"{name} is deprecated. {advice}", f, line, text))
+                out.append(self.finding(
+                    f"{name} is deprecated. {advice}", f, line, text, feature=name
+                ))
         return out
 
     def _check_ts(self, project: Project) -> list[Finding]:
@@ -135,6 +137,6 @@ class DeprecatedCoreFeatures(Rule):
                 if key in seen:
                     continue
                 seen.add(key)
-                out.append(self.finding(message, f, line, text))
+                out.append(self.finding(message, f, line, text, feature=name))
 
         return sorted(out, key=lambda x: (str(x.path or ""), x.line or 0))

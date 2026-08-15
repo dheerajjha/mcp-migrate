@@ -47,7 +47,15 @@ RULE_FIXTURES = {"R015": FIXTURES / "handrolled_jsonrpc_server"}
 def test_rule_fires_on_its_fixture(rule_id):
     fixture = RULE_FIXTURES.get(rule_id, LEGACY)
     by_rule = _findings_by_rule(fixture)
-    assert rule_id in by_rule, (
+    # A rule can fire and be invisible by rule id: R007 and R018 are a known
+    # overlapping pair (see #221), so when both fire on the same feature,
+    # dedupe folds R007's findings into the more severe R018 finding and
+    # R007 survives only as "Also flagged by R007:". Fired means either.
+    absorbed = any(
+        f"Also flagged by {rule_id}:" in f.message
+        for findings in by_rule.values() for f in findings
+    )
+    assert rule_id in by_rule or absorbed, (
         f"{rule_id} should fire on {fixture.name} but produced no findings"
     )
 
