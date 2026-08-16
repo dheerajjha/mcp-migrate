@@ -27,6 +27,7 @@ and is never mistaken for a pass, because it never produces one.
 """
 from __future__ import annotations
 
+import difflib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -49,6 +50,13 @@ STANDALONE_FILENAME = ".mcp-migrate.toml"
 # one learns both.
 _OFF_RX = re.compile(r"^(?:off|disabled|false)\s*(?:(?:--|:)\s*(?P<reason>.+))?$", re.IGNORECASE)
 _ON_RX = re.compile(r"^(?:on|enabled|true)$", re.IGNORECASE)
+
+# Every key `_parse_table` actually consumes. Both spellings of the tests
+# toggle are accepted (the reader takes either); the dash form is the one
+# the docstring and README use, so it is the only one a "did you mean"
+# hint ever suggests back.
+_KNOWN_KEYS = frozenset({"skip", "include-tests", "include_tests", "rules"})
+_HINT_KEYS = ("skip", "include-tests", "rules")
 
 
 @dataclass
@@ -108,6 +116,37 @@ def _parse_table(table: dict, *, source: Path) -> Config:
                 )
     elif rules_table:
         warnings.append(f"{source}: `[rules]` must be a table, ignoring")
+
+    # A key this parser doesn't consume used to fall off the end in silence
+    # -- the one misconfiguration the module let pass without the scrutiny it
+    # already applies one level down in `[rules]`. That silence is worse here
+    # than for an ordinary typo'd setting: a `skip` that never took effect or
+    # a rule toggle that never applied leaves the published grade different
+    # from the configured one, with no output that differs to reveal it, in a
+    # tool whose entire proposition is that the grade is trustworthy. So warn
+    # for every unrecognised key, and where the key is a recognisable mistake
+    # rather than noise, say what the right shape is.
+    is_standalone = source.name == STANDALONE_FILENAME
+    rules_label = "[rules]" if is_standalone else "[tool.mcp-migrate.rules]"
+    for key in table:
+        if key in _KNOWN_KEYS:
+            continue
+        if RULE_ID_RX.match(key):
+            warnings.append(
+                f"{source}: {key!r} is a rule id at the top level, ignoring "
+                f"-- rule toggles go in the {rules_label} table"
+            )
+        elif key == "tool" and is_standalone:
+            warnings.append(
+                f"{source}: unknown setting 'tool', ignoring -- "
+                f"`[tool.mcp-migrate]` is the pyproject.toml spelling; in "
+                f"{STANDALONE_FILENAME} the settings are top level "
+                f"(`skip`, `include-tests`, and a `[rules]` table)"
+            )
+        else:
+            near = difflib.get_close_matches(key, _HINT_KEYS, n=1)
+            hint = f" -- did you mean {near[0]!r}?" if near else ""
+            warnings.append(f"{source}: unknown setting {key!r}, ignoring{hint}")
 
     return Config(
         skip=frozenset(skip), include_tests=include_tests,
