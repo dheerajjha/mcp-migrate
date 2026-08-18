@@ -903,6 +903,79 @@ def test_r012_idempotent():
 
 
 # ---------------------------------------------------------------------------
+# #245 -- parenthesised import lists: strip members, never comment them out
+# ---------------------------------------------------------------------------
+# Commenting out every flagged member of `from mcp.types import (PingRequest)`
+# leaves `from mcp.types import ( )`, which does not parse -- so the fix guard
+# would refuse the whole file and nothing would be fixed. The comment-out
+# fixers must remove the flagged name from the list instead (dropping the
+# statement entirely if it empties), keeping the file parseable at every
+# intermediate state.
+
+# (fixer name, member the fixer flags, unrelated member kept on the list)
+IMPORT_STRIPPING_CASES = [
+    ("PingRemovedFixer", "PingRequest", "ListToolsRequest"),
+    ("LoggingSetLevelRemovedFixer", "SetLevelRequest", "ListToolsRequest"),
+    ("SubscriptionsReplacedFixer", "SubscribeRequest", "ListToolsRequest"),
+    ("InitializeHandshakeFixer", "InitializeRequest", "ListToolsRequest"),
+    ("TasksPollingFixer", "ListTasksRequest", "ListToolsRequest"),
+]
+
+
+@pytest.mark.parametrize("name,member,other", IMPORT_STRIPPING_CASES)
+def test_comment_out_fixer_strips_flagged_member_from_parenthesised_import(name, member, other):
+    before = f"from mcp.types import (\n    {member},\n    {other},\n)\n"
+    result = fix(name, before)
+    assert result.changed
+    assert f"    {other}," in result.text
+    assert member not in result.text
+    assert "TODO(mcp-migrate)" in result.text
+    ast.parse(result.text)  # the whole point of #245: stay parseable
+
+
+@pytest.mark.parametrize("name,member", [(n, m) for n, m, _ in IMPORT_STRIPPING_CASES])
+def test_comment_out_fixer_drops_import_when_list_empties(name, member):
+    before = f"from mcp.types import (\n    {member},\n)\n"
+    result = fix(name, before)
+    assert result.changed
+    assert "from mcp.types import" not in result.text
+    assert "TODO(mcp-migrate)" in result.text
+    ast.parse(result.text)
+
+
+@pytest.mark.parametrize("name,member,other", IMPORT_STRIPPING_CASES)
+def test_comment_out_fixer_import_strip_is_idempotent(name, member, other):
+    before = f"from mcp.types import (\n    {member},\n    {other},\n)\n"
+    once = fix(name, before)
+    twice = fix(name, once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+def test_r011_strips_member_from_single_line_parenthesised_import():
+    before = "from mcp.types import (PingRequest, ListToolsRequest)\n"
+    result = fix("PingRemovedFixer", before)
+    assert result.changed
+    assert "from mcp.types import (ListToolsRequest)" in result.text
+    assert "PingRequest" not in result.text
+    ast.parse(result.text)
+
+
+def test_r011_strips_member_when_comment_rides_on_the_import_line():
+    before = (
+        "from mcp.types import (\n"
+        "    PingRequest,  # legacy ping\n"
+        "    ListToolsRequest,\n"
+        ")\n"
+    )
+    result = fix("PingRemovedFixer", before)
+    assert result.changed
+    assert "PingRequest" not in result.text
+    assert "ListToolsRequest" in result.text
+    ast.parse(result.text)
+
+
+# ---------------------------------------------------------------------------
 # R017 -- resource-not-found error code
 # ---------------------------------------------------------------------------
 

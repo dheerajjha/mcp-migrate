@@ -13,6 +13,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from ._textedit import strip_import_members
 from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://modelcontextprotocol.io/specification/2026-07-28/changelog"
@@ -60,9 +61,12 @@ class PingRemovedFixer(Fixer):
     def fix(self, source: str, path: Path) -> FixResult:
         lines = source.splitlines(keepends=True)
         out: list[str] = []
-        changes: list[str] = []
         prefix = comment_prefix(path)
         todo = f"{prefix}{TODO_BODY}"
+        # An import member line must be removed from the list, never commented
+        # out: commenting every member leaves `from x import ( )` which does not
+        # parse, so the guard would refuse the whole file (#245).
+        lines, changes = strip_import_members(lines, _ping_hit, todo, "PingRequest/ping")
 
         for i, raw_line in enumerate(lines, start=1):
             stripped = raw_line.lstrip(" \t")

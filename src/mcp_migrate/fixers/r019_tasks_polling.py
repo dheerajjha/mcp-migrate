@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ._textedit import string_lines
+from ._textedit import string_lines, strip_import_members
 from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://modelcontextprotocol.io/specification/2026-07-28/changelog"
@@ -54,10 +54,11 @@ class TasksPollingFixer(Fixer):
     def fix(self, source: str, path: Path) -> FixResult:
         lines = source.splitlines(keepends=True)
         out: list[str] = []
-        changes: list[str] = []
-
         prefix = comment_prefix(path)
         todo = f"{prefix}{TODO}"
+        # Remove import members from a parenthesised list rather than
+        # commenting them out, so `from x import ( )` is never produced (#245).
+        lines, changes = strip_import_members(lines, _tasks_hit, todo, "tasks/list or tasks/result")
         # #105: a `#` inside a string literal opens no comment, so a TODO
         # written there silently edits the user's prose instead of
         # annotating their code.
