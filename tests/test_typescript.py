@@ -1757,20 +1757,34 @@ def test_a_language_with_no_backend_still_exits_unscannable(tmp_path, capsys):
     assert exit_code == 2
 
 
-def test_javascript_still_exits_unscannable_until_a_rule_covers_it(tmp_path, capsys):
-    # #149 step 1 made the scanner open .js files, which put them in
-    # `project.files` for the first time. `_checked_something` used to be
-    # `bool(project.files)`, so that alone flipped this from exit 2 to exit
-    # 0 -- "clean" -- for a project where zero rules ever ran. A real
-    # breaking pattern (Mcp-Session-Id) sits in this file and nothing
-    # catches it; exit 0 here would be worse than the old exit 2, not
-    # better, because it reads as a verdict instead of a refusal.
+def test_javascript_with_no_covered_finding_exits_zero_not_unscannable(tmp_path, capsys):
+    # #149 step 2 ported R006/R017/R021 to JavaScript and moved it into
+    # `PARTIAL`, the same status TypeScript held while its own port was
+    # still in progress. R001 (Mcp-Session-Id) is not one of the three, so
+    # this file has a real breaking pattern nothing here catches yet -- but
+    # that is now "partial coverage", not "could not read", so it exits 0
+    # exactly like a TypeScript tree whose only bug predates a rule port
+    # (see test_clean_typescript_exits_zero). Exit 2 would misreport that
+    # nothing was read, when three rules did run over this file and found
+    # nothing they know how to flag.
     (tmp_path / "server.js").write_text(
         'const sessionId = req.headers["Mcp-Session-Id"];\n'
     )
     exit_code = main(["check", str(tmp_path)])
     capsys.readouterr()
-    assert exit_code == 2
+    assert exit_code == 0
+
+
+def test_javascript_with_a_covered_breaking_finding_exits_one(tmp_path, capsys):
+    # The mirror case: a pattern one of the three ported rules (R017) does
+    # know, so partial coverage must still fail a build on it -- same
+    # contract as test_typescript_with_a_breaking_finding_exits_one.
+    (tmp_path / "server.js").write_text(
+        'const e = { code: -32002, message: "resource not found" };\n'
+    )
+    exit_code = main(["check", str(tmp_path)])
+    capsys.readouterr()
+    assert exit_code == 1, "a breaking finding must fail a build"
 
 
 def test_the_grade_is_still_withheld_for_typescript(tmp_path, capsys):

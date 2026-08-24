@@ -25,14 +25,17 @@ from .scan import SKIP_DIRS
 SUPPORTED = frozenset({"python"})
 
 # Languages some rules can read, but not yet enough of them to put a letter
-# on. TypeScript findings are real and worth printing; a *grade* derived
-# from them would be a claim about the rules that didn't run, which is the
-# same false-A this tool refuses to hand out for an empty directory.
+# on. TypeScript and JavaScript findings are real and worth printing; a
+# *grade* derived from them would be a claim about the rules that didn't
+# run, which is the same false-A this tool refuses to hand out for an
+# empty directory.
 # (Deliberately not a count -- the last one sat here saying "19" long after
 # it was 1.)
 # Move a language from here to SUPPORTED when coverage is broad enough to
-# mean something.
-PARTIAL = frozenset({"typescript"})
+# mean something. Each PARTIAL language tracks its own coverage fraction
+# independently (see cli._partial_coverage) -- TypeScript reaching 21 of 21
+# says nothing about how many rules JavaScript has, and vice versa.
+PARTIAL = frozenset({"typescript", "javascript"})
 
 EXTENSIONS = {
     ".py": "python", ".pyi": "python",

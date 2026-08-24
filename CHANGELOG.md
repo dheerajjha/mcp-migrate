@@ -4,6 +4,27 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **R006, R017, and R021 now read JavaScript.** ([#149](https://github.com/dheerajjha/mcp-migrate/issues/149))
+
+  The scanner has loaded `.js`/`.jsx`/`.mjs`/`.cjs` since the first half of
+  #149, but no rule declared `"javascript"`, so a plain-JavaScript server
+  scanned clean with zero findings regardless of what was in it. These
+  three rules match patterns spelled identically in JavaScript and
+  TypeScript (an SDK class name, a wire error code, a JSON Schema dialect
+  string), so porting them was the tuple edit alone -- confirmed against a
+  `require()`-based fixture, not just `import`, since a pattern anchored on
+  ES module syntax would silently miss a CommonJS server.
+
+  JavaScript moves into the same `PARTIAL` coverage tier TypeScript held
+  before it reached full coverage: findings are reported, the grade is
+  withheld, and the coverage fraction shown is JavaScript's own (3 of 21),
+  computed independently of TypeScript's so one language's completed port
+  can't hide the other's gap. The other eighteen rules key off TypeScript
+  idioms (`import`, type annotations) that don't hold in JavaScript and
+  need each checked before porting -- tracked as the rest of #149.
+
 ### Fixed
 
 - **`fix --write` could write Python that doesn't parse.**
