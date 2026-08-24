@@ -70,6 +70,7 @@ class CheckResult:
     suppression_problems: list
     config: Config
     disabled_rules: dict  # rule id -> reason, for rules a project config switched off
+    checked_languages: frozenset  # languages an active (selected, enabled) rule actually reads
 
 
 def _validate_configured_rules(config: Config, known_rule_ids) -> dict[str, str]:
@@ -139,6 +140,12 @@ def run_check_detailed(
         grade=letter(value), suppressed=suppressed,
         suppressions=suppressions, suppression_problems=problems,
         config=config, disabled_rules=disabled_rules,
+        # `views` is keyed by every language at least one active (selected,
+        # enabled) rule declared -- exactly "checked", independent of
+        # whether that language turned out to have files. Reusing its keys
+        # rather than recomputing means this can never drift from what the
+        # loop above actually ran.
+        checked_languages=frozenset(views),
     )
 
 
@@ -380,7 +387,7 @@ def _exit_for(findings, rules, fail_on: str = "breaking") -> int:
     ) else EXIT_OK
 
 
-def _checked_something(project) -> bool:
+def _checked_something(project, checked_languages) -> bool:
     """Did we actually read source, or is this an empty/unreadable tree?
 
     The discriminator between "partial coverage" and "could not check".
@@ -391,13 +398,24 @@ def _checked_something(project) -> bool:
     EXIT_UNSCANNABLE is the honest answer there.
 
     Deliberately not `bool(project.files)`: the scanner can load a file
-    (JavaScript, today) into a language no rule has been ported to yet,
-    which means it sits in `project.files` without a single rule ever
-    having run against it. That is "could not check" wearing "checked
-    it" as a disguise -- exactly the false confidence this function
-    exists to refuse.
+    into a language no rule has been ported to yet, which means it sits
+    in `project.files` without a single rule ever having run against it.
+    That is "could not check" wearing "checked it" as a disguise --
+    exactly the false confidence this function exists to refuse.
+
+    Also deliberately not `f.language in SUPPORTED or f.language in
+    PARTIAL`: that asks "does *any* rule anywhere read this language",
+    which stopped being the same question once a PARTIAL language could
+    have only some of its rules active. `check app.js --rule R001` (R001
+    doesn't read JavaScript) or a config that disables every JavaScript
+    rule both leave `project.files` holding a JavaScript file that zero
+    active rules ever looked at -- SUPPORTED/PARTIAL membership alone
+    would still call that "checked" and exit `0`. `checked_languages`
+    (`CheckResult.checked_languages`) is the language set the rules that
+    actually ran this pass declared, so it can't say "checked" about a
+    language no active rule touched.
     """
-    return any(f.language in SUPPORTED or f.language in PARTIAL for f in project.files)
+    return any(f.language in checked_languages for f in project.files)
 
 
 def _report_suppressions(console, result, *, show: bool) -> None:
@@ -489,6 +507,7 @@ def cmd_check(args) -> int:
     result = run_check_detailed(root, include_tests=args.include_tests, rule_ids=rule_ids, config=cfg)
     project, rules, all_findings = result.project, result.rules, result.findings
     value, grade = result.value, result.grade
+    checked_languages = result.checked_languages
     # A grade computed from a subset of the rule set isn't a grade -- #178.
     # `--rule` restricts which rules ran (not just what's printed), so
     # suppressing the grade here is more honest than reporting one that
@@ -524,7 +543,7 @@ def cmd_check(args) -> int:
         if sdk_info.is_sdk:
             return EXIT_OK
         if reason:
-            return _exit_for(all_findings, rules, fail_on) if _checked_something(project) \
+            return _exit_for(all_findings, rules, fail_on) if _checked_something(project, checked_languages) \
                 else EXIT_UNSCANNABLE
         return _exit_for(all_findings, rules, fail_on)
 
@@ -578,7 +597,7 @@ def cmd_check(args) -> int:
                 "disabled_rules": _disabled_rule_dicts(result),
                 "config_warnings": list(result.config.warnings),
             }, indent=2))
-            return _exit_for(all_findings, rules, fail_on) if _checked_something(project) \
+            return _exit_for(all_findings, rules, fail_on) if _checked_something(project, checked_languages) \
                 else EXIT_UNSCANNABLE
         print(json.dumps({
             "tool": "mcp-migrate",
@@ -654,7 +673,7 @@ def cmd_check(args) -> int:
         # scannable" would contradict it -- we did read those files and run
         # every rule that covers them; what we withheld is the grade.
         headline = (
-            "Nothing scannable here." if not _checked_something(project)
+            "Nothing scannable here." if not _checked_something(project, checked_languages)
             else "No grade for this one."
         )
         console.print(
@@ -687,7 +706,7 @@ def cmd_check(args) -> int:
         # saying nothing. When we read files and ran rules over them, "code
         # it could not read" contradicts the findings printed directly
         # above -- what we withheld is the grade, not the reading.
-        if not _checked_something(project):
+        if not _checked_something(project, checked_languages):
             console.print(
                 "[dim]No grade and no badge: this tool has no opinion about code it "
                 "could not read.[/dim]"
@@ -703,7 +722,7 @@ def cmd_check(args) -> int:
                 "rules that didn't run.[/dim]"
             )
         console.print()
-        return _exit_for(all_findings, rules, fail_on) if _checked_something(project) \
+        return _exit_for(all_findings, rules, fail_on) if _checked_something(project, checked_languages) \
             else EXIT_UNSCANNABLE
 
     _report_config(console, result)

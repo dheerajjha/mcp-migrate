@@ -1787,6 +1787,41 @@ def test_javascript_with_a_covered_breaking_finding_exits_one(tmp_path, capsys):
     assert exit_code == 1, "a breaking finding must fail a build"
 
 
+def test_javascript_exits_unscannable_when_the_selected_rule_does_not_cover_it(
+    tmp_path, capsys,
+):
+    # Moving JavaScript into PARTIAL made `_checked_something` recognize
+    # the language by name -- but `--rule` (or a config that disables a
+    # rule) chooses a *subset* of rules, and the language-membership check
+    # alone can't see that. `--rule R001` runs a rule with no JavaScript
+    # port at all, so zero rules actually look at this file even though a
+    # real Mcp-Session-Id bug sits in it. Exit 0 here would be the same
+    # false "checked it, clean" this module's older JS tests guard
+    # against, just reachable through `--rule` instead of through an
+    # unported language.
+    (tmp_path / "server.js").write_text(
+        'const sessionId = req.headers["Mcp-Session-Id"];\n'
+    )
+    exit_code = main(["check", str(tmp_path), "--rule", "R001"])
+    capsys.readouterr()
+    assert exit_code == 2
+
+
+def test_javascript_check_still_runs_when_the_selected_rule_covers_it(tmp_path, capsys):
+    # The mirror case: `--rule R006` does cover JavaScript, so restricting
+    # to it must not fall back to "unscannable" just because most rules
+    # don't. R006 is `deprecated`, below the default `--fail-on breaking`
+    # threshold, so the assertion is on the headline/exit-2, not exit-1.
+    (tmp_path / "server.js").write_text(
+        'const { SSEServerTransport } = require("@modelcontextprotocol/sdk/server/sse.js");\n'
+    )
+    exit_code = main(["check", str(tmp_path), "--rule", "R006"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "No grade for this one." in out
+    assert "Nothing scannable" not in out
+
+
 def test_the_grade_is_still_withheld_for_typescript(tmp_path, capsys):
     # The exit code changing must not be read as the grade changing.
     main(["check", str(_write(tmp_path, "transport.ts", LEGACY_TS)), "--json"])
