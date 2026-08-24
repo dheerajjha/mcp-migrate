@@ -43,6 +43,13 @@ TEST_FILE_PATTERNS = (
     "*.test.ts", "*.test.tsx", "*.test.mts", "*.test.cts",
     "*.spec.ts", "*.spec.tsx", "*.spec.mts", "*.spec.cts",
     "*.examples.ts", "*.examples.tsx", "*.examples.mts", "*.examples.cts",
+    # JavaScript's own spellings of the same convention -- added alongside
+    # R006/R017/R021's JavaScript port (#149), which is what first made a
+    # colocated `*.test.js` scanned as production code instead of skipped
+    # like its `.ts` counterpart already was.
+    "*.test.js", "*.test.jsx", "*.test.mjs", "*.test.cjs",
+    "*.spec.js", "*.spec.jsx", "*.spec.mjs", "*.spec.cjs",
+    "*.examples.js", "*.examples.jsx", "*.examples.mjs", "*.examples.cjs",
 )
 
 
