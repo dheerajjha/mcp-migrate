@@ -153,17 +153,44 @@ def run_check(root: Path, *, include_tests: bool = False):
     return r.project, r.rules, r.findings, r.value, r.grade
 
 
-def _partial_coverage() -> tuple[int, int]:
-    """(rules that read a `PARTIAL` language, rules total).
+def _partial_coverage(language: str) -> tuple[int, int]:
+    """(rules that read `language`, rules total).
 
     The fraction that decides whether "partial" still describes a coverage
     gap or has become the wrong word for what's actually being withheld
     (#172): once every rule reads the language, `covered == total` and
     there's no port left to finish -- only the grading decision itself.
+
+    Takes a single language rather than the whole `PARTIAL` set: TypeScript
+    reaching 21 of 21 rules doesn't mean JavaScript did too, and folding
+    both into one fraction would let a fully-ported language mask a
+    barely-started one sharing the same bucket.
     """
     rules_total = list(all_rules())
-    covered = sum(1 for r in rules_total if set(r.languages) & PARTIAL)
+    covered = sum(1 for r in rules_total if language in r.languages)
     return covered, len(rules_total)
+
+
+def _partial_coverage_summary(counts) -> tuple[str, bool]:
+    """One clause per `PARTIAL` language present in `counts`, plus whether
+    every one of them is fully covered.
+
+    e.g. ("TypeScript is read by every rule; JavaScript is read by 3 of 21
+    rules", False) for a repo holding both.
+    """
+    clauses = []
+    full = True
+    for lang in sorted(PARTIAL):
+        if not counts.get(lang):
+            continue
+        covered, total = _partial_coverage(lang)
+        name = DISPLAY.get(lang, lang)
+        if covered >= total:
+            clauses.append(f"{name} is read by every rule")
+        else:
+            full = False
+            clauses.append(f"{name} is read by {covered} of {total} rules")
+    return "; ".join(clauses), full
 
 
 def unscannable_reason(root: Path, project, counts, *, include_tests: bool) -> str | None:
@@ -187,21 +214,20 @@ def unscannable_reason(root: Path, project, counts, *, include_tests: bool) -> s
 
     partial = sum(counts.get(lang, 0) for lang in PARTIAL)
     if partial:
-        covered, total = _partial_coverage()
-        if covered >= total:
-            # Every rule reads it -- "partial" can no longer mean "we
-            # haven't ported enough of the rule set". Say what's actually
-            # true: coverage is complete, and grading it is a call that
-            # hasn't been made (#172), not a gap that's still closing.
+        detail, full_coverage = _partial_coverage_summary(counts)
+        if full_coverage:
+            # Every PARTIAL language present reads at every rule -- "partial"
+            # can no longer mean "we haven't ported enough of the rule set"
+            # for any of them. Say what's actually true: coverage is
+            # complete, and grading it is a call that hasn't been made
+            # (#172), not a gap that's still closing.
             return (
-                f"found {describe(counts)}. Every rule reads it now, but whether it "
-                f"gets graded is still an open decision, not a coverage gap -- "
-                f"see {GRADE_ISSUE_URL}"
+                f"found {describe(counts)}. {detail}, but whether it gets graded is "
+                f"still an open decision, not a coverage gap -- see {GRADE_ISSUE_URL}"
             )
         return (
-            f"found {describe(counts)}. TypeScript support is partial -- "
-            f"{covered} of {total} rules read it so far, which is "
-            "enough to report findings but not enough to stand behind a grade"
+            f"found {describe(counts)}. {detail} -- enough to report findings but "
+            "not enough to stand behind a grade"
         )
 
     python_files = counts.get("python", 0)
@@ -231,10 +257,22 @@ def _print_language_hint(console, counts) -> None:
     still needs is the rule port in #149, not #30.
     """
     if counts.get("javascript"):
-        console.print(
-            f"[dim]JavaScript files are read, but no rule reads into them yet -- "
-            f"porting the rules is up for grabs: {JS_ISSUE_URL}[/dim]"
-        )
+        covered, total = _partial_coverage("javascript")
+        if covered >= total:
+            console.print(
+                f"[dim]Every rule reads JavaScript; whether it gets a grade is the "
+                f"open question: {GRADE_ISSUE_URL}[/dim]"
+            )
+        elif covered:
+            console.print(
+                f"[dim]{covered} of {total} rules read JavaScript so far -- porting "
+                f"the rest is up for grabs: {JS_ISSUE_URL}[/dim]"
+            )
+        else:
+            console.print(
+                f"[dim]JavaScript files are read, but no rule reads into them yet -- "
+                f"porting the rules is up for grabs: {JS_ISSUE_URL}[/dim]"
+            )
     elif counts.get("typescript"):
         console.print(
             f"[dim]Every rule reads TypeScript; whether it gets a grade is the "
@@ -626,8 +664,7 @@ def cmd_check(args) -> int:
         # progress -- once coverage is complete there's nothing left that
         # didn't run, and the honest reason is that grading it is a decision
         # still pending (#172), not a gap in what got read.
-        covered, total = _partial_coverage()
-        full_coverage = covered >= total
+        _, full_coverage = _partial_coverage_summary(counts)
         if findings:
             console.print()
             for f in findings:
@@ -677,18 +714,17 @@ def cmd_check(args) -> int:
 
     partial = Counter({k: v for k, v in counts.items() if k in PARTIAL})
     if partial:
-        covered, total = _partial_coverage()
-        if covered >= total:
+        detail, full_coverage = _partial_coverage_summary(counts)
+        if full_coverage:
             console.print(
-                f"[dim]Also found {describe(partial)}, read by every rule -- the grade "
+                f"[dim]Also found {describe(partial)} -- {detail}, but the grade "
                 f"leans on the Python anyway, since grading it is still an open "
                 f"decision ({GRADE_ISSUE_URL}), not a coverage gap.[/dim]"
             )
         else:
             console.print(
-                f"[dim]Also found {describe(partial)}, read by {covered} of {total} "
-                f"rules -- partial coverage, so those files inform the findings but the "
-                f"grade leans on the Python.[/dim]"
+                f"[dim]Also found {describe(partial)} -- {detail}. Those files "
+                f"inform the findings but the grade leans on the Python.[/dim]"
             )
     unread = Counter({k: v for k, v in counts.items()
                       if k not in SUPPORTED and k not in PARTIAL})
