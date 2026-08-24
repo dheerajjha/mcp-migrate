@@ -33,8 +33,9 @@ SUPPORTED = frozenset({"python"})
 # it was 1.)
 # Move a language from here to SUPPORTED when coverage is broad enough to
 # mean something. Each PARTIAL language tracks its own coverage fraction
-# independently (see cli._partial_coverage) -- TypeScript reaching 21 of 21
-# says nothing about how many rules JavaScript has, and vice versa.
+# independently (see cli._partial_coverage) -- one language reaching full
+# coverage says nothing about another's, so their fractions are never
+# folded together.
 PARTIAL = frozenset({"typescript", "javascript"})
 
 EXTENSIONS = {

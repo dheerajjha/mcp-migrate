@@ -182,8 +182,11 @@ def _partial_coverage_summary(counts) -> tuple[str, bool]:
     """One clause per `PARTIAL` language present in `counts`, plus whether
     every one of them is fully covered.
 
-    e.g. ("TypeScript is read by every rule; JavaScript is read by 3 of 21
-    rules", False) for a repo holding both.
+    Clauses come out in `sorted(PARTIAL)` order (alphabetical by language
+    name, so "javascript" before "typescript"), and the fractions are
+    whatever `_partial_coverage` reports right now -- not printed here so
+    this docstring can't go stale the way the comment above `PARTIAL`
+    warns against.
     """
     clauses = []
     full = True
