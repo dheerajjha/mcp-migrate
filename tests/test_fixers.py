@@ -22,6 +22,8 @@ import pytest
 from mcp_migrate.cli import main, run_check, run_fix
 from mcp_migrate.fixers import all_fixers
 from mcp_migrate.grade import letter, score
+from mcp_migrate.rules.r010_server_discover_missing import ServerDiscoverMissing
+from mcp_migrate.scan import load_project
 
 FIXTURES = Path(__file__).parent / "fixtures"
 ROUNDTRIP = FIXTURES / "fixer_roundtrip"
@@ -193,6 +195,96 @@ def test_r009_idempotent():
     twice = fix("InitializeHandshakeFixer", once.text)
     assert twice.changed is False
     assert twice.text == once.text
+
+
+# ---------------------------------------------------------------------------
+# R010 -- server/discover scaffold
+# ---------------------------------------------------------------------------
+
+R010_BEFORE = (
+    'from mcp.server import Server\n'
+    'server = Server("fixture-server")\n'
+    '\n'
+    '@server.list_tools()\n'
+    'async def list_tools():\n'
+    '    return []\n'
+)
+R010_FIXTURE = FIXTURES / "r010" / "server.py"
+
+
+def test_r010_adds_review_only_server_discover_scaffold():
+    result = fix("ServerDiscoverFixer", R010_BEFORE)
+    assert result.changed
+    assert "@server.discover()" in result.text
+    assert '"protocolVersions": ["TODO: add supported protocol versions"]' in result.text
+    assert '"capabilities": {"TODO": "describe supported capabilities"}' in result.text
+    assert '"server": {"name": "TODO: replace with the real server name"}' in result.text
+    assert FIXERS["ServerDiscoverFixer"].confidence == "review"
+    ast.parse(result.text)
+
+
+def test_r010_scaffold_clears_the_rule(tmp_path):
+    source = tmp_path / R010_FIXTURE.name
+    fixture_source = R010_FIXTURE.read_text(encoding="utf-8")
+    source.write_text(fixture_source, encoding="utf-8")
+    before = ServerDiscoverMissing().check(load_project(tmp_path))
+
+    result = fix("ServerDiscoverFixer", fixture_source)
+    source.write_text(result.text, encoding="utf-8")
+    after = ServerDiscoverMissing().check(load_project(tmp_path))
+
+    assert before
+    assert not after
+
+
+def test_r010_refuses_ambiguous_server_receivers():
+    before = R010_BEFORE + (
+        '\n@other.list_tools()\n'
+        'async def other_tools():\n'
+        '    return []\n'
+    )
+    result = fix("ServerDiscoverFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r010_does_not_duplicate_existing_discover_or_scaffold():
+    existing = R010_BEFORE + '\nROUTES = {"server/discover": handle_discover}\n'
+    result = fix("ServerDiscoverFixer", existing)
+    assert result.changed is False
+    assert result.text == existing
+
+    documented_gap = R010_BEFORE + "\n# TODO: implement server/discover later\n"
+    result = fix("ServerDiscoverFixer", documented_gap)
+    assert result.changed
+
+    once = fix("ServerDiscoverFixer", R010_BEFORE)
+    twice = fix("ServerDiscoverFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+def test_r010_does_not_duplicate_plain_discover_function():
+    existing = R010_BEFORE + (
+        '\ndef discover(request=None):\n'
+        '    return {}\n'
+    )
+    result = fix("ServerDiscoverFixer", existing)
+    assert result.changed is False
+    assert result.text == existing
+
+
+def test_r010_refuses_fastmcp_and_functional_registrations():
+    before = (
+        'from mcp.server.fastmcp import FastMCP\n'
+        'mcp = FastMCP("fixture")\n'
+        '@mcp.tool()\n'
+        'def tool():\n'
+        '    return "ok"\n'
+    )
+    result = fix("ServerDiscoverFixer", before)
+    assert result.changed is False
+    assert result.text == before
 
 
 # ---------------------------------------------------------------------------
