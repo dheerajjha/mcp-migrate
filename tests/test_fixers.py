@@ -286,6 +286,17 @@ def test_r010_refuses_fastmcp_and_functional_registrations():
     assert result.changed is False
     assert result.text == before
 
+    functional = (
+        'from mcp.server.fastmcp import FastMCP\n'
+        'mcp = FastMCP("fixture")\n'
+        'def tool():\n'
+        '    return "ok"\n'
+        'mcp.tool(name="tool")(tool)\n'
+    )
+    result = fix("ServerDiscoverFixer", functional)
+    assert result.changed is False
+    assert result.text == functional
+
 
 # ---------------------------------------------------------------------------
 # R004 -- tools/list ordering
