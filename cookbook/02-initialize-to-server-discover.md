@@ -6,7 +6,10 @@
 - **Fixer:** R010 adds a review-only `server/discover` scaffold when it finds
   one unambiguous low-level Python server receiver. It leaves TODO placeholders
   for protocol versions, capabilities, and server identity; FastMCP,
-  functional, and ambiguous registrations are left unchanged.
+  functional, and ambiguous registrations are left unchanged. The generated
+  handler is intentionally left unregistered with its decorator commented out:
+  adapt and register it using the target SDK's supported registration API before
+  deployment.
 - **Severity:** R009 is breaking; R010 is advisory (downgraded from
   `breaking` after a real audit found it fires on ~100% of servers, since
   it checks for something the new spec introduced).

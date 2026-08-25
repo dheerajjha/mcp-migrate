@@ -215,7 +215,7 @@ R010_FIXTURE = FIXTURES / "r010" / "server.py"
 def test_r010_adds_review_only_server_discover_scaffold():
     result = fix("ServerDiscoverFixer", R010_BEFORE)
     assert result.changed
-    assert "@server.discover()" in result.text
+    assert "# @server.discover()" in result.text
     assert '"protocolVersions": ["TODO: add supported protocol versions"]' in result.text
     assert '"capabilities": {"TODO": "describe supported capabilities"}' in result.text
     assert '"server": {"name": "TODO: replace with the real server name"}' in result.text

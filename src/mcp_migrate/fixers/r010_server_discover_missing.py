@@ -26,8 +26,8 @@ DISCOVER_MARKER = "TODO(mcp-migrate): fill in your real server/discover values"
 def _scaffold(receiver: str) -> str:
     return (
         "\n"
-        f"# {DISCOVER_MARKER} and register this handler with the SDK's supported API.\n"
-        f"@{receiver}.discover()\n"
+        f"# {DISCOVER_MARKER}; adapt and register this handler with your SDK.\n"
+        f"# @{receiver}.discover()\n"
         "async def handle_discover(request=None) -> dict:\n"
         "    return {\n"
         '        "protocolVersions": ["TODO: add supported protocol versions"],\n'
