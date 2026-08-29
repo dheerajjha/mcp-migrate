@@ -4,6 +4,28 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **A fixer for R010 (`server/discover` missing).** R010 was one of two
+  rules without a fixer; it now has one, at `review` confidence -- never
+  `safe`.
+
+  The rule's finding is whole-project, but a fixer only ever sees one file,
+  so it applies the rule's own evidence and presence checks to the file in
+  front of it: it scaffolds only a file that registers real MCP request
+  handlers and has no `server/discover` anywhere in it. The stub handler is
+  registered on the *same instance* the existing handlers use -- Python's
+  `@{name}.discover()` and TypeScript's
+  `setRequestHandler("server/discover", ...)`, with per-language comment
+  syntax and a loud `TODO(mcp-migrate)` -- while the response body stays
+  obviously-placeholder, because a server's real protocol versions,
+  capabilities and identity are only ever a human's to fill in.
+
+  R010's own wire scan is now end-bounded the same way `MCP_SURFACE_RX`
+  already was: a longer method or metric name like `server/discoverFoo`
+  previously matched the bare `server/discover` prefix and silently
+  suppressed the finding for the whole project.
+
 ### Fixed
 
 - **`fix --write` could write Python that doesn't parse.**

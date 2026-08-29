@@ -374,7 +374,7 @@ Every change is tagged `safe` or `review` in the diff output:
 Pass `--safe-only` to apply only `safe` fixers, `--rule R006` to restrict to
 one or more rules (repeatable, same flag `check` uses), `--include-tests` to
 also fix test/fixture paths (skipped by default, same rule as `check`).
-Only 19 of the 21 rules ship a fixer at all -- see the table below and
+Only 20 of the 21 rules ship a fixer at all -- see the table below and
 [`mcp-migrate fixers`](#other-commands). Fixers are
 deliberately conservative: when a fixer can't be sure a transformation is
 correct, it leaves the source untouched rather than guess. A wrong fix that
@@ -434,7 +434,7 @@ mcp-migrate entry --repo owner/name   # print a registry/servers/*.yaml entry fo
 | [R007](src/mcp_migrate/rules/r007_deprecated_features.py) | deprecated | [Roots, Sampling and Logging](https://modelcontextprotocol.io/specification/draft/changelog) are deprecated as core capabilities. | yes (`review`) |
 | [R008](src/mcp_migrate/rules/r008_trace_context.py) | advisory | Trace context (`traceparent`, `tracestate`, `baggage`) now travels in `_meta` ([SEP-414](https://github.com/modelcontextprotocol/modelcontextprotocol/pull/414)); OpenTelemetry breaks at your server if it's never read. | yes (`review`) |
 | [R009](src/mcp_migrate/rules/r009_initialize_handshake_removed.py) | breaking | The `initialize`/`notifications/initialized` handshake ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) is gone; a server still implementing it never becomes usable to a 2026-07-28 client. | yes (`review`) |
-| [R010](src/mcp_migrate/rules/r010_server_discover_missing.py) | advisory | Servers must implement [`server/discover`](https://modelcontextprotocol.io/specification/2026-07-28/changelog) ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)); registering handlers without it leaves clients with no way to learn what you support. Downgraded from `breaking`: this checks for something the new spec introduced, so it fires on ~100% of pre-migration servers and has no discriminating power. | no |
+| [R010](src/mcp_migrate/rules/r010_server_discover_missing.py) | advisory | Servers must implement [`server/discover`](https://modelcontextprotocol.io/specification/2026-07-28/changelog) ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)); registering handlers without it leaves clients with no way to learn what you support. Downgraded from `breaking`: this checks for something the new spec introduced, so it fires on ~100% of pre-migration servers and has no discriminating power. | yes (`review`) |
 | [R011](src/mcp_migrate/rules/r011_ping_removed.py) | breaking | `ping` ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) is removed from the protocol; liveness rides on the transport now. | yes (`review`) |
 | [R012](src/mcp_migrate/rules/r012_logging_set_level_removed.py) | breaking | `logging/setLevel` ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) is removed; log level is per-request via `_meta` now. | yes (`review`) |
 | [R013](src/mcp_migrate/rules/r013_subscriptions_replaced.py) | breaking | `resources/subscribe`/`resources/unsubscribe` ([SEP-2575](https://modelcontextprotocol.io/specification/2026-07-28/changelog)) are replaced by `subscriptions/listen`. | yes (`review`) |

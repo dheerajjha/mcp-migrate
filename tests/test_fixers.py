@@ -196,6 +196,189 @@ def test_r009_idempotent():
 
 
 # ---------------------------------------------------------------------------
+# R010 -- server/discover missing
+# ---------------------------------------------------------------------------
+
+R010_BEFORE = (
+    'from mcp.server import Server\n'
+    'from mcp.types import Tool\n'
+    '\n'
+    'app = Server("weather")\n'
+    '\n'
+    '@app.list_tools()\n'
+    'async def list_tools() -> list[Tool]:\n'
+    '    return []\n'
+)
+R010_AFTER = R010_BEFORE + (
+    '\n'
+    '# TODO(mcp-migrate): this module registers request handlers but never implements\n'
+    '# server/discover. Stub inserted by mcp-migrate -- replace the placeholder\n'
+    "# protocol versions, capabilities and identity with this server's real ones,\n"
+    '# or delete the stub if the SDK already auto-implements server/discover.\n'
+    '# See https://modelcontextprotocol.io/specification/2026-07-28/changelog and cookbook/02-initialize-to-server-discover.md.\n'
+    '@app.discover()\n'
+    'async def handle_server_discover(request=None) -> dict:\n'
+    '    return {\n'
+    '        "protocolVersions": ["2026-07-28"],\n'
+    '        "capabilities": {},\n'
+    '        "server": {"name": "<your-server-name>", "version": "<your-version>"},\n'
+    '    }\n'
+)
+
+
+def test_r010_scaffolds_a_stub_discover_handler():
+    result = fix("ServerDiscoverFixer", R010_BEFORE)
+    assert result.changed
+    assert result.text == R010_AFTER
+    assert FIXERS["ServerDiscoverFixer"].confidence == "review"
+    ast.parse(result.text)  # still syntactically valid
+
+
+def test_r010_scaffold_registers_on_the_same_instance_the_handlers_use():
+    """The stub must not guess `server` -- it uses the object the existing
+    handlers are actually registered on, or it writes an undefined name into
+    the file and calls it fixed."""
+    bare = R010_BEFORE.replace("app", "mcp_server")
+    result = fix("ServerDiscoverFixer", bare)
+    assert result.changed
+    assert "@mcp_server.discover()" in result.text
+    assert "@app.discover()" not in result.text
+    ast.parse(result.text)
+
+
+def test_r010_uses_the_fastmcp_instance_name():
+    before = (
+        "from mcp.server.fastmcp import FastMCP\n"
+        "\n"
+        'mcp = FastMCP("weather")\n'
+        "@mcp.tool()\n"
+        "async def get_forecast() -> str:\n"
+        "    return 'sunny'\n"
+    )
+    result = fix("ServerDiscoverFixer", before)
+    assert result.changed
+    assert "@mcp.discover()" in result.text
+    ast.parse(result.text)
+
+
+def test_r010_scaffolds_functional_registration_too():
+    before = (
+        "from mcp.server.fastmcp import FastMCP\n"
+        "\n"
+        "mcp = FastMCP('weather')\n"
+        "mcp.tool(name='get_forecast')(get_forecast)\n"
+    )
+    result = fix("ServerDiscoverFixer", before)
+    assert result.changed
+    assert "@mcp.discover()" in result.text
+    ast.parse(result.text)
+
+
+def test_r010_refuses_to_guess_on_a_self_receiver():
+    """`self.tool(...)` is valid inside a class method, but the scaffold is
+    appended at module scope where `self` means nothing -- no usable name,
+    no fix."""
+    before = R010_BEFORE.replace("app", "self")
+    result = fix("ServerDiscoverFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r010_leaves_a_file_without_handlers_alone():
+    before = "from mcp.server import Server\n\nserver = Server('notes')\n"
+    result = fix("ServerDiscoverFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r010_leaves_a_file_that_already_implements_discover_alone():
+    before = R010_BEFORE + (
+        '@app.discover()\n'
+        'async def handle_server_discover(request=None) -> dict:\n'
+        '    return {"protocolVersions": ["2026-07-28"]}\n'
+    )
+    result = fix("ServerDiscoverFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r010_leaves_a_wire_routed_discover_alone():
+    """A real route table entry satisfies the rule, so `fix` must not add a
+    second registration that would contradict `check` on the same file."""
+    before = R010_BEFORE + 'ROUTES = {"server/discover": handle_server_discover}\n'
+    result = fix("ServerDiscoverFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r010_todo_comment_admitting_the_gap_still_gets_the_stub():
+    """Prose about the gap is the whole reason R010 exists -- a TODO is not
+    an implementation (the rule's `search_wire` agrees). The fixer must not
+    read a commented admission as reason to stay silent."""
+    before = R010_BEFORE + '# TODO: server/discover is not implemented yet\n'
+    result = fix("ServerDiscoverFixer", before)
+    assert result.changed
+    assert "@app.discover()" in result.text
+    ast.parse(result.text)
+
+
+def test_r010_idempotent():
+    once = fix("ServerDiscoverFixer", R010_BEFORE)
+    twice = fix("ServerDiscoverFixer", once.text)
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
+def test_r010_appends_cleanly_when_the_source_lacks_a_final_newline():
+    result = fix("ServerDiscoverFixer", R010_BEFORE.rstrip("\n"))
+    assert result.changed
+    ast.parse(result.text)
+
+
+def test_r010_typescript_inserts_a_wire_scaffold_with_slash_comments():
+    before = (
+        'import { Server } from "@modelcontextprotocol/sdk/server/index.js";\n'
+        'import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";\n'
+        '\n'
+        'const server = new Server({ name: "weather", version: "1.0.0" });\n'
+        'server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));\n'
+    )
+    result = fix("ServerDiscoverFixer", before, path="server.ts")
+    assert result.changed
+    assert 'server.setRequestHandler("server/discover", async () => ({' in result.text
+    assert "// TODO(mcp-migrate)" in result.text
+    assert not [ln for ln in result.text.splitlines() if ln.lstrip().startswith("#")]
+    twice = fix("ServerDiscoverFixer", result.text, path="server.ts")
+    assert twice.changed is False
+
+
+def test_r010_typescript_mcpserver_register_uses_the_instance_name():
+    before = (
+        'import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";\n'
+        '\n'
+        'const app = new McpServer({ name: "weather", version: "1.0.0" });\n'
+        'app.registerTool("echo", { description: "echo" }, async () => ({ content: [] }));\n'
+    )
+    result = fix("ServerDiscoverFixer", before, path="server.ts")
+    assert result.changed
+    assert 'app.setRequestHandler("server/discover"' in result.text
+
+
+def test_r010_typescript_without_the_sdk_in_play_stays_unchanged():
+    """`.tool(`/`.prompt(` on a builder object is somebody else's fluent
+    API -- the rule stays silent (test_r010_stays_silent_without_the_sdk_in_play),
+    so the fixer must too."""
+    before = (
+        'const pipeline = builder\n'
+        '  .tool("resize", { width: 100 })\n'
+        '  .prompt("describe this image");\n'
+    )
+    result = fix("ServerDiscoverFixer", before, path="build.ts")
+    assert result.changed is False
+    assert result.text == before
+
+
+# ---------------------------------------------------------------------------
 # R004 -- tools/list ordering
 # ---------------------------------------------------------------------------
 

@@ -3,10 +3,13 @@
 - **Rule:** [R009](../src/mcp_migrate/rules/r009_initialize_handshake_removed.py)
   (breaking, still implements the old handshake), [R010](../src/mcp_migrate/rules/r010_server_discover_missing.py)
   (advisory, registers handlers but never implements `server/discover`)
-- **Fixer:** none. Deleting the old handshake is mechanical enough, but
-  writing `server/discover`'s response body (your protocol versions,
-  capabilities, server identity) requires information only you have --
-  there's nothing here for a fixer to safely invent.
+- **Fixer:** R009 has none -- commenting out the dead handshake is
+  mechanical but pointless without the replacement. R010 ships a
+  `review`-confidence fixer (`mcp-migrate fix`): it appends a stub
+  `server/discover` handler, registered on the same instance your existing
+  handlers use, with placeholder values and a loud `TODO(mcp-migrate)`.
+  The one thing it deliberately does not do is invent your protocol
+  versions, capabilities or server identity -- those still need a human.
 - **Severity:** R009 is breaking; R010 is advisory (downgraded from
   `breaking` after a real audit found it fires on ~100% of servers, since
   it checks for something the new spec introduced).
