@@ -4,6 +4,7 @@ editable install (the project's README.md doesn't exist yet, which makes
 from __future__ import annotations
 
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -40,3 +41,24 @@ def _no_ansi_in_captured_output(monkeypatch):
     monkeypatch.delenv("COLORTERM", raising=False)
     monkeypatch.setenv("NO_COLOR", "1")
     monkeypatch.setenv("TERM", "dumb")
+
+
+@pytest.fixture(autouse=True)
+def _git_root_isolation(monkeypatch):
+    """Keep `git rev-parse` from discovering a repository above temp dirs.
+
+    `_git_sha` (and `test_entry_sha.py`) decide whether a scanned tree is a
+    real git checkout by asking `git -C <root> rev-parse HEAD`. Git walks up
+    from its `-C` argument looking for a `.git`, so if a test's `tmp_path`
+    happens to sit inside a parent git workspace (a contributor running the
+    suite from inside their repo, or a temp directory mounted under one),
+    git would report the *ancestor* checkout's HEAD for a directory that is
+    not itself a repository, and
+    `test_git_sha_of_a_non_git_directory_is_none` would fail.
+
+    GIT_CEILING_DIRECTORIES tells git the highest directory it may search
+    from. Pointing it at the system temp root means every pytest `tmp_path`
+    -- always a child of that root -- is barred from reaching any real repo
+    above it, so a non-repo scan directory reliably stays `None`.
+    """
+    monkeypatch.setenv("GIT_CEILING_DIRECTORIES", tempfile.gettempdir())
