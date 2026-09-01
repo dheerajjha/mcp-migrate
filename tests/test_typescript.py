@@ -1310,6 +1310,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
     assert len(ServerDiscoverMissing().check(project)) == 1
 
 
+def test_r010_is_not_satisfied_by_a_wire_method_that_merely_contains_discover(tmp_path):
+    # Same boundary as the Python side (test_r010... in test_regressions.py):
+    # `server/discoverLatency` contains the substring but is a different
+    # method/metric name, not an implementation of server/discover. The
+    # bounded wire scan must not read it as one.
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
+
+server.setRequestHandler("server/discoverLatency", async () => 0);
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert len(ServerDiscoverMissing().check(project)) == 1
+
+
 def test_r010_stays_silent_on_typescript_with_no_handlers(tmp_path):
     # A client, or a library. Not an MCP server, so the absence of
     # server/discover says nothing about it.

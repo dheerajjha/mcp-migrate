@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, wire_method
 
 # Evidence the project registers real MCP request handlers -- the
 # low-level SDK's own decorator names (list_tools, call_tool, ...) are
@@ -122,7 +122,14 @@ def _has_discover(project: Project) -> bool:
     # suppress the finding for the whole project -- the worst failure mode
     # available here, since nobody ever sees a finding that was silently
     # withheld. See _ts_has_discover below, which already gets this right.
-    if any(project.search_wire(r"server/discover")):
+    #
+    # The name is bounded end-to-end via wire_method() rather than spelled
+    # as a bare prefix: an unbounded `server/discover` also matches a longer
+    # wire method or metric name like `server/discoverFoo` or
+    # `server/discoverLatency`, which would suppress the finding for the
+    # same reason a comment would. The MCP_SURFACE_RX gate already bounds
+    # its copy of this name; this check must be at least as careful.
+    if any(project.search_wire(wire_method("server/discover"))):
         return True
     return False
 
@@ -151,7 +158,7 @@ def _ts_has_discover(project: Project) -> bool:
     # suppress the finding for the whole project -- the worst failure mode
     # available here, since nobody ever sees a finding that was silently
     # withheld.
-    if any(project.search_wire(r"server/discover")):
+    if any(project.search_wire(wire_method("server/discover"))):
         return True
     return False
 

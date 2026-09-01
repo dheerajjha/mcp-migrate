@@ -440,6 +440,24 @@ def test_r010_still_suppressed_by_a_real_wire_string_literal(tmp_path):
     assert ServerDiscoverMissing().check(project) == []
 
 
+def test_r010_is_not_suppressed_by_a_wire_name_merely_containing_discover(tmp_path):
+    # The wire scan must be bounded end-to-end, the way MCP_SURFACE_RX is:
+    # `server/discoverLatency` is a metric name (or a different method), not
+    # an implementation of the server/discover method. An unbounded prefix
+    # match hands out the same silent suppression the comment bug did -- a
+    # withheld finding is the one nobody ever sees.
+    (tmp_path / "server.py").write_text(
+        _r010_has_handlers_source()
+        + 'ROUTES = {"server/discoverLatency": handle_latency}\n'
+    )
+    project = load_project(tmp_path)
+    findings = ServerDiscoverMissing().check(project)
+    assert findings, (
+        "a wire name that merely *contains* server/discover is not an "
+        "implementation of server/discover and must not suppress R010"
+    )
+
+
 # --- 7. R015/R016 must not demand fields the framework owns ----------------
 #
 # The official SDK (mcp 2.0.0) sets `resultType` on every result it
