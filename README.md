@@ -229,6 +229,15 @@ No rule is Python-only any more.
 [Issue #30](https://github.com/dheerajjha/mcp-migrate/issues/30) is closed on
 coverage; what remains is the grading decision in #172.
 
+**JavaScript is scanned, and a handful of rules read it.** `.js`/`.jsx`/
+`.mjs`/`.cjs` load and route through the same comment/string scanner as
+TypeScript, but the rule port is a separate, ongoing effort tracked in
+[#149](https://github.com/dheerajjha/mcp-migrate/issues/149) — currently 3
+of 21 rules (R006, R017, R021) read JavaScript. `check` reports findings
+from those and withholds the grade, same as a `PARTIAL` TypeScript tree
+did before R002 landed; the summary line names how many rules cover it so
+the number is never a stale claim.
+
 By default, `check` skips test code: anything under a `tests/`, `test/`,
 `testing/`, `fixtures/`, `examples/`, or `docs/` directory, plus `test_*.py`,
 `*_test.py`, and `conftest.py` files. A backward-compat test that

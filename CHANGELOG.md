@@ -25,8 +25,41 @@ All notable changes to this project are documented here.
   already was: a longer method or metric name like `server/discoverFoo`
   previously matched the bare `server/discover` prefix and silently
   suppressed the finding for the whole project.
+- **R006, R017, and R021 now read JavaScript.** ([#149](https://github.com/dheerajjha/mcp-migrate/issues/149))
+
+  The scanner has loaded `.js`/`.jsx`/`.mjs`/`.cjs` since the first half of
+  #149, but no rule declared `"javascript"`, so a plain-JavaScript server
+  scanned clean with zero findings regardless of what was in it. These
+  three rules match patterns spelled identically in JavaScript and
+  TypeScript (an SDK class name, a wire error code, a JSON Schema dialect
+  string), so porting them was the tuple edit alone -- confirmed against a
+  `require()`-based fixture, not just `import`, since a pattern anchored on
+  ES module syntax would silently miss a CommonJS server.
+
+  JavaScript moves into the same `PARTIAL` coverage tier TypeScript held
+  before it reached full coverage: findings are reported, the grade is
+  withheld, and the coverage fraction shown is JavaScript's own (3 of 21),
+  computed independently of TypeScript's so one language's completed port
+  can't hide the other's gap. The other eighteen rules key off TypeScript
+  idioms (`import`, type annotations) that don't hold in JavaScript and
+  need each checked before porting -- tracked as the rest of #149.
 
 ### Fixed
+
+- **`check` claimed partial coverage in the two shapes where nothing ran.**
+
+  When `--rule` selected past every rule that reads a language, or config
+  switched them all off, the reason line still explained the *rule set's*
+  coverage -- "JavaScript is read by 3 of 21 rules -- enough to report
+  findings" -- printed directly beneath "Nothing scannable here." and above
+  an empty findings list. Both halves were true of the tool and false of the
+  run. `unscannable_reason` now takes the languages an active rule actually
+  declared and says so instead: "no rule that ran reads JavaScript". Exit
+  codes are unchanged; they were already right.
+
+  A mixed tree describes each language on its own terms, so one language
+  being unread no longer speaks for another: "JavaScript was read by no rule
+  that ran; TypeScript is read by every rule".
 
 - **`fix --write` could write Python that doesn't parse.**
   ([#244](https://github.com/dheerajjha/mcp-migrate/issues/244))
