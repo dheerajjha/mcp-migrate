@@ -70,6 +70,7 @@ class CheckResult:
     suppression_problems: list
     config: Config
     disabled_rules: dict  # rule id -> reason, for rules a project config switched off
+    checked_languages: frozenset  # languages an active (selected, enabled) rule actually reads
 
 
 def _validate_configured_rules(config: Config, known_rule_ids) -> dict[str, str]:
@@ -139,6 +140,12 @@ def run_check_detailed(
         grade=letter(value), suppressed=suppressed,
         suppressions=suppressions, suppression_problems=problems,
         config=config, disabled_rules=disabled_rules,
+        # `views` is keyed by every language at least one active (selected,
+        # enabled) rule declared -- exactly "checked", independent of
+        # whether that language turned out to have files. Reusing its keys
+        # rather than recomputing means this can never drift from what the
+        # loop above actually ran.
+        checked_languages=frozenset(views),
     )
 
 
@@ -153,20 +160,64 @@ def run_check(root: Path, *, include_tests: bool = False):
     return r.project, r.rules, r.findings, r.value, r.grade
 
 
-def _partial_coverage() -> tuple[int, int]:
-    """(rules that read a `PARTIAL` language, rules total).
+def _partial_coverage(language: str) -> tuple[int, int]:
+    """(rules that read `language`, rules total).
 
     The fraction that decides whether "partial" still describes a coverage
     gap or has become the wrong word for what's actually being withheld
     (#172): once every rule reads the language, `covered == total` and
     there's no port left to finish -- only the grading decision itself.
+
+    Takes a single language rather than the whole `PARTIAL` set: TypeScript
+    reaching 21 of 21 rules doesn't mean JavaScript did too, and folding
+    both into one fraction would let a fully-ported language mask a
+    barely-started one sharing the same bucket.
     """
     rules_total = list(all_rules())
-    covered = sum(1 for r in rules_total if set(r.languages) & PARTIAL)
+    covered = sum(1 for r in rules_total if language in r.languages)
     return covered, len(rules_total)
 
 
-def unscannable_reason(root: Path, project, counts, *, include_tests: bool) -> str | None:
+def _partial_coverage_summary(counts, checked_languages=None) -> tuple[str, bool]:
+    """One clause per `PARTIAL` language present in `counts`, plus whether
+    every one of them is fully covered.
+
+    `checked_languages` is the set an *active* rule declared this pass (see
+    `CheckResult.checked_languages`). A language missing from it had its
+    rules selected past by `--rule` or switched off in config, and the
+    ported-rule fraction would then describe a capability nothing
+    exercised -- "JavaScript is read by 3 of 21 rules" is true of the rule
+    set and false of this run. Passing None keeps the rule-set answer, for
+    callers that never narrowed the rules.
+
+    Clauses come out in `sorted(PARTIAL)` order (alphabetical by language
+    name, so "javascript" before "typescript"), and the fractions are
+    whatever `_partial_coverage` reports right now -- not printed here so
+    this docstring can't go stale the way the comment above `PARTIAL`
+    warns against.
+    """
+    clauses = []
+    full = True
+    for lang in sorted(PARTIAL):
+        if not counts.get(lang):
+            continue
+        name = DISPLAY.get(lang, lang)
+        if checked_languages is not None and lang not in checked_languages:
+            clauses.append(f"{name} was read by no rule that ran")
+            full = False
+            continue
+        covered, total = _partial_coverage(lang)
+        if covered >= total:
+            clauses.append(f"{name} is read by every rule")
+        else:
+            full = False
+            clauses.append(f"{name} is read by {covered} of {total} rules")
+    return "; ".join(clauses), full
+
+
+def unscannable_reason(
+    root: Path, project, counts, *, include_tests: bool, checked_languages=None,
+) -> str | None:
     """Why we must not report a grade for `root`, or None if we may.
 
     An empty finding set has two very different causes -- "we read this and
@@ -187,21 +238,36 @@ def unscannable_reason(root: Path, project, counts, *, include_tests: bool) -> s
 
     partial = sum(counts.get(lang, 0) for lang in PARTIAL)
     if partial:
-        covered, total = _partial_coverage()
-        if covered >= total:
-            # Every rule reads it -- "partial" can no longer mean "we
-            # haven't ported enough of the rule set". Say what's actually
-            # true: coverage is complete, and grading it is a call that
-            # hasn't been made (#172), not a gap that's still closing.
+        present = [lang for lang in sorted(PARTIAL) if counts.get(lang)]
+        if checked_languages is not None and not any(
+            lang in checked_languages for lang in present
+        ):
+            # Not the same sentence as a coverage gap, and saying it that
+            # way contradicts the headline directly above it: `--rule` or a
+            # config `[rules]` table can leave a file that *is* readable
+            # with no active rule to read it, and "enough to report
+            # findings" is then printed over zero findings. What we
+            # withheld here is the reading, not the grade.
+            names = ", ".join(DISPLAY.get(lang, lang) for lang in present)
             return (
-                f"found {describe(counts)}. Every rule reads it now, but whether it "
-                f"gets graded is still an open decision, not a coverage gap -- "
-                f"see {GRADE_ISSUE_URL}"
+                f"found {describe(counts)}, but no rule that ran reads {names}. "
+                f"Rules for it do exist -- --rule, or a rules table in config, "
+                f"narrowed this run past them"
+            )
+        detail, full_coverage = _partial_coverage_summary(counts, checked_languages)
+        if full_coverage:
+            # Every PARTIAL language present reads at every rule -- "partial"
+            # can no longer mean "we haven't ported enough of the rule set"
+            # for any of them. Say what's actually true: coverage is
+            # complete, and grading it is a call that hasn't been made
+            # (#172), not a gap that's still closing.
+            return (
+                f"found {describe(counts)}. {detail}, but whether it gets graded is "
+                f"still an open decision, not a coverage gap -- see {GRADE_ISSUE_URL}"
             )
         return (
-            f"found {describe(counts)}. TypeScript support is partial -- "
-            f"{covered} of {total} rules read it so far, which is "
-            "enough to report findings but not enough to stand behind a grade"
+            f"found {describe(counts)}. {detail} -- enough to report findings but "
+            "not enough to stand behind a grade"
         )
 
     python_files = counts.get("python", 0)
@@ -231,10 +297,22 @@ def _print_language_hint(console, counts) -> None:
     still needs is the rule port in #149, not #30.
     """
     if counts.get("javascript"):
-        console.print(
-            f"[dim]JavaScript files are read, but no rule reads into them yet -- "
-            f"porting the rules is up for grabs: {JS_ISSUE_URL}[/dim]"
-        )
+        covered, total = _partial_coverage("javascript")
+        if covered >= total:
+            console.print(
+                f"[dim]Every rule reads JavaScript; whether it gets a grade is the "
+                f"open question: {GRADE_ISSUE_URL}[/dim]"
+            )
+        elif covered:
+            console.print(
+                f"[dim]{covered} of {total} rules read JavaScript so far -- porting "
+                f"the rest is up for grabs: {JS_ISSUE_URL}[/dim]"
+            )
+        else:
+            console.print(
+                f"[dim]JavaScript files are read, but no rule reads into them yet -- "
+                f"porting the rules is up for grabs: {JS_ISSUE_URL}[/dim]"
+            )
     elif counts.get("typescript"):
         console.print(
             f"[dim]Every rule reads TypeScript; whether it gets a grade is the "
@@ -342,7 +420,7 @@ def _exit_for(findings, rules, fail_on: str = "breaking") -> int:
     ) else EXIT_OK
 
 
-def _checked_something(project) -> bool:
+def _checked_something(project, checked_languages) -> bool:
     """Did we actually read source, or is this an empty/unreadable tree?
 
     The discriminator between "partial coverage" and "could not check".
@@ -353,13 +431,24 @@ def _checked_something(project) -> bool:
     EXIT_UNSCANNABLE is the honest answer there.
 
     Deliberately not `bool(project.files)`: the scanner can load a file
-    (JavaScript, today) into a language no rule has been ported to yet,
-    which means it sits in `project.files` without a single rule ever
-    having run against it. That is "could not check" wearing "checked
-    it" as a disguise -- exactly the false confidence this function
-    exists to refuse.
+    into a language no rule has been ported to yet, which means it sits
+    in `project.files` without a single rule ever having run against it.
+    That is "could not check" wearing "checked it" as a disguise --
+    exactly the false confidence this function exists to refuse.
+
+    Also deliberately not `f.language in SUPPORTED or f.language in
+    PARTIAL`: that asks "does *any* rule anywhere read this language",
+    which stopped being the same question once a PARTIAL language could
+    have only some of its rules active. `check app.js --rule R001` (R001
+    doesn't read JavaScript) or a config that disables every JavaScript
+    rule both leave `project.files` holding a JavaScript file that zero
+    active rules ever looked at -- SUPPORTED/PARTIAL membership alone
+    would still call that "checked" and exit `0`. `checked_languages`
+    (`CheckResult.checked_languages`) is the language set the rules that
+    actually ran this pass declared, so it can't say "checked" about a
+    language no active rule touched.
     """
-    return any(f.language in SUPPORTED or f.language in PARTIAL for f in project.files)
+    return any(f.language in checked_languages for f in project.files)
 
 
 def _report_suppressions(console, result, *, show: bool) -> None:
@@ -451,6 +540,7 @@ def cmd_check(args) -> int:
     result = run_check_detailed(root, include_tests=args.include_tests, rule_ids=rule_ids, config=cfg)
     project, rules, all_findings = result.project, result.rules, result.findings
     value, grade = result.value, result.grade
+    checked_languages = result.checked_languages
     # A grade computed from a subset of the rule set isn't a grade -- #178.
     # `--rule` restricts which rules ran (not just what's printed), so
     # suppressing the grade here is more honest than reporting one that
@@ -471,7 +561,10 @@ def cmd_check(args) -> int:
     }
     counts = survey(root, extra_skip=cfg.skip)
     effective_include_tests = args.include_tests or cfg.include_tests
-    reason = unscannable_reason(root, project, counts, include_tests=effective_include_tests)
+    reason = unscannable_reason(
+        root, project, counts, include_tests=effective_include_tests,
+        checked_languages=checked_languages,
+    )
     sdk_info = detect_sdk(root)
 
     if _output_format(args) == "sarif":
@@ -486,7 +579,7 @@ def cmd_check(args) -> int:
         if sdk_info.is_sdk:
             return EXIT_OK
         if reason:
-            return _exit_for(all_findings, rules, fail_on) if _checked_something(project) \
+            return _exit_for(all_findings, rules, fail_on) if _checked_something(project, checked_languages) \
                 else EXIT_UNSCANNABLE
         return _exit_for(all_findings, rules, fail_on)
 
@@ -540,7 +633,7 @@ def cmd_check(args) -> int:
                 "disabled_rules": _disabled_rule_dicts(result),
                 "config_warnings": list(result.config.warnings),
             }, indent=2))
-            return _exit_for(all_findings, rules, fail_on) if _checked_something(project) \
+            return _exit_for(all_findings, rules, fail_on) if _checked_something(project, checked_languages) \
                 else EXIT_UNSCANNABLE
         print(json.dumps({
             "tool": "mcp-migrate",
@@ -616,7 +709,7 @@ def cmd_check(args) -> int:
         # scannable" would contradict it -- we did read those files and run
         # every rule that covers them; what we withheld is the grade.
         headline = (
-            "Nothing scannable here." if not _checked_something(project)
+            "Nothing scannable here." if not _checked_something(project, checked_languages)
             else "No grade for this one."
         )
         console.print(
@@ -626,8 +719,7 @@ def cmd_check(args) -> int:
         # progress -- once coverage is complete there's nothing left that
         # didn't run, and the honest reason is that grading it is a decision
         # still pending (#172), not a gap in what got read.
-        covered, total = _partial_coverage()
-        full_coverage = covered >= total
+        _, full_coverage = _partial_coverage_summary(counts, checked_languages)
         if findings:
             console.print()
             for f in findings:
@@ -650,7 +742,7 @@ def cmd_check(args) -> int:
         # saying nothing. When we read files and ran rules over them, "code
         # it could not read" contradicts the findings printed directly
         # above -- what we withheld is the grade, not the reading.
-        if not _checked_something(project):
+        if not _checked_something(project, checked_languages):
             console.print(
                 "[dim]No grade and no badge: this tool has no opinion about code it "
                 "could not read.[/dim]"
@@ -666,7 +758,7 @@ def cmd_check(args) -> int:
                 "rules that didn't run.[/dim]"
             )
         console.print()
-        return _exit_for(all_findings, rules, fail_on) if _checked_something(project) \
+        return _exit_for(all_findings, rules, fail_on) if _checked_something(project, checked_languages) \
             else EXIT_UNSCANNABLE
 
     _report_config(console, result)
@@ -677,18 +769,17 @@ def cmd_check(args) -> int:
 
     partial = Counter({k: v for k, v in counts.items() if k in PARTIAL})
     if partial:
-        covered, total = _partial_coverage()
-        if covered >= total:
+        detail, full_coverage = _partial_coverage_summary(counts, checked_languages)
+        if full_coverage:
             console.print(
-                f"[dim]Also found {describe(partial)}, read by every rule -- the grade "
+                f"[dim]Also found {describe(partial)} -- {detail}, but the grade "
                 f"leans on the Python anyway, since grading it is still an open "
                 f"decision ({GRADE_ISSUE_URL}), not a coverage gap.[/dim]"
             )
         else:
             console.print(
-                f"[dim]Also found {describe(partial)}, read by {covered} of {total} "
-                f"rules -- partial coverage, so those files inform the findings but the "
-                f"grade leans on the Python.[/dim]"
+                f"[dim]Also found {describe(partial)} -- {detail}. Those files "
+                f"inform the findings but the grade leans on the Python.[/dim]"
             )
     unread = Counter({k: v for k, v in counts.items()
                       if k not in SUPPORTED and k not in PARTIAL})
