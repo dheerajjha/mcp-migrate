@@ -45,15 +45,17 @@ FASTMCP_FUNCTIONAL_RX = re.compile(
 # initialized note in r009), so it needs a raw scan; a `discover`-named
 # handler function/decorator is code, so search_code covers that half.
 #
-# The function-name half must be anchored to the *whole* name. The previous
-# `\bdef\s+\w*discover\w*\b` matched any identifier merely containing the
-# substring, so Jira's `_try_discover_fields_from_existing_epic` and
-# `_discover_application_types` (both in mcp-atlassian) read as "implements
-# server/discover" and silently suppressed this rule for the entire project.
-# That is the worst failure mode available here: not a false finding a
-# maintainer can argue with, but a missing one nobody ever sees.
+# Only match registered handlers, not bare function definitions. A standalone
+# discover function may be a scaffold or helper rather than an active request
+# handler, so it does not establish that the method is implemented. The fixer
+# emits an unregistered scaffold and therefore must not satisfy this check.
+#
+# MCP 1.x has no `Server.discover()` decorator, while MCP 2.x registers the
+# method during `Server.__init__`. Both versions are detected by the wire scan
+# below when `"server/discover"` appears in a route or handler mapping.
+# The code pattern below covers explicit decorator registration.
 DISCOVER_CODE_RX = re.compile(
-    r"@[\w.]*\.discover\s*\(|\bdef\s+(?:handle_|server_|on_)*discover\b"
+    r"@[\w.]*\.discover\s*\("
 )
 
 

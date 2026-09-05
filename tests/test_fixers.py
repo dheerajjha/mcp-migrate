@@ -223,7 +223,10 @@ def test_r010_adds_review_only_server_discover_scaffold():
     ast.parse(result.text)
 
 
-def test_r010_scaffold_clears_the_rule(tmp_path):
+def test_r010_scaffold_does_not_clear_the_rule_without_registration(tmp_path):
+    """The fixer emits a commented scaffold as a starting point, but this
+    is not proof of implementation. Only registered handlers satisfy the rule.
+    A scaffold without registration must not clear the finding."""
     source = tmp_path / R010_FIXTURE.name
     fixture_source = R010_FIXTURE.read_text(encoding="utf-8")
     source.write_text(fixture_source, encoding="utf-8")
@@ -233,8 +236,23 @@ def test_r010_scaffold_clears_the_rule(tmp_path):
     source.write_text(result.text, encoding="utf-8")
     after = ServerDiscoverMissing().check(load_project(tmp_path))
 
-    assert before
-    assert not after
+    assert before  # Rule fires: no implementation
+    assert after   # Rule still fires: scaffold alone is not implementation
+
+
+def test_r010_scaffold_is_recognized_when_explicit_decorator_is_present(tmp_path):
+    """An explicit discover decorator is source-visible evidence of registration."""
+    source = tmp_path / R010_FIXTURE.name
+    fixture_source = R010_FIXTURE.read_text(encoding="utf-8")
+    source.write_text(fixture_source, encoding="utf-8")
+
+    result = fix("ServerDiscoverFixer", fixture_source)
+    # Simulate an SDK that provides an explicit discover decorator.
+    registered = result.text.replace("# @server.discover()", "@server.discover()")
+    source.write_text(registered, encoding="utf-8")
+
+    after = ServerDiscoverMissing().check(load_project(tmp_path))
+    assert not after  # Rule clears when properly registered
 
 
 def test_r010_refuses_ambiguous_server_receivers():

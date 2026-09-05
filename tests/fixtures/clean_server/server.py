@@ -58,6 +58,9 @@ async def call_tool(name: str, arguments: dict):
     raise ValueError(f"unknown tool {name}")
 
 
+# Explicit registration used by this scanner fixture; an SDK may expose this
+# method differently, including automatic registration.
+@server.discover()
 async def handle_server_discover(request=None) -> dict:
     """server/discover: advertise protocol versions, capabilities and identity
 

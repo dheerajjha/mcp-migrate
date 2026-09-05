@@ -2,14 +2,19 @@
 
 - **Rule:** [R009](../src/mcp_migrate/rules/r009_initialize_handshake_removed.py)
   (breaking, still implements the old handshake), [R010](../src/mcp_migrate/rules/r010_server_discover_missing.py)
-  (advisory, registers handlers but never implements `server/discover`)
+  (advisory, registers handlers but never implements `server/discover` in
+  source-visible code)
 - **Fixer:** R010 adds a review-only `server/discover` scaffold when it finds
   one unambiguous low-level Python server receiver. It leaves TODO placeholders
   for protocol versions, capabilities, and server identity; FastMCP,
   functional, and ambiguous registrations are left unchanged. The generated
-  handler is intentionally left unregistered with its decorator commented out:
-  adapt and register it using the target SDK's supported registration API before
-  deployment.
+  handler is intentionally left unregistered as a starting point. Complete the
+  protocol response and verify how the target MCP SDK exposes `server/discover`
+  before adding any registration. In SDKs that provide an explicit decorator
+  or wire mapping, use that mechanism; in SDKs that register `server/discover`
+  automatically, no additional registration is required. R010 recognizes
+  active source-visible registrations as evidence of an implementation, but a
+  bare function definition does not clear the finding.
 - **Severity:** R009 is breaking; R010 is advisory (downgraded from
   `breaking` after a real audit found it fires on ~100% of servers, since
   it checks for something the new spec introduced).
@@ -95,11 +100,14 @@ async def handle_server_discover(request=None) -> dict:
   on finding `list_tools`/`call_tool`/etc. (or FastMCP's `.tool()` decorator
   plus a `FastMCP(...)` instantiation) somewhere in the project first -- a
   library or a pure MCP *client* with no handlers won't be flagged, and
-  shouldn't be.
-- **FastMCP users:** if the SDK version you're on has already grown a
-  `server/discover` default handler, you may see R010 stop firing
-  automatically as soon as you upgrade -- check your SDK's changelog before
-  hand-writing one.
+  shouldn't be. For Python source, R010 recognizes an explicit registered
+  decorator or wire mapping when one is present. TypeScript also recognizes a
+  conventional `discover`-named handler. SDK-provided registrations that
+  exist only inside the installed dependency may not be visible to the source
+  scanner.
+- **SDK-provided handlers:** R010 is a source scanner and cannot infer a
+  `server/discover` handler that exists only inside an installed SDK. Verify
+  the SDK's behavior when interpreting the result.
 
 ## Spec link
 

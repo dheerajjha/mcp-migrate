@@ -377,9 +377,29 @@ def test_r010_is_not_suppressed_by_a_helper_whose_name_contains_discover():
     )
 
 
-def test_r010_still_respects_a_real_server_discover_implementation(tmp_path):
-    # The other direction: tightening the name match must not start firing on
-    # projects that genuinely do implement the method.
+def test_r010_still_respects_a_real_server_discover_implementation_with_decorator(tmp_path):
+    # The tightening to require registration must not start firing on
+    # projects that genuinely do implement the method with a decorator.
+    (tmp_path / "server.py").write_text(
+        "from mcp.server import Server\n"
+        "from mcp.types import Tool\n\n"
+        "app = Server('demo')\n\n"
+        "@app.list_tools()\n"
+        "async def list_tools() -> list[Tool]:\n"
+        "    return []\n\n"
+        "@app.discover()\n"
+        "async def discover() -> dict:\n"
+        "    return {'protocolVersions': ['2026-07-28']}\n"
+    )
+    project = load_project(tmp_path)
+    assert ServerDiscoverMissing().check(project) == []
+
+
+def test_r010_bare_function_without_registration_does_not_satisfy_rule(tmp_path):
+    # A bare function named `discover` without any registration (no decorator,
+    # no wire mapping) is not sufficient proof of implementation. This guards
+    # against the trap where the fixer's scaffold (with commented-out
+    # decorator) improved grading for incomplete work.
     (tmp_path / "server.py").write_text(
         "from mcp.server import Server\n"
         "from mcp.types import Tool\n\n"
@@ -391,7 +411,12 @@ def test_r010_still_respects_a_real_server_discover_implementation(tmp_path):
         "    return {'protocolVersions': ['2026-07-28']}\n"
     )
     project = load_project(tmp_path)
-    assert ServerDiscoverMissing().check(project) == []
+    findings = ServerDiscoverMissing().check(project)
+    assert findings, (
+        "a bare function without registration is not proof of implementation; "
+        "a wire mapping like ROUTES={'server/discover': discover} or a "
+        "decorator like @app.discover() is required"
+    )
 
 
 def _r010_has_handlers_source() -> str:
