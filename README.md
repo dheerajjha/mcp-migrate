@@ -422,6 +422,77 @@ questions — R010 asks whether `server/discover` exists *anywhere* — and hand
 partial view they fire wrongly. Cost of that choice, measured on 600 files
 (300 Python + 300 TypeScript): **~0.32 s**.
 
+## Run it in CI
+
+```yaml
+# .github/workflows/mcp-migrate.yml
+name: mcp-migrate
+on: [push, pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dheerajjha/mcp-migrate@v0.5.0
+```
+
+`v0.5.0` is the first tag that contains the action; until it is cut, `@main`
+works and `@v0.4.0` does not -- that tag predates this file. The action ref and
+the `version:` input below are independent: the ref picks the *action*, the
+input picks the *tool* it installs from PyPI.
+
+A breaking finding fails the job. Nothing else does, until you say so:
+
+```yaml
+      - uses: dheerajjha/mcp-migrate@v0.5.0
+        with:
+          path: src/my_server     # default: .
+          fail-on: deprecated     # breaking | deprecated | advisory | never
+          version: '0.4.0'        # pin the tool; default installs the latest
+```
+
+Pinning `version` is worth a thought rather than a default. Unpinned, a
+release that ports a rule can turn a green build red on a commit that changed
+nothing -- correctly, but without warning. Pinned, you choose when to find out.
+
+### Into the Security tab
+
+`check` already emits SARIF 2.1.0, so the findings can go where the rest of
+your code scanning lives:
+
+```yaml
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dheerajjha/mcp-migrate@v0.5.0
+        with:
+          sarif-file: results.sarif
+          fail-on: never          # let the Security tab hold them, not the build
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: mcp-migrate
+```
+
+`fail-on: never` is deliberate there: a finding that is *recorded* and a
+finding that *blocks the merge* are different decisions, and uploading is the
+first without committing to the second.
+
+### Outputs
+
+| output | meaning |
+|---|---|
+| `grade` | `A`-`F`, or empty when the tree is ungradeable or `--rule` narrowed the run |
+| `score` | `0`-`100`, empty under the same conditions |
+| `findings` | total findings reported, regardless of `fail-on` |
+| `exit-code` | `0` clean, `1` findings at or above `fail-on`, `2` nothing scannable |
+
+`grade` is empty rather than `A` when the run was narrowed, for the same
+reason the CLI omits it: a grade computed from part of the rule set is not a
+grade. Gate on `exit-code`, not on an empty `grade` being falsy.
+
 ## Other commands
 
 ```bash

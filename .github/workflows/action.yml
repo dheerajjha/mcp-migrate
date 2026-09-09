@@ -1,0 +1,120 @@
+# Proves action.yml works as a real GitHub Action, not just as valid YAML.
+#
+# The action installs mcp-migrate from PyPI, which is what a user gets, so
+# this workflow deliberately exercises the published package rather than the
+# checkout. That means it also fails when a release is broken -- which is the
+# point. Assertions are therefore on exit codes and output shape, not on exact
+# grades, which move legitimately when a rule lands.
+name: action
+
+on:
+  push:
+    branches: [main]
+    paths: ['action.yml', '.github/workflows/action.yml']
+  pull_request:
+    paths: ['action.yml', '.github/workflows/action.yml']
+  workflow_dispatch:
+
+jobs:
+  clean-tree-passes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        uses: ./
+        with:
+          path: tests/fixtures/clean_server
+      - name: Assert
+        shell: bash
+        run: |
+          echo "grade=${{ steps.scan.outputs.grade }} score=${{ steps.scan.outputs.score }} findings=${{ steps.scan.outputs.findings }}"
+          [ "${{ steps.scan.outputs.exit-code }}" = "0" ] || { echo "expected exit 0"; exit 1; }
+          [ -n "${{ steps.scan.outputs.grade }}" ]        || { echo "expected a grade"; exit 1; }
+          [ "${{ steps.scan.outputs.findings }}" = "0" ]  || { echo "expected no findings"; exit 1; }
+
+  findings-fail-the-job:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        uses: ./
+        continue-on-error: true
+        with:
+          path: tests/fixtures/legacy_server
+      - name: Assert the step failed, and said why
+        shell: bash
+        run: |
+          [ "${{ steps.scan.outcome }}" = "failure" ] || { echo "a tree full of breaking findings must fail the step"; exit 1; }
+          [ "${{ steps.scan.outputs.exit-code }}" = "1" ] || { echo "expected exit 1, got '${{ steps.scan.outputs.exit-code }}'"; exit 1; }
+          [ "${{ steps.scan.outputs.findings }}" -gt 0 ]  || { echo "expected findings"; exit 1; }
+
+  fail-on-never-does-not-fail:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        uses: ./
+        with:
+          path: tests/fixtures/legacy_server
+          fail-on: never
+      - name: Assert
+        shell: bash
+        run: |
+          [ "${{ steps.scan.outputs.exit-code }}" = "0" ] || { echo "fail-on never must not fail on findings"; exit 1; }
+          [ "${{ steps.scan.outputs.findings }}" -gt 0 ]  || { echo "findings must still be reported"; exit 1; }
+
+  sarif-is-uploadable:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        uses: ./
+        with:
+          path: tests/fixtures/legacy_server
+          fail-on: never
+          sarif-file: results.sarif
+      - name: Assert SARIF is valid 2.1.0 and non-empty
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, sys
+          d = json.load(open("results.sarif"))
+          assert d["version"] == "2.1.0", d["version"]
+          n = len(d["runs"][0]["results"])
+          assert n > 0, "expected results in SARIF"
+          print(f"SARIF 2.1.0 with {n} results")
+          PY
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: mcp-migrate
+
+  unscannable-path-exits-2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        uses: ./
+        continue-on-error: true
+        with:
+          path: no/such/directory
+      - name: Assert
+        shell: bash
+        run: |
+          [ "${{ steps.scan.outputs.exit-code }}" = "2" ] || { echo "expected exit 2 for an unreadable tree, got '${{ steps.scan.outputs.exit-code }}'"; exit 1; }
+
+  pinned-version-is-honoured:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        uses: ./
+        with:
+          path: tests/fixtures/clean_server
+          version: '0.4.0'
+      - name: Assert
+        shell: bash
+        run: |
+          [ "${{ steps.scan.outputs.exit-code }}" = "0" ] || exit 1

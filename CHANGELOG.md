@@ -6,6 +6,28 @@ All notable changes to this project are documented here.
 
 ### Added
 
+- **A GitHub Action, so the tool can run in CI without a bespoke workflow.** ([#100](https://github.com/dheerajjha/mcp-migrate/issues/100))
+
+  `uses: dheerajjha/mcp-migrate@v0.5.0` installs the published package and
+  runs `check`. A breaking finding fails the job; `fail-on` moves that line,
+  and `never` reports without blocking. `sarif-file` writes the SARIF 2.1.0
+  `check` already emits, for `upload-sarif` and the Security tab -- the
+  format existed for this and had no documented path to it.
+
+  Outputs are `grade`, `score`, `findings` and `exit-code`. `grade` and
+  `score` come back **empty**, not `A`/`100`, when the run was narrowed by
+  `--rule` or the tree was unscannable, for the reason the CLI omits them:
+  a grade computed from part of the rule set is not a grade. Gate on
+  `exit-code`.
+
+  `.github/workflows/action.yml` exercises the action against the repo's own
+  fixtures on every change to it -- a clean tree passing, a legacy tree
+  failing the step, `fail-on: never` not failing, SARIF validating as 2.1.0
+  and surviving `upload-sarif`, an unreadable path exiting 2, and a pinned
+  `version`. It installs from PyPI rather than the checkout, so it also
+  fails when a *release* is broken, which is deliberate.
+
+
 - **R006, R017, and R021 now read JavaScript.** ([#149](https://github.com/dheerajjha/mcp-migrate/issues/149))
 
   The scanner has loaded `.js`/`.jsx`/`.mjs`/`.cjs` since the first half of
