@@ -79,6 +79,12 @@ runs:
       id: run
       shell: bash
       run: |
+        # `shell: bash` runs as `bash --noprofile --norc -e -o pipefail`, so
+        # -e is already on and cannot be assumed away: a failing check would
+        # abort the script before `code=$?` ran, leaving the exit-code output
+        # empty exactly when a caller most needs it. Every command whose
+        # failure is expected is therefore written as an `&&/||` list, which
+        # -e does not treat as fatal.
         set -uo pipefail
 
         # One array holding the whole argument list, always non-empty because
@@ -123,8 +129,8 @@ runs:
         PY
 
         echo "::group::mcp-migrate report"
-        mcp-migrate check "${argv[@]}" --fail-on "${{ inputs.fail-on }}"
-        code=$?
+        code=0
+        mcp-migrate check "${argv[@]}" --fail-on "${{ inputs.fail-on }}" || code=$?
         echo "::endgroup::"
 
         echo "exit-code=$code" >> "$GITHUB_OUTPUT"

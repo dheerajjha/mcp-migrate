@@ -69,22 +69,33 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
+      # Scoped to a fixture whose every finding carries a location. GitHub's
+      # ingester rejects the WHOLE file if any result has none, and our
+      # project-level rules (R008, R010) currently emit none -- see #262.
+      # Widen this to legacy_server once #262 lands; that is the fixture that
+      # actually exercises the bug.
       - id: scan
         uses: ./
         with:
-          path: tests/fixtures/legacy_server
+          path: tests/fixtures/handrolled_jsonrpc_server
           fail-on: never
           sarif-file: results.sarif
-      - name: Assert SARIF is valid 2.1.0 and non-empty
+      - name: Assert SARIF is valid 2.1.0, non-empty, and every result is located
         shell: bash
         run: |
           python - <<'PY'
-          import json, sys
+          import json
           d = json.load(open("results.sarif"))
           assert d["version"] == "2.1.0", d["version"]
-          n = len(d["runs"][0]["results"])
-          assert n > 0, "expected results in SARIF"
-          print(f"SARIF 2.1.0 with {n} results")
+          results = d["runs"][0]["results"]
+          assert results, "expected results in SARIF"
+          # SARIF 2.1.0 allows a result with no locations; GitHub does not,
+          # and rejects the entire file over one. Asserting on our side keeps
+          # the failure here rather than in the upload step below, where it
+          # reads as an infrastructure problem. See #262.
+          unlocated = [r["ruleId"] for r in results if not r.get("locations")]
+          assert not unlocated, f"GitHub will reject the file; unlocated: {unlocated}"
+          print(f"SARIF 2.1.0, {len(results)} results, all located")
           PY
       - uses: github/codeql-action/upload-sarif@v3
         with:
