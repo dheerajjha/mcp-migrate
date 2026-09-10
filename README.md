@@ -622,7 +622,7 @@ color using the table above):
 
 <!-- BOARD:START -->
 
-**16 servers checked** (7x A, 7x B, 1x C, 1x D)
+**17 servers checked** (7x A, 7x B, 1x C, 2x D)
 
 All of these were checked by this project, not submitted by the servers' maintainers -- so read it as a survey, not as adoption. If you maintain one of these, [submit your own entry](registry/README.md) and it becomes yours.
 
@@ -644,6 +644,7 @@ All of these were checked by this project, not submitted by the servers' maintai
 | [mcp-neo4j-cypher](https://github.com/neo4j-contrib/mcp-neo4j) | **B** | ready | python | MCP server for Neo4j that runs Cypher graph queries and supports Text2Cypher workflows over graph data. |
 | [mcp-atlassian](https://github.com/sooperset/mcp-atlassian) | **C** | migrating | python | MCP server for Atlassian products (Confluence and Jira), supporting both Cloud and Server/Data Center deployments. |
 | [mcp-server-git](https://github.com/modelcontextprotocol/servers) | **D** | ready | python | Reference MCP server for Git repository interaction, giving LLMs tools to read, search, and manipulate repos. |
+| [serena](https://github.com/oraios/serena) | **D** | migrating | python | Python MCP toolkit for coding with semantic retrieval and editing capabilities. |
 
 <!-- BOARD:END -->
 

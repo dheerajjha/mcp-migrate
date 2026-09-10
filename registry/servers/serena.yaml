@@ -1,0 +1,11 @@
+name: serena
+repo: oraios/serena
+language: python
+grade: D
+score: 47
+checked_with: mcp-migrate 0.4.0
+spec: "2026-07-28"
+sha: 701e7c843f46c6a649203a488cece1bf19f1df90
+status: migrating
+notes: >-
+  Python MCP toolkit for coding with semantic retrieval and editing capabilities.
