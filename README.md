@@ -622,7 +622,7 @@ color using the table above):
 
 <!-- BOARD:START -->
 
-**17 servers checked** (7x A, 7x B, 1x C, 2x D)
+**18 servers checked** (7x A, 8x B, 1x C, 2x D)
 
 All of these were checked by this project, not submitted by the servers' maintainers -- so read it as a survey, not as adoption. If you maintain one of these, [submit your own entry](registry/README.md) and it becomes yours.
 
@@ -636,6 +636,7 @@ All of these were checked by this project, not submitted by the servers' maintai
 | [mcp-server-qdrant](https://github.com/qdrant/mcp-server-qdrant) | **A** | ready | python | Official MCP server for Qdrant that acts as a semantic memory layer for keeping and retrieving memories in the vector search engine. |
 | [mcp-server-tree-sitter](https://github.com/wrale/mcp-server-tree-sitter) | **A** | ready | python | MCP server providing tree-sitter code analysis so AI assistants get structure-aware access to codebases in many languages. |
 | [arxiv-mcp-server](https://github.com/blazickjp/arxiv-mcp-server) | **B** | ready | python | Search, download, and read arXiv papers, with semantic search and citation tools, over MCP. |
+| [mcp-obsidian](https://github.com/MarkusPfundstein/mcp-obsidian) | **B** | ready | python | MCP server that lets clients read, search, and modify Obsidian vault content through the Local REST API. |
 | [mcp-server-fetch](https://github.com/modelcontextprotocol/servers) | **B** | ready | python | Reference MCP server that fetches web pages and converts HTML to markdown so LLMs can read them in chunks. |
 | [mcp-server-sentry](https://github.com/modelcontextprotocol/servers-archived) | **B** | ready | python | Archived reference MCP server for retrieving and analyzing issues, stacktraces, and debugging info from Sentry.io. |
 | [mcp-server-sqlite](https://github.com/modelcontextprotocol/servers-archived) | **B** | ready | python | Archived reference MCP server for SQLite that runs SQL queries and auto-generates business insight memos. |
