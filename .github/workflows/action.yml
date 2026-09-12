@@ -69,14 +69,17 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      # legacy_server on purpose: it trips R008 and R010, the two
-      # project-level rules whose unlocated results used to make GitHub
-      # reject the whole document (#262). This is the fixture that
-      # exercises the bug, so this job is the regression test for it.
+      # Scoped to a fixture whose findings all carry a location, because
+      # this job runs the action, and the action installs the *published*
+      # package. Until a release carries the #262 fix, pointing it at
+      # legacy_server would fail on the released bug rather than on
+      # anything in this checkout. sarif-from-source-is-uploadable below
+      # is the regression test for #262; widen this one to legacy_server
+      # after the release that ships the fix.
       - id: scan
         uses: ./
         with:
-          path: tests/fixtures/legacy_server
+          path: tests/fixtures/handrolled_jsonrpc_server
           fail-on: never
           sarif-file: results.sarif
       - name: Assert SARIF is valid 2.1.0, non-empty, and every result is located
@@ -128,3 +131,45 @@ jobs:
         shell: bash
         run: |
           [ "${{ steps.scan.outputs.exit-code }}" = "0" ] || exit 1
+
+  # The #262 regression test. Deliberately does NOT go through the action:
+  # the action installs mcp-migrate from PyPI, which is the right thing for
+  # testing what users get and the wrong thing for testing a fix that has
+  # not shipped yet. This runs the checkout against legacy_server -- the
+  # fixture that trips R008 and R010, the two project-level rules whose
+  # unlocated results made GitHub reject the entire document -- and pushes
+  # the result through the real ingester.
+  sarif-from-source-is-uploadable:
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --quiet -e .
+      - name: Generate SARIF from this checkout
+        run: |
+          mcp-migrate check tests/fixtures/legacy_server \
+            --format sarif --fail-on never > from-source.sarif
+      - name: Assert every result is located
+        run: |
+          python - <<'PY'
+          import json
+          d = json.load(open("from-source.sarif"))
+          results = d["runs"][0]["results"]
+          assert results, "legacy_server must produce findings"
+          unlocated = [r["ruleId"] for r in results if not r.get("locations")]
+          assert not unlocated, f"unlocated results will sink the upload: {unlocated}"
+          anchors = {
+              r["ruleId"]: r["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+              for r in results if r["ruleId"] in ("R008", "R010")
+          }
+          assert anchors, "expected the project-level rules to fire on this fixture"
+          print(f"{len(results)} results, all located; project-level anchors: {anchors}")
+          PY
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: from-source.sarif
+          category: mcp-migrate-from-source
