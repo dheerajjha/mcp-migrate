@@ -132,23 +132,32 @@ def build(findings, rules, root: Path, *, version: str, spec: str) -> dict:
             "message": {"text": f.message},
         }
 
-        uri = _uri(f.path, root)
-        if uri:
-            location = {
-                "physicalLocation": {
-                    "artifactLocation": {"uri": uri, "uriBaseId": "%SRCROOT%"},
-                }
+        # A project-level finding has no `path` -- it is about the tree, and
+        # the text output says "(project)" for exactly that reason. SARIF
+        # cannot say that. It was previously given `"locations": []`, on the
+        # reading that the spec permits it (it does, SS3.27.12) and that
+        # consumers would render it against the repository root. GitHub does
+        # not: it rejects the *entire document* with
+        #   locationFromSarifResult: expected at least one location
+        # so one unlocated result discarded every other finding in the run
+        # (#262). Rules therefore carry an `evidence_path` -- the file that
+        # made them fire -- purely so this projection has somewhere real to
+        # point. Falling back to the scanned root keeps the guarantee total:
+        # a result here always has a location.
+        path = f.path if f.path is not None else f.evidence_path
+        line = f.line if f.path is not None else f.evidence_line
+        uri = _uri(path, root) if path is not None else ""
+        if not uri:
+            uri = "."
+        location = {
+            "physicalLocation": {
+                "artifactLocation": {"uri": uri, "uriBaseId": "%SRCROOT%"},
             }
-            if f.line:
-                # SARIF regions are 1-based, same as our line numbers.
-                location["physicalLocation"]["region"] = {"startLine": f.line}
-            result["locations"] = [location]
-        else:
-            # Project-level findings (R010 asks a question about the whole
-            # tree) have no file. SARIF allows an empty locations array and
-            # consumers render it against the repository root; omitting the
-            # key entirely makes some consumers drop the result.
-            result["locations"] = []
+        }
+        if line:
+            # SARIF regions are 1-based, same as our line numbers.
+            location["physicalLocation"]["region"] = {"startLine": line}
+        result["locations"] = [location]
 
         results.append(result)
 

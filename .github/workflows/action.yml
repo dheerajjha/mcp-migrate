@@ -69,15 +69,14 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      # Scoped to a fixture whose every finding carries a location. GitHub's
-      # ingester rejects the WHOLE file if any result has none, and our
-      # project-level rules (R008, R010) currently emit none -- see #262.
-      # Widen this to legacy_server once #262 lands; that is the fixture that
-      # actually exercises the bug.
+      # legacy_server on purpose: it trips R008 and R010, the two
+      # project-level rules whose unlocated results used to make GitHub
+      # reject the whole document (#262). This is the fixture that
+      # exercises the bug, so this job is the regression test for it.
       - id: scan
         uses: ./
         with:
-          path: tests/fixtures/handrolled_jsonrpc_server
+          path: tests/fixtures/legacy_server
           fail-on: never
           sarif-file: results.sarif
       - name: Assert SARIF is valid 2.1.0, non-empty, and every result is located

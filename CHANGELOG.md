@@ -4,6 +4,41 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **SARIF is accepted by GitHub code scanning again -- or rather, for the first time.** ([#262](https://github.com/dheerajjha/mcp-migrate/issues/262))
+
+  `--format sarif` advertises itself as being *for* code scanning, and
+  `upload-sarif` rejected it outright:
+
+  ```
+  locationFromSarifResult: expected at least one location
+  ```
+
+  Project-level findings carried `"locations": []`, on the reading that
+  SARIF permits it -- it does, SS3.27.12 -- and that consumers would render
+  them against the repository root. GitHub does not, and the rejection is
+  **all-or-nothing**: one unlocated result discarded every other finding in
+  the run. On `legacy_server` that was 2 results silently costing the other
+  48. On a project whose only finding is R010 it was everything.
+
+  Not a corner case: R010 fires on 16 of 16 registry servers, so in practice
+  no real MCP server could upload this output at all.
+
+  `Finding` now carries an `evidence_path` -- the file that made a
+  project-level rule fire -- which only the SARIF projection reads. R008
+  anchors at the file importing OpenTelemetry, R010 at the file registering
+  handlers, which is what its own title describes. The text and `--json`
+  outputs are untouched and still say `(project)`, because that is still the
+  honest answer: the finding is about the tree, and the anchor exists so
+  SARIF has somewhere to point, not to blame a file.
+
+  Schema validation could never have caught this -- it passed throughout,
+  since the document was valid SARIF the whole time. The new test asserts
+  GitHub's requirement rather than the spec's, and says so, so nobody
+  loosens it back later.
+
+
 ## [0.5.0] - 2026-09-12
 
 ### Added

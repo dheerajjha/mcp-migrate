@@ -250,3 +250,71 @@ def test_every_format_agrees_on_what_suppression_removed(capsys, tmp_path):
     assert [(u["rule"], u["line"]) for u in payload["unused_suppressions"]] == [
         ("R004", 4)
     ]
+
+
+# --- Every result must carry a location, which is GitHub's rule, not SARIF's ---
+#
+# SARIF 2.1.0 SS3.27.12 makes `locations` optional, so schema validation --
+# which every other test in this file relies on -- passes happily on a
+# result with none. GitHub code scanning is stricter and rejects the whole
+# document:
+#
+#   locationFromSarifResult: expected at least one location
+#
+# All-or-nothing: one unlocated result discarded the other 48 in the same
+# run. That is #262, and it meant no real MCP server could upload this
+# output at all, since R010 fires on 16 of 16 registry servers.
+#
+# Do not "fix" a failure here by loosening the assertion back to the spec.
+# The spec is not the consumer.
+
+@pytest.mark.parametrize(
+    "fixture",
+    ["legacy_server", "fastmcp_functional_registration", "handrolled_jsonrpc_server"],
+)
+def test_every_sarif_result_has_at_least_one_location(capsys, fixture):
+    doc, _ = run_sarif(capsys, FIXTURES / fixture, "--fail-on", "never")
+    results = doc["runs"][0]["results"]
+    assert results, f"{fixture} produced no findings, so this proves nothing"
+    unlocated = [r["ruleId"] for r in results if not r.get("locations")]
+    assert not unlocated, (
+        f"GitHub will reject the entire document, not just these results: "
+        f"{sorted(set(unlocated))}. A project-level rule needs an "
+        f"`evidence` file passed to self.finding() -- see Finding.evidence_path."
+    )
+
+
+def test_project_level_findings_anchor_at_the_file_that_produced_them(capsys):
+    """R008 and R010 are project-level, and still point at real files.
+
+    `fastmcp_functional_registration` is the sharp case: its only finding is
+    R010, so before #262 its SARIF had one result, that result had no
+    location, and the upload therefore carried nothing at all.
+    """
+    doc, _ = run_sarif(capsys, FIXTURES / "fastmcp_functional_registration",
+                       "--fail-on", "never")
+    results = doc["runs"][0]["results"]
+    assert [r["ruleId"] for r in results] == ["R010"]
+    uri = results[0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
+    assert uri == "server.py", uri
+    assert not uri.startswith("/"), (
+        "an absolute path from the scanning machine matches nothing in the diff"
+    )
+
+
+def test_the_text_output_still_calls_those_findings_project_level(capsys):
+    """The other direction: the SARIF anchor must not leak into the report.
+
+    `evidence_path` exists so SARIF has somewhere to point. The finding is
+    still about the tree, and a user reading the console -- or `--json` --
+    should still be told "(project)", not handed a file that is not at
+    fault. Without this, #262's fix would quietly reclassify two rules.
+    """
+    main(["check", str(FIXTURES / "fastmcp_functional_registration"),
+          "--format", "json", "--fail-on", "never"])
+    doc = json.loads(capsys.readouterr().out)
+    r010 = [f for f in doc["findings"] if f["rule"] == "R010"]
+    assert r010, "expected R010 in the JSON output"
+    assert r010[0].get("path") in (None, ""), (
+        f"R010 is a project-level finding and must not report a path: {r010[0]}"
+    )

@@ -209,7 +209,37 @@ class ServerDiscoverMissing(Rule):
             return []
         if has_discover:
             return []
+        # Project-level: "(project)" is the honest location, because the
+        # absence is a property of the tree and no single file is at fault.
+        # The evidence anchor is the file that registers handlers, which is
+        # both what the title describes and where a reader would start --
+        # SARIF needs a concrete location or GitHub rejects the whole
+        # document (#262).
+        evidence, line = _first_handler_registration(project)
         return [self.finding(
             "This project registers MCP request handlers (tools/resources/prompts) "
-            "but has no server/discover implementation anywhere in the project."
+            "but has no server/discover implementation anywhere in the project.",
+            evidence=evidence,
+            evidence_line=line,
         )]
+
+
+def _first_handler_registration(project: Project):
+    """The file (and line) where this project registers an MCP handler.
+
+    Mirrors the patterns `_has_request_handlers` and its TypeScript twin
+    gate on, in the same order, so the anchor is the same evidence the
+    rule actually fired on rather than a second, looser guess.
+    """
+    if project.language == "typescript":
+        patterns = (TS_LOWLEVEL_HANDLER_RX, TS_MCPSERVER_REGISTER_RX)
+    else:
+        patterns = (
+            LOWLEVEL_HANDLER_RX.pattern,
+            FASTMCP_DECORATOR_RX.pattern,
+            FASTMCP_FUNCTIONAL_RX.pattern,
+        )
+    for pattern in patterns:
+        for f, i, _ in project.search_code(pattern):
+            return f, i
+    return None, None

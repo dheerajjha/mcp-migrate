@@ -342,6 +342,15 @@ class Finding:
     path: Path | None = None
     line: int | None = None
     snippet: str | None = None
+    # Where a *project-level* finding found its evidence. `path` stays None
+    # for those on purpose -- the finding is about the tree, not the file,
+    # and `location()` says "(project)" because that is the honest answer.
+    # But SARIF has no way to say "(project)": GitHub code scanning rejects
+    # the entire document if any result carries no location (#262), so the
+    # SARIF projection needs a concrete file to anchor to and this is it.
+    # Nothing else reads these; the text and JSON outputs are unchanged.
+    evidence_path: Path | None = None
+    evidence_line: int | None = None
 
     def location(self) -> str:
         if self.path is None:
@@ -377,13 +386,26 @@ class Rule:
 
     # convenience for subclasses
     def finding(self, message: str, f: SourceFile | None = None,
-                line: int | None = None, snippet: str | None = None) -> Finding:
+                line: int | None = None, snippet: str | None = None,
+                evidence: SourceFile | None = None,
+                evidence_line: int | None = None) -> Finding:
+        """Build a Finding.
+
+        `f` is the file the finding is *about*; passing none makes it a
+        project-level finding that renders as "(project)".
+
+        `evidence` is for project-level findings only: the file that made
+        the rule fire, used to anchor the SARIF result. It does not change
+        what the text or JSON outputs say. See Finding.evidence_path.
+        """
         return Finding(
             rule_id=self.id,
             message=message,
             path=f.path if f else None,
             line=line,
             snippet=snippet,
+            evidence_path=evidence.path if evidence else None,
+            evidence_line=evidence_line,
         )
 
 
