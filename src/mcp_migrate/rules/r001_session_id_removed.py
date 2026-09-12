@@ -3,7 +3,26 @@ import re
 from .base import Finding, Project, Rule
 
 # --- Python ---------------------------------------------------------------
-PY_RX = r"Mcp-Session-Id|mcp_session_id|MCP_SESSION_ID"
+#
+# Identifiers are safe to match anywhere search_code allows -- a real
+# variable/constant named mcp_session_id or MCP_SESSION_ID is a use of the
+# session id, wherever it appears in code.
+PY_IDENT_RX = r"mcp_session_id|MCP_SESSION_ID"
+
+# Mcp-Session-Id is not a valid Python identifier, so the header name can
+# only ever appear inside a string literal. search_code discards every
+# STRING token -- including that one -- so this alternative could never
+# match anything there; it needs search_wire instead, and it needs to be
+# anchored to an actual header access rather than a bare mention, for the
+# same reason TS_HEADER_RX is anchored below (see comment_only_mentions
+# fixture: a docstring/comment/log string naming the header is not a read
+# or write of it, and search_wire does not filter those out on its own --
+# only comments and triple-quoted strings are excluded).
+PY_HEADER_RX = (
+    r"headers?\s*(?:\[|\.get\s*\(|\.setdefault\s*\(|\.pop\s*\()\s*"
+    r"b?[\"']mcp-session-id[\"']"
+    r"|b?[\"']mcp-session-id[\"']\s*:\s"  # dict literal: {"mcp-session-id": ...}
+)
 
 # --- TypeScript -----------------------------------------------------------
 #
@@ -43,14 +62,29 @@ class SessionIdRemoved(Rule):
         return self._check_python(project)
 
     def _check_python(self, project: Project) -> list[Finding]:
+        seen: set[tuple[str, int]] = set()
+        out: list[Finding] = []
+
         # search_code, not search: a docstring, --help string, or log
-        # message that merely *mentions* Mcp-Session-Id isn't code that
+        # message that merely *mentions* mcp_session_id isn't code that
         # uses it (see motherduck's click.option help text, mcp-atlassian's
         # logger.debug call -- both false positives under plain search).
-        return [
-            self.finding(self.MESSAGE, f, line, text)
-            for f, line, text in project.search_code(PY_RX)
-        ]
+        for f, line, text in project.search_code(PY_IDENT_RX):
+            seen.add((str(f.path), line))
+            out.append(self.finding(self.MESSAGE, f, line, text))
+
+        # The header-literal form ("Mcp-Session-Id") only ever appears
+        # inside a string, so it needs search_wire, not search_code --
+        # anchored to an access so a bare mention still doesn't fire.
+        for f, line, text in project.search_wire(PY_HEADER_RX, flags=re.IGNORECASE):
+            # mcp_session_id = request.headers.get("Mcp-Session-Id") hits
+            # both patterns on one line -- that's one problem, not two.
+            if (str(f.path), line) in seen:
+                continue
+            seen.add((str(f.path), line))
+            out.append(self.finding(self.MESSAGE, f, line, text))
+
+        return sorted(out, key=lambda x: (str(x.path or ""), x.line or 0))
 
     def _check_ts(self, project: Project) -> list[Finding]:
         seen: set[tuple[str, int]] = set()

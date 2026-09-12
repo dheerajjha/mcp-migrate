@@ -954,3 +954,91 @@ def test_the_surface_gate_is_not_fooled_by_a_longer_wire_name(tmp_path):
     )
     by_rule = _findings_by_rule(tmp_path)
     assert "R020" not in by_rule, by_rule.get("R020")
+
+
+
+    
+# --- R001: the header literal, not just the mcp_session_id identifier -----
+#
+# See #260: R001's Python path matched Mcp-Session-Id, mcp_session_id, and
+# MCP_SESSION_ID through search_code, which skips every STRING token.
+# Mcp-Session-Id is not a valid Python identifier, so the header-literal
+# alternative could never match real code -- only the two identifier
+# spellings ever fired. Renaming the local that a header read is stored in
+# made a real breaking finding disappear.
+
+
+def test_header_read_fires_r001_even_when_the_local_is_not_named_mcp_session_id(tmp_path):
+    """The issue's exact repro: identical files except for one local's name.
+
+    Before the fix these graded differently (C 75 named / A 100 renamed)
+    even though both read the same removed header -- R001 was grading the
+    variable name, not the header access.
+    """
+    (tmp_path / "named" / "server.py").parent.mkdir(parents=True)
+    (tmp_path / "named" / "server.py").write_text(
+        "def handle(request):\n"
+        '    mcp_session_id = request.headers.get("Mcp-Session-Id")\n'
+        "    return lookup(mcp_session_id)\n"
+    )
+    (tmp_path / "renamed" / "server.py").parent.mkdir(parents=True)
+    (tmp_path / "renamed" / "server.py").write_text(
+        "def handle(request):\n"
+        '    session = request.headers.get("Mcp-Session-Id")\n'
+        "    return lookup(session)\n"
+    )
+    named = _findings_by_rule(tmp_path / "named")
+    renamed = _findings_by_rule(tmp_path / "renamed")
+    assert "R001" in named, named
+    assert "R001" in renamed, (
+        "renaming the local away from mcp_session_id must not hide the "
+        f"header read: {renamed}"
+    )
+
+
+def test_header_read_via_dict_bracket_access_fires_r001(tmp_path):
+    (tmp_path / "srv.py").write_text(
+        "def handle(request):\n"
+        '    return request.headers["Mcp-Session-Id"]\n'
+    )
+    assert "R001" in _findings_by_rule(tmp_path)
+
+
+def test_header_read_via_bytes_literal_fires_r001(tmp_path):
+    """mcp-atlassian's real form: `headers.get(b"mcp-session-id")`."""
+    (tmp_path / "srv.py").write_text(
+        "def handle(headers):\n"
+        '    return headers.get(b"mcp-session-id")\n'
+    )
+    assert "R001" in _findings_by_rule(tmp_path)
+
+
+def test_header_and_identifier_hit_on_one_line_is_one_finding_not_two(tmp_path):
+    (tmp_path / "srv.py").write_text(
+        "def handle(request):\n"
+        '    mcp_session_id = request.headers.get("Mcp-Session-Id")\n'
+        "    return mcp_session_id\n"
+    )
+    by_rule = _findings_by_rule(tmp_path)
+    line_2_hits = [f for f in by_rule.get("R001", []) if f.line == 2]
+    assert len(line_2_hits) == 1, (
+        "identifier and header-literal patterns both matching line 2 "
+        f"should collapse to one finding, got {line_2_hits}"
+    )
+
+
+def test_header_mention_in_docstring_comment_or_log_still_does_not_fire_r001(tmp_path):
+    """search_wire keeps ordinary string literals (unlike search_code), so
+    the header-literal pattern must stay anchored to a real access -- a
+    log message that merely names the header must not fire."""
+    (tmp_path / "srv.py").write_text(
+        '"""This server predates Mcp-Session-Id and never reads it."""\n'
+        "import logging\n"
+        "logger = logging.getLogger(__name__)\n\n"
+        "def handle(request):\n"
+        "    # some older clients still send an Mcp-Session-Id header\n"
+        '    logger.debug("Mcp-Session-Id, if sent, is ignored")\n'
+        "    return {}\n"
+    )
+    by_rule = _findings_by_rule(tmp_path)
+    assert "R001" not in by_rule, by_rule.get("R001")
