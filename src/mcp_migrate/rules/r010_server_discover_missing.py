@@ -1,5 +1,6 @@
 import re
 
+from ..sdk import declared_mcp_floor
 from .base import Finding, Project, Rule, wire_method
 
 # Evidence the project registers real MCP request handlers -- the
@@ -185,8 +186,11 @@ class ServerDiscoverMissing(Rule):
     spec_ref = "SEP-2575 https://modelcontextprotocol.io/specification/2026-07-28/changelog"
     fix = (
         "Servers MUST implement server/discover so clients can learn supported protocol "
-        "versions, capabilities and server identity before doing anything else. Add a "
-        "handler for it alongside your other request handlers."
+        "versions, capabilities and server identity before doing anything else. On Python, "
+        "upgrade to mcp>=2.0 -- Server.__init__ registers the handler for you, and there is "
+        "no handler to register on 1.x because the method does not exist there. The "
+        "TypeScript SDK has not shipped server/discover as of 1.30.0, so there is nothing "
+        "to call yet."
     )
     languages = ("python", "typescript")
 
@@ -209,6 +213,41 @@ class ServerDiscoverMissing(Rule):
             return []
         if has_discover:
             return []
+
+        # The absence check above asks the wrong question on Python, because
+        # `server/discover` is not something a 2.x project writes: the SDK
+        # registers it in `Server.__init__`, so the evidence is never in the
+        # project's own source and the rule reports a gap that is not there.
+        # Verified on mcp==2.1.1, where `Server("demo")._request_handlers`
+        # already contains "server/discover" for both the low-level and the
+        # high-level entry points, with no user code. See #257.
+        #
+        # 1.x is the mirror image: `server/discover` does not exist in it at
+        # all, so the finding stands but the remediation is "upgrade", not
+        # "add a handler".
+        #
+        # Undeterminable stays silent, which is the same posture sdk.py takes
+        # and the reason `declared_mcp_floor` returns None rather than a
+        # guess: a floor read from a declaration is not a resolved version,
+        # and a finding nobody can act on is worse than a missing one.
+        #
+        # TypeScript is deliberately not gated this way. The TS SDK has not
+        # shipped `server/discover` at all as of 1.30.0 -- checked against the
+        # published package, not assumed -- so there is no version at which
+        # the SDK supplies it and no floor to compare against.
+        #
+        # Known gap, stated rather than papered over: a project whose SDK is
+        # `fastmcp` rather than `mcp` reads as undeterminable and stays
+        # silent. fastmcp has its own version line and pulls `mcp` in
+        # transitively, so `fastmcp==2.7.0` says nothing readable about which
+        # `mcp` resolves underneath it -- and three board servers are exactly
+        # this shape. Resolving that needs a lockfile, not a declaration. The
+        # silence is a missed finding rather than a false one, which is the
+        # direction this project errs in on purpose.
+        if project.language != "typescript":
+            floor = declared_mcp_floor(project.root)
+            if floor is None or floor >= (2,):
+                return []
         # Project-level: "(project)" is the honest location, because the
         # absence is a property of the tree and no single file is at fault.
         # The evidence anchor is the file that registers handlers, which is

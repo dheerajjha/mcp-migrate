@@ -394,6 +394,21 @@ def test_r010_still_respects_a_real_server_discover_implementation(tmp_path):
     assert ServerDiscoverMissing().check(project) == []
 
 
+def _r010_declare_legacy_sdk(root) -> None:
+    """Make the fixture a 1.x project, which is the only case R010 speaks to.
+
+    Since #257, R010 stays silent unless the project declares an SDK floor
+    below 2.0: on 2.x `Server.__init__` registers `server/discover` itself,
+    so an absence check against the project's own source reports a gap that
+    is not there, and an undeclared floor is not evidence of an old one.
+    Every one of these tests is about the *suppression* logic, so each needs
+    the rule to be speaking at all.
+    """
+    (root / "pyproject.toml").write_text(
+        '[project]\nname = "t"\nversion = "0"\ndependencies = ["mcp>=1.9.0"]\n'
+    )
+
+
 def _r010_has_handlers_source() -> str:
     # Enough to satisfy _has_request_handlers on its own, independent of
     # whatever the test appends about server/discover.
@@ -414,6 +429,7 @@ def test_r010_is_not_suppressed_by_a_todo_comment_admitting_the_gap(tmp_path):
     (tmp_path / "server.py").write_text(
         _r010_has_handlers_source() + "# TODO: server/discover is not implemented yet\n"
     )
+    _r010_declare_legacy_sdk(tmp_path)
     project = load_project(tmp_path)
     findings = ServerDiscoverMissing().check(project)
     assert findings, "a TODO admitting the gap must not suppress R010"
@@ -424,6 +440,7 @@ def test_r010_is_not_suppressed_by_a_docstring_mentioning_the_gap(tmp_path):
         _r010_has_handlers_source()
         + '"""We do not implement server/discover."""\n'
     )
+    _r010_declare_legacy_sdk(tmp_path)
     project = load_project(tmp_path)
     findings = ServerDiscoverMissing().check(project)
     assert findings, "a docstring mentioning the gap must not suppress R010"
@@ -436,6 +453,7 @@ def test_r010_still_suppressed_by_a_real_wire_string_literal(tmp_path):
     (tmp_path / "server.py").write_text(
         _r010_has_handlers_source() + 'ROUTES = {"server/discover": handle_discover}\n'
     )
+    _r010_declare_legacy_sdk(tmp_path)
     project = load_project(tmp_path)
     assert ServerDiscoverMissing().check(project) == []
 
@@ -450,6 +468,7 @@ def test_r010_is_not_suppressed_by_a_wire_name_merely_containing_discover(tmp_pa
         _r010_has_handlers_source()
         + 'ROUTES = {"server/discoverLatency": handle_latency}\n'
     )
+    _r010_declare_legacy_sdk(tmp_path)
     project = load_project(tmp_path)
     findings = ServerDiscoverMissing().check(project)
     assert findings, (

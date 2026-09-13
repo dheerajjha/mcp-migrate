@@ -115,3 +115,118 @@ def detect_sdk(root: Path) -> SdkInfo:
             pass
 
     return SdkInfo(is_sdk=False)
+
+
+# --- which version of the Python SDK a project asks for -------------------
+#
+# Needed because `server/discover` is not something a 2.x project writes:
+# `Server.__init__` registers it, so an absence check against the project's
+# own source reports a gap that does not exist. See #257.
+#
+# This reads the *declared* floor, not the resolved one. A lockfile would be
+# authoritative and this is not; the difference is why "undeterminable"
+# returns None and callers are expected to stay silent rather than guess.
+
+# `mcp`, optionally with extras, then the first version-like constraint.
+# Deliberately not a full PEP 508 parser: the only question is "does this
+# project ask for at least 2.0", and anything this cannot answer becomes
+# None, which callers treat as "do not fire".
+_MCP_REQ_RX = re.compile(
+    r"""^\s*mcp                         # the package, exactly
+        (?:\[[^\]]*\])?                 # optional extras: mcp[cli]
+        \s*(?P<op>==|>=|~=|\^|>)        # the constraint we can read a floor from
+        \s*v?(?P<ver>\d+(?:\.\d+)*)     # 2, 2.0, 2.1.1
+    """,
+    re.VERBOSE | re.IGNORECASE,
+)
+
+
+def _version_tuple(text: str) -> tuple[int, ...]:
+    return tuple(int(p) for p in text.split("."))
+
+
+def _floor_from_requirement(spec: str) -> tuple[int, ...] | None:
+    """The lower bound a single requirement string puts on `mcp`, if any.
+
+    `<` and `!=` are deliberately unreadable here: `mcp<3` says nothing
+    about the floor, and treating it as one would be inventing a number.
+    """
+    m = _MCP_REQ_RX.match(spec.strip())
+    if not m:
+        return None
+    try:
+        return _version_tuple(m.group("ver"))
+    except ValueError:
+        return None
+
+
+def declared_mcp_floor(root: Path) -> tuple[int, ...] | None:
+    """The lowest version of the Python `mcp` SDK this project accepts.
+
+    None when the project does not depend on `mcp`, pins it without a
+    readable lower bound (`mcp`, `mcp<3`), or cannot be parsed. Callers
+    must treat None as "unknown", never as "old".
+    """
+    if not root.is_dir():
+        return None
+
+    candidates: list[str] = []
+
+    pyproject = root / "pyproject.toml"
+    if pyproject.is_file():
+        try:
+            content = pyproject.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            content = ""
+        if content:
+            parsed = False
+            if tomllib:
+                try:
+                    data = tomllib.loads(content)
+                    parsed = isinstance(data, dict)
+                except Exception:
+                    parsed = False
+                if parsed:
+                    project_table = data.get("project")
+                    if isinstance(project_table, dict):
+                        deps = project_table.get("dependencies")
+                        if isinstance(deps, list):
+                            candidates += [d for d in deps if isinstance(d, str)]
+                        optional = project_table.get("optional-dependencies")
+                        if isinstance(optional, dict):
+                            for group in optional.values():
+                                if isinstance(group, list):
+                                    candidates += [d for d in group if isinstance(d, str)]
+                    tool = data.get("tool")
+                    if isinstance(tool, dict):
+                        poetry = tool.get("poetry")
+                        if isinstance(poetry, dict):
+                            pdeps = poetry.get("dependencies")
+                            if isinstance(pdeps, dict):
+                                for name, spec in pdeps.items():
+                                    if str(name).strip().lower() != "mcp":
+                                        continue
+                                    if isinstance(spec, str):
+                                        candidates.append(f"mcp{spec}")
+                                    elif isinstance(spec, dict) and isinstance(spec.get("version"), str):
+                                        candidates.append(f"mcp{spec['version']}")
+            if not parsed:
+                # No tomllib (3.10 without tomli) or unparseable TOML. Reading
+                # requirement-shaped lines out of the raw text is strictly
+                # better than answering None for every 3.10 user.
+                candidates += re.findall(r'["\']\s*(mcp(?:\[[^\]]*\])?[^"\']*)["\']', content)
+
+    for name in ("requirements.txt", "requirements/base.txt", "requirements-dev.txt"):
+        req = root / name
+        if req.is_file():
+            try:
+                candidates += req.read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError:
+                pass
+
+    floors = [f for f in (_floor_from_requirement(c) for c in candidates) if f]
+    if not floors:
+        return None
+    # The highest declared floor wins: a project listing `mcp>=1.2` in one
+    # place and `mcp>=2.1` in another cannot resolve below 2.1.
+    return max(floors)

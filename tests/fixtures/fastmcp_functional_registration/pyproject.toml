@@ -1,0 +1,8 @@
+# A 1.x server: `server/discover` does not exist in this SDK, so R010's
+# finding stands here and its remediation is "upgrade", not "add a handler".
+# Without a declared floor the rule stays silent (see r010 / #257), so this
+# file is what makes the fixture represent the case it is named for.
+[project]
+name = "fixture-server"
+version = "0.0.0"
+dependencies = ["mcp>=1.9.0"]
