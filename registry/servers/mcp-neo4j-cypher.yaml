@@ -3,8 +3,8 @@ repo: neo4j-contrib/mcp-neo4j
 path: servers/mcp-neo4j-cypher
 language: python
 grade: B
-score: 89
-checked_with: mcp-migrate 0.4.0
+score: 92
+checked_with: mcp-migrate 0.5.0
 spec: "2026-07-28"
 # backfilled 2026-08-09: re-verified against current HEAD, not the
 # commit this entry was originally graded from -- that predates the

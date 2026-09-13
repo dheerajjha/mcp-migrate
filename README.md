@@ -632,13 +632,14 @@ All of these were checked by this project, not submitted by the servers' maintai
 
 | server | grade | status | language | what it does |
 | --- | --- | --- | --- | --- |
+| [mcp-server-motherduck](https://github.com/motherduckdb/mcp-server-motherduck) | **A** | ready | python | Local MCP server connecting AI assistants to DuckDB and MotherDuck for SQL analytics and data engineering. |
+| [mcp-server-qdrant](https://github.com/qdrant/mcp-server-qdrant) | **A** | ready | python | Official MCP server for Qdrant that acts as a semantic memory layer for keeping and retrieving memories in the vector search engine. |
 | [aws-documentation-mcp-server](https://github.com/awslabs/mcp) | **A** | ready | python | AWS Labs MCP server that fetches, searches, and recommends AWS documentation pages, converted to markdown. |
 | [cloudwatch-mcp-server](https://github.com/awslabs/mcp) | **A** | ready | python | AWS Labs MCP server for CloudWatch that gives troubleshooting agents alarm, metric, and log data for root cause analysis. |
 | [duckduckgo-mcp-server](https://github.com/nickclyde/duckduckgo-mcp-server) | **A** | ready | python | MCP server that provides web search through DuckDuckGo, with additional content fetching and parsing features. |
 | [dynamodb-mcp-server](https://github.com/awslabs/mcp) | **A** | ready | python | Official AWS DynamoDB MCP server providing expert data modeling guidance, validation, and cost analysis tools. |
-| [mcp-server-motherduck](https://github.com/motherduckdb/mcp-server-motherduck) | **A** | ready | python | Local MCP server connecting AI assistants to DuckDB and MotherDuck for SQL analytics and data engineering. |
-| [mcp-server-qdrant](https://github.com/qdrant/mcp-server-qdrant) | **A** | ready | python | Official MCP server for Qdrant that acts as a semantic memory layer for keeping and retrieving memories in the vector search engine. |
 | [mcp-server-tree-sitter](https://github.com/wrale/mcp-server-tree-sitter) | **A** | ready | python | MCP server providing tree-sitter code analysis so AI assistants get structure-aware access to codebases in many languages. |
+| [mcp-neo4j-cypher](https://github.com/neo4j-contrib/mcp-neo4j) | **B** | ready | python | MCP server for Neo4j that runs Cypher graph queries and supports Text2Cypher workflows over graph data. |
 | [arxiv-mcp-server](https://github.com/blazickjp/arxiv-mcp-server) | **B** | ready | python | Search, download, and read arXiv papers, with semantic search and citation tools, over MCP. |
 | [mcp-obsidian](https://github.com/MarkusPfundstein/mcp-obsidian) | **B** | ready | python | MCP server that lets clients read, search, and modify Obsidian vault content through the Local REST API. |
 | [mcp-server-fetch](https://github.com/modelcontextprotocol/servers) | **B** | ready | python | Reference MCP server that fetches web pages and converts HTML to markdown so LLMs can read them in chunks. |
@@ -646,7 +647,6 @@ All of these were checked by this project, not submitted by the servers' maintai
 | [mcp-server-sqlite](https://github.com/modelcontextprotocol/servers-archived) | **B** | ready | python | Archived reference MCP server for SQLite that runs SQL queries and auto-generates business insight memos. |
 | [mcp-server-time](https://github.com/modelcontextprotocol/servers) | **B** | ready | python | Reference MCP server giving LLMs current time and timezone conversion using IANA timezone names. |
 | [excel-mcp-server](https://github.com/haris-musa/excel-mcp-server) | **B** | ready | python | Read, write, and format Excel workbooks (formulas, charts, pivot tables) over MCP, via SSE or Streamable HTTP. |
-| [mcp-neo4j-cypher](https://github.com/neo4j-contrib/mcp-neo4j) | **B** | ready | python | MCP server for Neo4j that runs Cypher graph queries and supports Text2Cypher workflows over graph data. |
 | [mcp-atlassian](https://github.com/sooperset/mcp-atlassian) | **C** | migrating | python | MCP server for Atlassian products (Confluence and Jira), supporting both Cloud and Server/Data Center deployments. |
 | [mcp-server-git](https://github.com/modelcontextprotocol/servers) | **D** | ready | python | Reference MCP server for Git repository interaction, giving LLMs tools to read, search, and manipulate repos. |
 | [serena](https://github.com/oraios/serena) | **D** | migrating | python | Python MCP toolkit for coding with semantic retrieval and editing capabilities. |
