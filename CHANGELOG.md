@@ -6,6 +6,101 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- **SARIF is accepted by GitHub code scanning again -- or rather, for the first time.** ([#262](https://github.com/dheerajjha/mcp-migrate/issues/262))
+
+  `--format sarif` advertises itself as being *for* code scanning, and
+  `upload-sarif` rejected it outright:
+
+  ```
+  locationFromSarifResult: expected at least one location
+  ```
+
+  Project-level findings carried `"locations": []`, on the reading that
+  SARIF permits it -- it does, SS3.27.12 -- and that consumers would render
+  them against the repository root. GitHub does not, and the rejection is
+  **all-or-nothing**: one unlocated result discarded every other finding in
+  the run. On `legacy_server` that was 2 results silently costing the other
+  48. On a project whose only finding is R010 it was everything.
+
+  Not a corner case: R010 fires on 16 of 16 registry servers, so in practice
+  no real MCP server could upload this output at all.
+
+  `Finding` now carries an `evidence_path` -- the file that made a
+  project-level rule fire -- which only the SARIF projection reads. R008
+  anchors at the file importing OpenTelemetry, R010 at the file registering
+  handlers, which is what its own title describes. The text and `--json`
+  outputs are untouched and still say `(project)`, because that is still the
+  honest answer: the finding is about the tree, and the anchor exists so
+  SARIF has somewhere to point, not to blame a file.
+
+  Schema validation could never have caught this -- it passed throughout,
+  since the document was valid SARIF the whole time. The new test asserts
+  GitHub's requirement rather than the spec's, and says so, so nobody
+  loosens it back later.
+
+
+## [0.5.0] - 2026-09-12
+
+### Added
+
+- **A GitHub Action, so the tool can run in CI without a bespoke workflow.** ([#100](https://github.com/dheerajjha/mcp-migrate/issues/100))
+
+  `uses: dheerajjha/mcp-migrate@v0.5.0` installs the published package and
+  runs `check`. A breaking finding fails the job; `fail-on` moves that line,
+  and `never` reports without blocking. `sarif-file` writes the SARIF 2.1.0
+  `check` already emits, for `upload-sarif` and the Security tab -- the
+  format existed for this and had no documented path to it.
+
+  Outputs are `grade`, `score`, `findings` and `exit-code`. `grade` and
+  `score` come back **empty**, not `A`/`100`, when the run was narrowed by
+  `--rule` or the tree was unscannable, for the reason the CLI omits them:
+  a grade computed from part of the rule set is not a grade. Gate on
+  `exit-code`.
+
+  `.github/workflows/action.yml` exercises the action against the repo's own
+  fixtures on every change to it -- a clean tree passing, a legacy tree
+  failing the step, `fail-on: never` not failing, SARIF validating as 2.1.0
+  and surviving `upload-sarif`, an unreadable path exiting 2, and a pinned
+  `version`. It installs from PyPI rather than the checkout, so it also
+  fails when a *release* is broken, which is deliberate.
+
+
+- **R006, R017, and R021 now read JavaScript.** ([#149](https://github.com/dheerajjha/mcp-migrate/issues/149))
+
+  The scanner has loaded `.js`/`.jsx`/`.mjs`/`.cjs` since the first half of
+  #149, but no rule declared `"javascript"`, so a plain-JavaScript server
+  scanned clean with zero findings regardless of what was in it. These
+  three rules match patterns spelled identically in JavaScript and
+  TypeScript (an SDK class name, a wire error code, a JSON Schema dialect
+  string), so porting them was the tuple edit alone -- confirmed against a
+  `require()`-based fixture, not just `import`, since a pattern anchored on
+  ES module syntax would silently miss a CommonJS server.
+
+  JavaScript moves into the same `PARTIAL` coverage tier TypeScript held
+  before it reached full coverage: findings are reported, the grade is
+  withheld, and the coverage fraction shown is JavaScript's own (3 of 21),
+  computed independently of TypeScript's so one language's completed port
+  can't hide the other's gap. The other eighteen rules key off TypeScript
+  idioms (`import`, type annotations) that don't hold in JavaScript and
+  need each checked before porting -- tracked as the rest of #149.
+
+### Fixed
+
+- **`check` claimed partial coverage in the two shapes where nothing ran.**
+
+  When `--rule` selected past every rule that reads a language, or config
+  switched them all off, the reason line still explained the *rule set's*
+  coverage -- "JavaScript is read by 3 of 21 rules -- enough to report
+  findings" -- printed directly beneath "Nothing scannable here." and above
+  an empty findings list. Both halves were true of the tool and false of the
+  run. `unscannable_reason` now takes the languages an active rule actually
+  declared and says so instead: "no rule that ran reads JavaScript". Exit
+  codes are unchanged; they were already right.
+
+  A mixed tree describes each language on its own terms, so one language
+  being unread no longer speaks for another: "JavaScript was read by no rule
+  that ran; TypeScript is read by every rule".
+
 - **`fix --write` could write Python that doesn't parse.**
   ([#244](https://github.com/dheerajjha/mcp-migrate/issues/244))
 

@@ -13,6 +13,11 @@ on:
       - "registry/**"
       - "scripts/render_board.py"
       - "scripts/render_badges.py"
+      - "scripts/render_site.py"
+      # The landing page renders the rule set, so a reworded rule changes
+      # the page even when no registry file moved.
+      - "src/mcp_migrate/rules/**"
+      - "src/mcp_migrate/__init__.py"
       - "scripts/validate_registry.py"
       - "src/mcp_migrate/constants.py"
       - ".github/workflows/board.yml"
@@ -46,14 +51,17 @@ jobs:
       - name: Render live badge endpoints
         run: python scripts/render_badges.py
 
+      - name: Render the landing page
+        run: python scripts/render_site.py
+
       - name: Commit board update
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md docs/badge
+          git add README.md docs/badge docs/index.html
           if git diff --cached --quiet; then
-            echo "Board and badges unchanged, nothing to commit."
+            echo "Board, badges and landing page unchanged, nothing to commit."
             exit 0
           fi
-          git commit -m "chore: regenerate board and badge endpoints [skip ci]"
+          git commit -m "chore: regenerate board, badges and landing page [skip ci]"
           git push

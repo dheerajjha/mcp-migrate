@@ -1,0 +1,144 @@
+name: 'mcp-migrate'
+description: 'Find what the MCP 2026-07-28 spec revision breaks in your MCP server, and fail CI on it.'
+author: 'Dheeraj Jha'
+branding:
+  icon: 'git-pull-request'
+  color: 'purple'
+
+inputs:
+  path:
+    description: 'Directory to scan.'
+    required: false
+    default: '.'
+  version:
+    description: >-
+      Version of mcp-migrate to install, e.g. "0.4.0". Empty installs the
+      latest release. Pin this if you want a grade that cannot move under you
+      when a new rule ships.
+    required: false
+    default: ''
+  fail-on:
+    description: >-
+      Minimum severity that fails the job: breaking, deprecated, advisory, or
+      never. Matches the CLI flag of the same name. A tree the tool cannot read
+      exits 2 regardless of this setting.
+    required: false
+    default: 'breaking'
+  sarif-file:
+    description: >-
+      Write SARIF 2.1.0 here for upload to GitHub code scanning. Empty writes
+      none. Requires `security-events: write` on the job to upload.
+    required: false
+    default: ''
+  include-tests:
+    description: 'Also scan tests, fixtures, examples and docs (off by default).'
+    required: false
+    default: 'false'
+  args:
+    description: 'Extra arguments appended verbatim to `mcp-migrate check`.'
+    required: false
+    default: ''
+  python-version:
+    description: 'Python used to install the tool. Unrelated to the version of Python in the project being scanned.'
+    required: false
+    default: '3.12'
+
+outputs:
+  grade:
+    description: 'Letter grade (A-F), or empty when the tree is ungradeable.'
+    value: ${{ steps.run.outputs.grade }}
+  score:
+    description: 'Numeric score 0-100, or empty when the tree is ungradeable.'
+    value: ${{ steps.run.outputs.score }}
+  exit-code:
+    description: '0 clean, 1 findings at or above fail-on, 2 nothing scannable.'
+    value: ${{ steps.run.outputs.exit-code }}
+  findings:
+    description: 'Total number of findings reported.'
+    value: ${{ steps.run.outputs.findings }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install mcp-migrate
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.version }}" ]; then
+          python -m pip install --quiet "mcp-migrate==${{ inputs.version }}"
+        else
+          python -m pip install --quiet mcp-migrate
+        fi
+        echo "installed: $(mcp-migrate --version 2>&1 | tail -1)"
+
+    - name: Run mcp-migrate check
+      id: run
+      shell: bash
+      run: |
+        # `shell: bash` runs as `bash --noprofile --norc -e -o pipefail`, so
+        # -e is already on and cannot be assumed away: a failing check would
+        # abort the script before `code=$?` ran, leaving the exit-code output
+        # empty exactly when a caller most needs it. Every command whose
+        # failure is expected is therefore written as an `&&/||` list, which
+        # -e does not treat as fatal.
+        set -uo pipefail
+
+        # One array holding the whole argument list, always non-empty because
+        # it starts with the path. An empty array expanded under `set -u` is
+        # an "unbound variable" error on bash 3.2, which is still what a
+        # self-hosted macOS runner ships, so no bare "${arr[@]}" anywhere.
+        argv=("${{ inputs.path }}")
+        if [ "${{ inputs.include-tests }}" = "true" ]; then
+          argv+=(--include-tests)
+        fi
+        # Unquoted expansion on purpose: `args` is a caller-supplied flag list.
+        for a in ${{ inputs.args }}; do
+          argv+=("$a")
+        done
+
+        # SARIF and JSON are generated with --fail-on never so a findings exit
+        # never truncates an artifact the caller asked for. The real exit code
+        # comes from the human-readable run below, the only one honouring
+        # fail-on.
+        if [ -n "${{ inputs.sarif-file }}" ]; then
+          mkdir -p "$(dirname "${{ inputs.sarif-file }}")"
+          mcp-migrate check "${argv[@]}" --format sarif --fail-on never \
+            > "${{ inputs.sarif-file }}" || true
+          echo "wrote SARIF to ${{ inputs.sarif-file }}"
+        fi
+
+        mcp-migrate check "${argv[@]}" --format json --fail-on never \
+          > /tmp/mcp-migrate.json 2>/dev/null || true
+
+        python - <<'PY' >> "$GITHUB_OUTPUT"
+        import json
+        try:
+            with open("/tmp/mcp-migrate.json") as fh:
+                d = json.load(fh)
+        except Exception:
+            d = {}
+        # A grade computed from part of the rule set is not a grade, so the
+        # tool omits it. Emit empty rather than inventing a number.
+        print(f"grade={d.get('grade') or ''}")
+        print(f"score={'' if d.get('score') is None else d['score']}")
+        print(f"findings={len(d.get('findings') or [])}")
+        PY
+
+        echo "::group::mcp-migrate report"
+        code=0
+        mcp-migrate check "${argv[@]}" --fail-on "${{ inputs.fail-on }}" || code=$?
+        echo "::endgroup::"
+
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+
+        if [ "$code" = "2" ]; then
+          echo "::error::mcp-migrate found nothing it could scan at '${{ inputs.path }}'. Check the path, or widen the scan with include-tests or args."
+        elif [ "$code" = "1" ]; then
+          echo "::error::mcp-migrate found findings at or above severity '${{ inputs.fail-on }}'."
+        fi
+
+        exit $code

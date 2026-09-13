@@ -1310,6 +1310,24 @@ server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
     assert len(ServerDiscoverMissing().check(project)) == 1
 
 
+def test_r010_is_not_satisfied_by_a_wire_method_that_merely_contains_discover(tmp_path):
+    # Same boundary as the Python side (test_r010... in test_regressions.py):
+    # `server/discoverLatency` contains the substring but is a different
+    # method/metric name, not an implementation of server/discover. The
+    # bounded wire scan must not read it as one.
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
+
+const server = new Server({ name: "demo", version: "1.0.0" });
+server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
+
+server.setRequestHandler("server/discoverLatency", async () => 0);
+"""
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert len(ServerDiscoverMissing().check(project)) == 1
+
+
 def test_r010_stays_silent_on_typescript_with_no_handlers(tmp_path):
     # A client, or a library. Not an MCP server, so the absence of
     # server/discover says nothing about it.
@@ -1757,20 +1775,69 @@ def test_a_language_with_no_backend_still_exits_unscannable(tmp_path, capsys):
     assert exit_code == 2
 
 
-def test_javascript_still_exits_unscannable_until_a_rule_covers_it(tmp_path, capsys):
-    # #149 step 1 made the scanner open .js files, which put them in
-    # `project.files` for the first time. `_checked_something` used to be
-    # `bool(project.files)`, so that alone flipped this from exit 2 to exit
-    # 0 -- "clean" -- for a project where zero rules ever ran. A real
-    # breaking pattern (Mcp-Session-Id) sits in this file and nothing
-    # catches it; exit 0 here would be worse than the old exit 2, not
-    # better, because it reads as a verdict instead of a refusal.
+def test_javascript_with_no_covered_finding_exits_zero_not_unscannable(tmp_path, capsys):
+    # #149 step 2 ported R006/R017/R021 to JavaScript and moved it into
+    # `PARTIAL`, the same status TypeScript held while its own port was
+    # still in progress. R001 (Mcp-Session-Id) is not one of the three, so
+    # this file has a real breaking pattern nothing here catches yet -- but
+    # that is now "partial coverage", not "could not read", so it exits 0
+    # exactly like a TypeScript tree whose only bug predates a rule port
+    # (see test_clean_typescript_exits_zero). Exit 2 would misreport that
+    # nothing was read, when three rules did run over this file and found
+    # nothing they know how to flag.
     (tmp_path / "server.js").write_text(
         'const sessionId = req.headers["Mcp-Session-Id"];\n'
     )
     exit_code = main(["check", str(tmp_path)])
     capsys.readouterr()
+    assert exit_code == 0
+
+
+def test_javascript_with_a_covered_breaking_finding_exits_one(tmp_path, capsys):
+    # The mirror case: a pattern one of the three ported rules (R017) does
+    # know, so partial coverage must still fail a build on it -- same
+    # contract as test_typescript_with_a_breaking_finding_exits_one.
+    (tmp_path / "server.js").write_text(
+        'const e = { code: -32002, message: "resource not found" };\n'
+    )
+    exit_code = main(["check", str(tmp_path)])
+    capsys.readouterr()
+    assert exit_code == 1, "a breaking finding must fail a build"
+
+
+def test_javascript_exits_unscannable_when_the_selected_rule_does_not_cover_it(
+    tmp_path, capsys,
+):
+    # Moving JavaScript into PARTIAL made `_checked_something` recognize
+    # the language by name -- but `--rule` (or a config that disables a
+    # rule) chooses a *subset* of rules, and the language-membership check
+    # alone can't see that. `--rule R001` runs a rule with no JavaScript
+    # port at all, so zero rules actually look at this file even though a
+    # real Mcp-Session-Id bug sits in it. Exit 0 here would be the same
+    # false "checked it, clean" this module's older JS tests guard
+    # against, just reachable through `--rule` instead of through an
+    # unported language.
+    (tmp_path / "server.js").write_text(
+        'const sessionId = req.headers["Mcp-Session-Id"];\n'
+    )
+    exit_code = main(["check", str(tmp_path), "--rule", "R001"])
+    capsys.readouterr()
     assert exit_code == 2
+
+
+def test_javascript_check_still_runs_when_the_selected_rule_covers_it(tmp_path, capsys):
+    # The mirror case: `--rule R006` does cover JavaScript, so restricting
+    # to it must not fall back to "unscannable" just because most rules
+    # don't. R006 is `deprecated`, below the default `--fail-on breaking`
+    # threshold, so the assertion is on the headline/exit-2, not exit-1.
+    (tmp_path / "server.js").write_text(
+        'const { SSEServerTransport } = require("@modelcontextprotocol/sdk/server/sse.js");\n'
+    )
+    exit_code = main(["check", str(tmp_path), "--rule", "R006"])
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "No grade for this one." in out
+    assert "Nothing scannable" not in out
 
 
 def test_the_grade_is_still_withheld_for_typescript(tmp_path, capsys):
@@ -1846,3 +1913,89 @@ def test_fix_preserves_typescript_language_for_remaining_findings(tmp_path, caps
 
     assert remaining == len(check_data["findings"])
     assert fix_exit == 0
+
+
+def _unwrapped(out: str) -> str:
+    """Console output with rich's line wrapping collapsed.
+
+    These assertions are on whole sentences, and rich breaks them at the
+    terminal width -- which is where the bug being pinned actually shows,
+    so the output has to stay rendered rather than be read off the reason
+    string directly.
+    """
+    return " ".join(out.split())
+
+
+# --- the message that goes with those exit codes ---------------------------
+#
+# The exit codes above were right from the start; the sentence printed above
+# them was not. `unscannable_reason` explained the *rule set's* coverage
+# ("JavaScript is read by 3 of 21 rules -- enough to report findings") in
+# exactly the two shapes where none of those rules ran, so it appeared over
+# an empty findings list, directly under a headline saying nothing was
+# scannable. Both halves were true of the tool and false of the run.
+
+
+def test_the_reason_does_not_promise_findings_when_no_rule_ran(tmp_path, capsys):
+    (tmp_path / "server.js").write_text(
+        'const sessionId = req.headers["Mcp-Session-Id"];\n'
+    )
+    assert main(["check", str(tmp_path), "--rule", "R001"]) == 2
+    out = _unwrapped(capsys.readouterr().out)
+    assert "Nothing scannable here." in out
+    assert "no rule that ran reads JavaScript" in out
+    # The contradiction, pinned by its exact words: this claim may never
+    # appear beneath a "nothing scannable" headline.
+    assert "enough to report findings" not in out
+
+
+def test_a_config_that_disables_every_ported_rule_says_so_too(tmp_path, capsys):
+    # Same hole reached without `--rule`: config switches off all three
+    # rules that read JavaScript, so again nothing looked at the file.
+    (tmp_path / "server.js").write_text(
+        'const { SSEServerTransport } = require("@modelcontextprotocol/sdk/server/sse.js");\n'
+    )
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.mcp-migrate.rules]\nR006 = false\nR017 = false\nR021 = false\n"
+    )
+    assert main(["check", str(tmp_path)]) == 2
+    out = _unwrapped(capsys.readouterr().out)
+    assert "no rule that ran reads JavaScript" in out
+    assert "enough to report findings" not in out
+
+
+def test_a_language_that_was_read_is_still_described_by_its_coverage(tmp_path, capsys):
+    # The guard against over-correcting: when the ported rules *do* run,
+    # the fraction is the right thing to print and must not be replaced.
+    (tmp_path / "server.js").write_text(
+        'const e = { code: -32002, message: "resource not found" };\n'
+    )
+    assert main(["check", str(tmp_path)]) == 1
+    out = _unwrapped(capsys.readouterr().out)
+    assert "JavaScript is read by 3 of 21 rules" in out
+    assert "no rule that ran" not in out
+
+
+def test_one_language_read_and_one_not_is_described_per_language(tmp_path, capsys):
+    # `--rule R001` covers TypeScript but not JavaScript, so the two
+    # clauses must disagree with each other. The headline stays "No grade
+    # for this one" because something genuinely was read.
+    (tmp_path / "a.js").write_text('const x = 1;\n')
+    (tmp_path / "b.ts").write_text(
+        'const sessionId = req.headers["Mcp-Session-Id"];\n'
+    )
+    main(["check", str(tmp_path), "--rule", "R001"])
+    out = _unwrapped(capsys.readouterr().out)
+    assert "JavaScript was read by no rule that ran" in out
+    assert "TypeScript is read by every rule" in out
+    assert "Nothing scannable" not in out
+
+
+def test_the_reason_survives_rich_markup(tmp_path, capsys):
+    # `[rules]` in the prose was swallowed as a rich style tag, printing
+    # "a config  table" -- the same class of bug #246 fixed for config
+    # warnings. Assert on rendered output, which is where it showed.
+    (tmp_path / "server.js").write_text('const x = 1;\n')
+    main(["check", str(tmp_path), "--rule", "R001"])
+    out = _unwrapped(capsys.readouterr().out)
+    assert "rules table in config" in out

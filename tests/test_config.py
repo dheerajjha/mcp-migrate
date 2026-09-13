@@ -95,6 +95,75 @@ def test_malformed_toml_falls_back_to_defaults_with_a_warning(tmp_path):
     assert "invalid TOML" in cfg.warnings[0]
 
 
+# --- config discovery walks up from the scan root -------------------------
+
+def test_walks_up_to_repo_root_pyproject(tmp_path):
+    """`check src/` must find the repo's config at the repo root."""
+    _write(tmp_path, "pyproject.toml", """
+[tool.mcp-migrate.rules]
+R001 = "off"
+""")
+    cfg = load_config(tmp_path / "src")
+    assert cfg.disabled_rules == {"R001": ""}
+    assert cfg.source == tmp_path / "pyproject.toml"
+
+
+def test_walks_up_past_a_sectionless_inner_pyproject(tmp_path):
+    """A monorepo inner pyproject.toml that says nothing about this tool must
+    not stop the walk -- `check src/` still finds the repo root's config."""
+    _write(tmp_path, "pyproject.toml", """
+[tool.mcp-migrate.rules]
+R001 = "off"
+""")
+    _write(tmp_path / "src", "pyproject.toml", '[project]\nname = "inner-pkg"\n')
+    cfg = load_config(tmp_path / "src")
+    assert cfg.disabled_rules == {"R001": ""}
+    assert cfg.source == tmp_path / "pyproject.toml"
+
+
+def test_walks_up_to_standalone_file_in_parent(tmp_path):
+    _write(tmp_path, ".mcp-migrate.toml", 'skip = ["vendor"]\n')
+    cfg = load_config(tmp_path / "src")
+    assert cfg.skip == frozenset({"vendor"})
+    assert cfg.source == tmp_path / ".mcp-migrate.toml"
+
+
+def test_walk_stops_at_git_ceiling(tmp_path):
+    """A stray config above the repo root must never change the grade."""
+    _write(tmp_path, ".mcp-migrate.toml", 'skip = ["stray"]\n')
+    repo = tmp_path / "repo"
+    _write(repo, ".git", "")
+    cfg = load_config(repo / "src")
+    assert cfg.skip == frozenset()
+    assert cfg.source is None
+
+
+def test_walk_stops_at_filesystem_root_backstop(tmp_path):
+    """Even without a .git ceiling, the walk must terminate."""
+    _write(tmp_path, "pyproject.toml", '[tool.mcp-migrate]\nskip = ["top"]\n')
+    # No .git anywhere; walk from a deep dir up to the filesystem root and
+    # the config at tmp_path is between them, so it must still be found.
+    cfg = load_config(tmp_path / "a" / "b" / "c")
+    assert cfg.skip == frozenset({"top"})
+
+
+def test_check_text_reports_walked_up_config_source(tmp_path, capsys):
+    """The check output must say where the config came from when it was
+    found above the scan root, per the issue."""
+    _write(tmp_path, "pyproject.toml", """
+[tool.mcp-migrate.rules]
+R001 = "off"
+""")
+    _write(tmp_path / "src", "server.py", "x = 1\n")
+    rc = main(["check", str(tmp_path / "src")])
+    assert rc == 0
+    out = capsys.readouterr().out
+    # Rich wraps/truncates long paths across lines, so assert the line exists
+    # and that it names the walked-up config file rather than the exact path.
+    assert "config:" in out
+    assert "pyproject.toml" in out
+
+
 def test_unrecognised_rule_value_is_reported_not_silently_dropped(tmp_path):
     _write(tmp_path, ".mcp-migrate.toml", '[rules]\nR001 = "sometimes"\n')
     cfg = load_config(tmp_path)
@@ -107,6 +176,75 @@ def test_non_rule_id_key_in_rules_table_is_reported(tmp_path):
     cfg = load_config(tmp_path)
     assert cfg.disabled_rules == {}
     assert any("not-a-rule" in w for w in cfg.warnings)
+
+
+# --- unknown top-level keys ------------------------------------------------
+# The mirror of the [rules] checks above, one level up: a setting the parser
+# doesn't consume must be *visible*, not silently dropped, for the same
+# reason -- a grade you can't tell was misconfigured is not a grade.
+
+def test_unknown_top_level_key_is_reported_not_silently_dropped(tmp_path):
+    _write(tmp_path, "pyproject.toml", '[tool.mcp-migrate]\nfrobnicate = true\n')
+    cfg = load_config(tmp_path)
+    assert cfg.skip == frozenset()
+    assert cfg.disabled_rules == {}
+    assert any("frobnicate" in w for w in cfg.warnings)
+
+
+def test_a_fully_valid_config_produces_no_warnings(tmp_path):
+    """The regression that actually bites: a warning that fires on a correct
+    config is worse than no warning at all."""
+    _write(tmp_path, "pyproject.toml", """
+[tool.mcp-migrate]
+skip = ["vendor/"]
+include-tests = true
+
+[tool.mcp-migrate.rules]
+R001 = "off -- deliberate"
+""")
+    cfg = load_config(tmp_path)
+    assert cfg.warnings == []
+    assert cfg.skip == frozenset({"vendor"})
+    assert cfg.include_tests is True
+    assert cfg.disabled_rules == {"R001": "deliberate"}
+
+
+def test_underscore_spelling_of_include_tests_is_accepted_silently(tmp_path):
+    _write(tmp_path, "pyproject.toml", "[tool.mcp-migrate]\ninclude_tests = true\n")
+    cfg = load_config(tmp_path)
+    assert cfg.include_tests is True
+    assert cfg.warnings == []
+
+
+def test_rule_id_at_top_level_points_at_the_rules_table(tmp_path):
+    _write(tmp_path, "pyproject.toml", '[tool.mcp-migrate]\nR010 = "off -- gateway"\n')
+    cfg = load_config(tmp_path)
+    assert cfg.disabled_rules == {}  # it did not take effect
+    assert any("R010" in w and "[tool.mcp-migrate.rules]" in w for w in cfg.warnings)
+
+
+def test_rule_id_at_top_level_in_standalone_names_the_bare_rules_table(tmp_path):
+    _write(tmp_path, ".mcp-migrate.toml", 'R010 = "off"\n')
+    cfg = load_config(tmp_path)
+    assert cfg.disabled_rules == {}
+    assert any(
+        "R010" in w and "[rules]" in w and "[tool.mcp-migrate.rules]" not in w
+        for w in cfg.warnings
+    )
+
+
+def test_pyproject_shaped_rules_table_in_standalone_names_the_spelling(tmp_path):
+    _write(tmp_path, ".mcp-migrate.toml", '[tool.mcp-migrate.rules]\nR010 = "off"\n')
+    cfg = load_config(tmp_path)
+    assert cfg.disabled_rules == {}  # the toggle silently did nothing before
+    assert any("pyproject.toml spelling" in w for w in cfg.warnings)
+
+
+def test_near_miss_on_a_real_key_suggests_it(tmp_path):
+    _write(tmp_path, "pyproject.toml", '[tool.mcp-migrate]\nskips = ["vendor"]\n')
+    cfg = load_config(tmp_path)
+    assert cfg.skip == frozenset()  # 'skips' did nothing
+    assert any("did you mean 'skip'" in w for w in cfg.warnings)
 
 
 # --- check integration -------------------------------------------------
@@ -237,6 +375,18 @@ def test_check_json_surfaces_a_config_warning(tmp_path, capsys):
     out = json.loads(capsys.readouterr().out)
     assert len(out["config_warnings"]) == 1
     assert "R001" in out["config_warnings"][0]
+
+
+def test_config_warning_renders_toml_table_names_literally(tmp_path, capsys):
+    """A warning that names a TOML table must print the table, not let Rich
+    markup swallow the [brackets] into nothing -- the warning is only useful
+    if the reader can see the table it's being pointed at."""
+    _write(tmp_path, "server.py", "x = 1\n")
+    _write(tmp_path, "pyproject.toml", '[tool.mcp-migrate]\nR010 = "off"\n')
+    rc = main(["check", str(tmp_path)])
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "[tool.mcp-migrate.rules]" in out
 
 
 def test_fix_skips_a_rule_disabled_by_config(tmp_path, capsys):

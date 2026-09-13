@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Is your MCP server ready for 2026-07-28? &middot; mcp-migrate</title>
+<meta name="description" content="The MCP 2026-07-28 spec revision removes sessions, the initialize handshake, ping, logging/setLevel and resources/subscribe. mcp-migrate finds all 21 breakages in your server and fixes 10 of them for you.">
+<link rel="canonical" href="https://dheerajjha.github.io/mcp-migrate/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://dheerajjha.github.io/mcp-migrate/">
+<meta property="og:title" content="Is your MCP server ready for 2026-07-28?">
+<meta property="og:description" content="The MCP 2026-07-28 spec revision removes sessions, the initialize handshake, ping, logging/setLevel and resources/subscribe. mcp-migrate finds all 21 breakages in your server and fixes 10 of them for you.">
+<meta property="og:image" content="https://github.com/dheerajjha/mcp-migrate/raw/main/docs/banner.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Is your MCP server ready for 2026-07-28?">
+<meta name="twitter:description" content="The MCP 2026-07-28 spec revision removes sessions, the initialize handshake, ping, logging/setLevel and resources/subscribe. mcp-migrate finds all 21 breakages in your server and fixes 10 of them for you.">
+<meta name="twitter:image" content="https://github.com/dheerajjha/mcp-migrate/raw/main/docs/banner.jpg">
+<style>
+:root{
+  --bg:#ffffff; --fg:#1f2328; --mut:#59636e; --line:#d1d9e0; --soft:#f6f8fa;
+  --acc:#0969da; --code:#1f2328; --codebg:#f6f8fa;
+  --breaking:#f85149; --deprecated:#d29922; --advisory:#8b949e;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#0d1117; --fg:#e6edf3; --mut:#9198a1; --line:#2f3742; --soft:#151b23;
+    --acc:#4493f8; --code:#e6edf3; --codebg:#151b23;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0d1117; --fg:#e6edf3; --mut:#9198a1; --line:#2f3742; --soft:#151b23;
+  --acc:#4493f8; --code:#e6edf3; --codebg:#151b23;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;margin:0}
+.wrap{max-width:920px;margin:0 auto;padding:0 20px}
+a{color:var(--acc);text-decoration:none}
+a:hover{text-decoration:underline}
+code,pre{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace}
+header{padding-block:56px 40px;border-bottom:1px solid var(--line)}
+h1{font-size:2.1rem;line-height:1.25;margin:0 0 14px;letter-spacing:-.02em}
+.sub{font-size:1.12rem;color:var(--mut);margin:0 0 28px;max-width:64ch}
+.cta{background:var(--codebg);border:1px solid var(--line);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:0 0 10px}
+.cta pre{margin:0;color:var(--code);font-size:.94rem}
+.cta .p{color:var(--mut);user-select:none}
+.note{font-size:.88rem;color:var(--mut);margin:0}
+.pills{display:flex;flex-wrap:wrap;gap:8px;margin:26px 0 0;padding:0;list-style:none}
+.pills li{font-size:.83rem;color:var(--mut);border:1px solid var(--line);border-radius:999px;padding:3px 11px}
+section{padding-block:44px;border-bottom:1px solid var(--line)}
+h2{font-size:1.4rem;margin:0 0 6px;letter-spacing:-.01em}
+.lede{color:var(--mut);margin:0 0 22px;max-width:70ch}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{border-collapse:collapse;width:100%;font-size:.9rem}
+th{text-align:left;font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;color:var(--mut);font-weight:600;padding:0 12px 8px 0;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:11px 12px 11px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.s a{font-weight:600}
+.repo{display:block;font-size:.76rem;color:var(--mut);font-family:ui-monospace,monospace}
+.g{display:inline-block;min-width:22px;text-align:center;color:#fff;font-weight:700;border-radius:4px;padding:1px 7px;font-size:.82rem}
+.num{font-variant-numeric:tabular-nums;color:var(--mut);white-space:nowrap}
+.lang{color:var(--mut)}
+.what{color:var(--mut);min-width:230px}
+.rid a{font-family:ui-monospace,monospace;font-weight:600}
+.rt strong{font-weight:600;display:block}
+.fix{display:block;color:var(--mut);font-size:.86rem;margin-top:3px}
+.ref{white-space:nowrap;font-size:.84rem}
+.sev{display:inline-block;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em;border-radius:4px;padding:2px 7px;color:#fff;white-space:nowrap}
+.sev-breaking{background:var(--breaking)}
+.sev-deprecated{background:var(--deprecated)}
+.sev-advisory{background:var(--advisory)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:18px;margin-top:6px}
+.card{border:1px solid var(--line);border-radius:8px;padding:16px;background:var(--soft)}
+.card h3{margin:0 0 6px;font-size:.95rem}
+.card p{margin:0;font-size:.88rem;color:var(--mut)}
+footer{padding-block:34px 60px;color:var(--mut);font-size:.88rem}
+footer a{margin-right:16px}
+@media (max-width:560px){h1{font-size:1.6rem}.what{display:none}}
+</style>
+</head>
+<body>
+
+<header>
+<div class="wrap">
+<h1>Is your MCP server ready for 2026-07-28?</h1>
+<p class="sub">The 2026-07-28 spec revision removes protocol sessions, replaces the
+<code>initialize</code> handshake with <code>server/discover</code>, and deletes
+<code>ping</code>, <code>logging/setLevel</code> and <code>resources/subscribe</code>.
+<strong>mcp-migrate</strong> finds all 21 of those breakages in your code and rewrites
+your server for the ones it can fix safely.</p>
+<div class="cta"><pre><span class="p">$ </span>uvx mcp-migrate check .
+<span class="p">$ </span>uvx mcp-migrate fix . --write</pre></div>
+<p class="note">No install, no config, no account. Exit code 1 if it finds anything, so
+it drops straight into CI.</p>
+<ul class="pills">
+<li>21 rules</li>
+<li>10 breaking &middot; 3 deprecated &middot; 8 advisory</li>
+<li>Python &middot; TypeScript (partial)</li>
+<li>SARIF for code scanning</li>
+<li>v0.5.0</li>
+</ul>
+</div>
+</header>
+
+<section>
+<div class="wrap">
+<h2>The readiness board</h2>
+<p class="lede">18 public MCP servers, graded against 2026-07-28 (7× A, 8× B, 1× C, 2× D).
+Every row here was produced by this project scanning a public repository. It is a survey, not a list of adopters &mdash; nobody below has endorsed this tool. If you maintain one of them, <a href="https://github.com/dheerajjha/mcp-migrate/blob/main/registry/README.md">submit your own entry</a> and it becomes yours to correct.</p>
+<div class="scroll">
+<table>
+<thead><tr><th>Server</th><th>Grade</th><th>Score</th><th>Lang</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td class="s"><a href="https://github.com/awslabs/mcp">aws-documentation-mcp-server</a><span class="repo">awslabs/mcp</span></td><td><span class="g" style="background:#3fb950">A</span></td><td class="num">97/100</td><td class="lang">python</td><td class="what">AWS Labs MCP server that fetches, searches, and recommends AWS documentation pages, converted to markdown.</td></tr>
+<tr><td class="s"><a href="https://github.com/awslabs/mcp">cloudwatch-mcp-server</a><span class="repo">awslabs/mcp</span></td><td><span class="g" style="background:#3fb950">A</span></td><td class="num">97/100</td><td class="lang">python</td><td class="what">AWS Labs MCP server for CloudWatch that gives troubleshooting agents alarm, metric, and log data for root cause analysis.</td></tr>
+<tr><td class="s"><a href="https://github.com/nickclyde/duckduckgo-mcp-server">duckduckgo-mcp-server</a><span class="repo">nickclyde/duckduckgo-mcp-server</span></td><td><span class="g" style="background:#3fb950">A</span></td><td class="num">97/100</td><td class="lang">python</td><td class="what">MCP server that provides web search through DuckDuckGo, with additional content fetching and parsing features.</td></tr>
+<tr><td class="s"><a href="https://github.com/awslabs/mcp">dynamodb-mcp-server</a><span class="repo">awslabs/mcp</span></td><td><span class="g" style="background:#3fb950">A</span></td><td class="num">97/100</td><td class="lang">python</td><td class="what">Official AWS DynamoDB MCP server providing expert data modeling guidance, validation, and cost analysis tools.</td></tr>
+<tr><td class="s"><a href="https://github.com/motherduckdb/mcp-server-motherduck">mcp-server-motherduck</a><span class="repo">motherduckdb/mcp-server-motherduck</span></td><td><span class="g" style="background:#3fb950">A</span></td><td class="num">97/100</td><td class="lang">python</td><td class="what">Local MCP server connecting AI assistants to DuckDB and MotherDuck for SQL analytics and data engineering.</td></tr>
+<tr><td class="s"><a href="https://github.com/qdrant/mcp-server-qdrant">mcp-server-qdrant</a><span class="repo">qdrant/mcp-server-qdrant</span></td><td><span class="g" style="background:#3fb950">A</span></td><td class="num">97/100</td><td class="lang">python</td><td class="what">Official MCP server for Qdrant that acts as a semantic memory layer for keeping and retrieving memories in the vector search engine.</td></tr>
+<tr><td class="s"><a href="https://github.com/wrale/mcp-server-tree-sitter">mcp-server-tree-sitter</a><span class="repo">wrale/mcp-server-tree-sitter</span></td><td><span class="g" style="background:#3fb950">A</span></td><td class="num">97/100</td><td class="lang">python</td><td class="what">MCP server providing tree-sitter code analysis so AI assistants get structure-aware access to codebases in many languages.</td></tr>
+<tr><td class="s"><a href="https://github.com/blazickjp/arxiv-mcp-server">arxiv-mcp-server</a><span class="repo">blazickjp/arxiv-mcp-server</span></td><td><span class="g" style="background:#2ea043">B</span></td><td class="num">91/100</td><td class="lang">python</td><td class="what">Search, download, and read arXiv papers, with semantic search and citation tools, over MCP.</td></tr>
+<tr><td class="s"><a href="https://github.com/MarkusPfundstein/mcp-obsidian">mcp-obsidian</a><span class="repo">MarkusPfundstein/mcp-obsidian</span></td><td><span class="g" style="background:#2ea043">B</span></td><td class="num">91/100</td><td class="lang">python</td><td class="what">MCP server that lets clients read, search, and modify Obsidian vault content through the Local REST API.</td></tr>
+<tr><td class="s"><a href="https://github.com/modelcontextprotocol/servers">mcp-server-fetch</a><span class="repo">modelcontextprotocol/servers</span></td><td><span class="g" style="background:#2ea043">B</span></td><td class="num">91/100</td><td class="lang">python</td><td class="what">Reference MCP server that fetches web pages and converts HTML to markdown so LLMs can read them in chunks.</td></tr>
+<tr><td class="s"><a href="https://github.com/modelcontextprotocol/servers-archived">mcp-server-sentry</a><span class="repo">modelcontextprotocol/servers-archived</span></td><td><span class="g" style="background:#2ea043">B</span></td><td class="num">91/100</td><td class="lang">python</td><td class="what">Archived reference MCP server for retrieving and analyzing issues, stacktraces, and debugging info from Sentry.io.</td></tr>
+<tr><td class="s"><a href="https://github.com/modelcontextprotocol/servers-archived">mcp-server-sqlite</a><span class="repo">modelcontextprotocol/servers-archived</span></td><td><span class="g" style="background:#2ea043">B</span></td><td class="num">91/100</td><td class="lang">python</td><td class="what">Archived reference MCP server for SQLite that runs SQL queries and auto-generates business insight memos.</td></tr>
+<tr><td class="s"><a href="https://github.com/modelcontextprotocol/servers">mcp-server-time</a><span class="repo">modelcontextprotocol/servers</span></td><td><span class="g" style="background:#2ea043">B</span></td><td class="num">91/100</td><td class="lang">python</td><td class="what">Reference MCP server giving LLMs current time and timezone conversion using IANA timezone names.</td></tr>
+<tr><td class="s"><a href="https://github.com/haris-musa/excel-mcp-server">excel-mcp-server</a><span class="repo">haris-musa/excel-mcp-server</span></td><td><span class="g" style="background:#2ea043">B</span></td><td class="num">89/100</td><td class="lang">python</td><td class="what">Read, write, and format Excel workbooks (formulas, charts, pivot tables) over MCP, via SSE or Streamable HTTP.</td></tr>
+<tr><td class="s"><a href="https://github.com/neo4j-contrib/mcp-neo4j">mcp-neo4j-cypher</a><span class="repo">neo4j-contrib/mcp-neo4j</span></td><td><span class="g" style="background:#2ea043">B</span></td><td class="num">89/100</td><td class="lang">python</td><td class="what">MCP server for Neo4j that runs Cypher graph queries and supports Text2Cypher workflows over graph data.</td></tr>
+<tr><td class="s"><a href="https://github.com/sooperset/mcp-atlassian">mcp-atlassian</a><span class="repo">sooperset/mcp-atlassian</span></td><td><span class="g" style="background:#d29922">C</span></td><td class="num">64/100</td><td class="lang">python</td><td class="what">MCP server for Atlassian products (Confluence and Jira), supporting both Cloud and Server/Data Center deployments.</td></tr>
+<tr><td class="s"><a href="https://github.com/modelcontextprotocol/servers">mcp-server-git</a><span class="repo">modelcontextprotocol/servers</span></td><td><span class="g" style="background:#db6d28">D</span></td><td class="num">58/100</td><td class="lang">python</td><td class="what">Reference MCP server for Git repository interaction, giving LLMs tools to read, search, and manipulate repos.</td></tr>
+<tr><td class="s"><a href="https://github.com/oraios/serena">serena</a><span class="repo">oraios/serena</span></td><td><span class="g" style="background:#db6d28">D</span></td><td class="num">47/100</td><td class="lang">python</td><td class="what">Python MCP toolkit for coding with semantic retrieval and editing capabilities.</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+
+<section>
+<div class="wrap">
+<h2>What it checks</h2>
+<p class="lede">Every rule, what it means, and the spec change behind it. If your
+server is failing and you landed here from a search, find the symptom below.</p>
+<div class="scroll">
+<table>
+<thead><tr><th>Rule</th><th>Severity</th><th>What it finds &amp; what to do</th><th>Spec</th></tr></thead>
+<tbody>
+<tr id="r001"><td class="rid"><a href="#r001">R001</a></td><td><span class="sev sev-breaking">breaking</span></td><td class="rt"><strong>Uses Mcp-Session-Id, which no longer exists</strong><span class="fix">Sessions are gone from the transport. Mint an explicit handle server-side and take it as an ordinary tool argument instead.</span></td><td class="ref"><a href="https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567">SEP-2567</a></td></tr>
+<tr id="r002"><td class="rid"><a href="#r002">R002</a></td><td><span class="sev sev-breaking">breaking</span></td><td class="rt"><strong>Keeps per-connection state in a module-level dict</strong><span class="fix">A stateless server can sit behind a round-robin load balancer. Move this into a store keyed by an explicit handle you return to the client.</span></td><td class="ref"><a href="https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567">SEP-2567</a></td></tr>
+<tr id="r003"><td class="rid"><a href="#r003">R003</a></td><td><span class="sev sev-advisory">advisory</span></td><td class="rt"><strong>Custom HTTP client does not send Mcp-Method (or Mcp-Name where required)</strong><span class="fix">POST requests now carry Mcp-Method on every request so proxies can route and rate-limit without parsing the body. Add it, and add Mcp-Name too if this call is tools/call, resources/read, or prompts/get -- those are the only methods that carry a name to route on. Or move to an SDK that sets both for you.</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http">spec</a></td></tr>
+<tr id="r004"><td class="rid"><a href="#r004">R004</a></td><td><span class="sev sev-advisory">advisory</span></td><td class="rt"><strong>tools/list order is not deterministic</strong><span class="fix">Sort the tools you return. Stable ordering lets clients cache and it lifts LLM prompt-cache hit rates for everyone downstream.</span></td><td class="ref">Deterministic tool ordering (SHOULD)</td></tr>
+<tr id="r005"><td class="rid"><a href="#r005">R005</a></td><td><span class="sev sev-advisory">advisory</span></td><td class="rt"><strong>Server capabilities declare no extensions map</strong><span class="fix">Optional features now negotiate through `extensions` on ServerCapabilities. Declare an empty map if you support none -- it tells clients you speak 2026-07-28.</span></td><td class="ref">extensions field on ServerCapabilities</td></tr>
+<tr id="r006"><td class="rid"><a href="#r006">R006</a></td><td><span class="sev sev-deprecated">deprecated</span></td><td class="rt"><strong>Uses the deprecated HTTP+SSE transport</strong><span class="fix">Move to Streamable HTTP. HTTP+SSE stays in the spec for 12+ months, then goes.</span></td><td class="ref">HTTP+SSE deprecated in favour of Streamable HTTP</td></tr>
+<tr id="r007"><td class="rid"><a href="#r007">R007</a></td><td><span class="sev sev-deprecated">deprecated</span></td><td class="rt"><strong>Depends on a deprecated core feature (Roots / Sampling / Logging)</strong><span class="fix">These stay in the spec for at least 12 months, then leave. Start moving now.</span></td><td class="ref">Roots, Sampling and Logging deprecated</td></tr>
+<tr id="r008"><td class="rid"><a href="#r008">R008</a></td><td><span class="sev sev-advisory">advisory</span></td><td class="rt"><strong>Does not propagate OpenTelemetry trace context from _meta</strong><span class="fix">Read `traceparent`, `tracestate` and `baggage` off `_meta` and hand them to your tracer. Without it, agent traces break at your server.</span></td><td class="ref"><a href="https://github.com/modelcontextprotocol/modelcontextprotocol/pull/414">SEP-414</a></td></tr>
+<tr id="r009"><td class="rid"><a href="#r009">R009</a></td><td><span class="sev sev-breaking">breaking</span></td><td class="rt"><strong>Still implements the initialize / notifications/initialized handshake</strong><span class="fix">The initialize handshake is gone -- there is no more negotiation round trip before a server is usable. Delete your initialize/notifications/initialized handling and advertise protocol versions, capabilities and identity through server/discover instead.</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">SEP-2575</a></td></tr>
+<tr id="r010"><td class="rid"><a href="#r010">R010</a></td><td><span class="sev sev-advisory">advisory</span></td><td class="rt"><strong>Registers MCP request handlers but never implements server/discover</strong><span class="fix">Servers MUST implement server/discover so clients can learn supported protocol versions, capabilities and server identity before doing anything else. Add a handler for it alongside your other request handlers.</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">SEP-2575</a></td></tr>
+<tr id="r011"><td class="rid"><a href="#r011">R011</a></td><td><span class="sev sev-breaking">breaking</span></td><td class="rt"><strong>Implements the removed ping request/response</strong><span class="fix">ping is gone from the protocol -- liveness now rides on the transport itself. Remove the handler and rely on your HTTP stack&#x27;s own keepalive/health checks.</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">SEP-2575</a></td></tr>
+<tr id="r012"><td class="rid"><a href="#r012">R012</a></td><td><span class="sev sev-breaking">breaking</span></td><td class="rt"><strong>Implements the removed logging/setLevel request</strong><span class="fix">logging/setLevel is gone. Log level is now per-request: read it off `_meta[&quot;io.modelcontextprotocol/logLevel&quot;]` on each incoming request instead of tracking one process-wide level.</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">SEP-2575</a></td></tr>
+<tr id="r013"><td class="rid"><a href="#r013">R013</a></td><td><span class="sev sev-breaking">breaking</span></td><td class="rt"><strong>Uses resources/subscribe or resources/unsubscribe, replaced by subscriptions/listen</strong><span class="fix">resources/subscribe and resources/unsubscribe are gone. Move subscription management to the new subscriptions/listen call.</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">SEP-2575</a></td></tr>
+<tr id="r014"><td class="rid"><a href="#r014">R014</a></td><td><span class="sev sev-breaking">breaking</span></td><td class="rt"><strong>Implements SSE resumability (Last-Event-ID / event redelivery)</strong><span class="fix">Stream resumability via Last-Event-ID and replayed events is gone. Drop your event store / replay logic -- a dropped connection is just a dropped connection now, the client issues a fresh request.</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">SEP-2575</a></td></tr>
+<tr id="r015"><td class="rid"><a href="#r015">R015</a></td><td><span class="sev sev-advisory">advisory</span></td><td class="rt"><strong>Results are returned without the required resultType field</strong><span class="fix">Every result now carries resultType: &quot;complete&quot; or &quot;input_required&quot;. If you build JSON-RPC responses yourself, set it on each result you return. On the official SDK you do not need to do anything: the runner stamps resultType on every result it serializes.</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">SEP-2322</a></td></tr>
+<tr id="r016"><td class="rid"><a href="#r016">R016</a></td><td><span class="sev sev-advisory">advisory</span></td><td class="rt"><strong>List/read results are returned without ttlMs / cacheScope</strong><span class="fix">tools/list, prompts/list, resources/list, resources/read and resources/templates/list results now require CacheableResult&#x27;s ttlMs and cacheScope. With the official SDK you configure this once rather than per handler: Server(cache_hints={method: CacheHint(...)}). Without hints the SDK emits no cache metadata at all.</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">SEP-2549</a></td></tr>
+<tr id="r017"><td class="rid"><a href="#r017">R017</a></td><td><span class="sev sev-breaking">breaking</span></td><td class="rt"><strong>Uses the old -32002 resource-not-found error code</strong><span class="fix">The resource-not-found error code changed from -32002 to -32602 (Invalid params). Update whatever raises or checks for -32002 in this context.</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">spec</a></td></tr>
+<tr id="r018"><td class="rid"><a href="#r018">R018</a></td><td><span class="sev sev-breaking">breaking</span></td><td class="rt"><strong>Uses a server-initiated request replaced by Multi Round-Trip Requests</strong><span class="fix">Server-initiated roots/list, sampling/createMessage and elicitation/create are gone, along with notifications/elicitation/complete and elicitationId. Return an InputRequiredResult instead and let the client retry the call with inputResponses.</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">SEP-2322</a></td></tr>
+<tr id="r019"><td class="rid"><a href="#r019">R019</a></td><td><span class="sev sev-breaking">breaking</span></td><td class="rt"><strong>Uses removed tasks/list or the removed blocking tasks/result</strong><span class="fix">tasks/list is gone, and blocking tasks/result is replaced by polling tasks/get + tasks/update. Tasks itself moved out of core into the io.modelcontextprotocol/tasks extension -- declare it there instead.</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">SEP-2663</a></td></tr>
+<tr id="r020"><td class="rid"><a href="#r020">R020</a></td><td><span class="sev sev-deprecated">deprecated</span></td><td class="rt"><strong>Uses Dynamic Client Registration (RFC 7591), now deprecated</strong><span class="fix">RFC 7591 Dynamic Client Registration is deprecated in favour of Client ID Metadata Documents. Plan a migration to CIMD for onboarding new OAuth clients.</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">spec</a></td></tr>
+<tr id="r021"><td class="rid"><a href="#r021">R021</a></td><td><span class="sev sev-advisory">advisory</span></td><td class="rt"><strong>Pins an older JSON Schema dialect than 2020-12</strong><span class="fix">Implementations MUST support at least JSON Schema 2020-12 for inputSchema/outputSchema. If you pin an older draft explicitly, move it to 2020-12 (or drop the pin and let a modern validator pick the default).</span></td><td class="ref"><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog">SEP-2106</a></td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+
+<section>
+<div class="wrap">
+<h2>Three ways to run it</h2>
+<div class="grid">
+<div class="card"><h3>Once, right now</h3><p><code>uvx mcp-migrate check .</code> &mdash;
+prints a graded report and exits 1 if anything is wrong.</p></div>
+<div class="card"><h3>In CI</h3><p>The <a href="https://github.com/marketplace/actions/mcp-migrate">GitHub
+Action</a> runs the same check on every push and uploads SARIF to code scanning.</p></div>
+<div class="card"><h3>As a pre-commit hook</h3><p>Pinned to a release tag, so a
+breaking pattern never lands on main in the first place.</p></div>
+</div>
+</div>
+</section>
+
+<footer>
+<div class="wrap">
+<a href="https://github.com/dheerajjha/mcp-migrate">Source</a>
+<a href="https://pypi.org/project/mcp-migrate/">PyPI</a>
+<a href="https://github.com/marketplace/actions/mcp-migrate">GitHub Action</a>
+<a href="https://github.com/dheerajjha/mcp-migrate/blob/main/registry/README.md">Add your server</a>
+<a href="https://github.com/dheerajjha/mcp-migrate/issues">Issues</a>
+<p style="margin:18px 0 0">MIT licensed. Not affiliated with Anthropic or the Model
+Context Protocol project. Generated from the registry and the rule set at v0.5.0
+&mdash; if this page and the tool disagree, the tool is right and it is a bug.</p>
+</div>
+</footer>
+
+</body>
+</html>

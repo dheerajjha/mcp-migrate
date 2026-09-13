@@ -361,3 +361,34 @@ def test_readme_cost_and_cap_table_matches_the_code():
         "the wrong grade for a repeated finding.\n"
         f"  README: {documented_cap}\n  code:   {RULE_CAP}"
     )
+
+
+def test_readme_javascript_coverage_matches_the_code():
+    """README's "3 of 21 rules (R006, R017, R021) read JavaScript", against
+    the rules themselves.
+
+    The paragraph this pins was added in the same PR (#251) that made the
+    *printed* fraction derive from `rule.languages` instead of being
+    hardcoded, precisely so it could never go stale -- and then wrote the
+    number into README by hand two paragraphs later. `PARTIAL`'s own
+    comment is about this exact failure ("the last one sat here saying 19
+    long after it was 1"), and README is where it has always happened.
+
+    Both halves are checked. The count alone would still pass if a rule
+    were ported and another dropped, and the ids alone would not catch the
+    denominator moving when rule 22 lands.
+    """
+    from mcp_migrate.rules import all_rules
+
+    js_rules = sorted(r.id for r in all_rules() if "javascript" in r.languages)
+    total = len(list(all_rules()))
+
+    # Whitespace-collapsed: the claim spans a line break today and
+    # rewrapping the paragraph must not fail this test for the wrong reason.
+    readme = " ".join((ROOT / "README.md").read_text().split())
+    claim = f"currently {len(js_rules)} of {total} rules ({', '.join(js_rules)}) read JavaScript"
+    assert claim in readme, (
+        f"README's JavaScript coverage claim is stale: the code says "
+        f"{len(js_rules)} of {total} ({', '.join(js_rules)}). Update the "
+        f"paragraph in README.md, or drop the number and name the issue only."
+    )

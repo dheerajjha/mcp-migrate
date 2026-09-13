@@ -18,12 +18,15 @@ uvx mcp-migrate check .
 uvx mcp-migrate fix . --write
 ```
 
+Every rule, with the spec change behind it, and a board of public servers
+graded against the revision: **<https://dheerajjha.github.io/mcp-migrate/>**
+
 ## `mcp-migrate check`
 
 ```
 $ uvx mcp-migrate check tests/fixtures/fixer_roundtrip
 
-mcp-migrate v0.2.0  ->  fixer_roundtrip
+mcp-migrate v0.5.0  ->  fixer_roundtrip
 2 Python files, 21 rules, spec 2026-07-28
 
             rule    where         what
@@ -38,6 +41,7 @@ advisory    R010    (project)     This project registers MCP request handlers (t
                                   but has no server/discover implementation anywhere in the project.
 advisory    R016    server.py:32  This file implements a list/read handler but neither `ttlMs` nor
                                   `cacheScope` appears in it.
+advisory    R021    server.py:41  Pins an older JSON Schema dialect; 2026-07-28 requires 2020-12 support.
 
   R001  Uses Mcp-Session-Id, which no longer exists
   SEP-2567 https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567
@@ -46,7 +50,7 @@ advisory    R016    server.py:32  This file implements a list/read handler but n
 
   [... one block like this per rule that fired ...]
 
-Grade F (26/100)  3 breaking, 2 deprecated, 4 advisory
+Grade F (27/100)  3 breaking, 2 deprecated, 5 advisory
 
 Add your server to the board:  mcp-migrate entry --repo owner/name
 ```
@@ -200,10 +204,10 @@ coverage is complete the reason it gives is a decision, not a fraction:
 ```
 $ mcp-migrate check ./my-ts-server
 
-mcp-migrate v0.2.0  ->  my-ts-server
+mcp-migrate v0.5.0  ->  my-ts-server
 
-No grade for this one. Found 1 TypeScript. Every rule reads it now, but
-whether it gets graded is still an open decision, not a coverage gap --
+No grade for this one. Found 1 TypeScript. TypeScript is read by every rule,
+but whether it gets graded is still an open decision, not a coverage gap --
 see https://github.com/dheerajjha/mcp-migrate/issues/172.
 
   breaking    R001  server.ts:4  Mcp-Session-Id was removed from the Streamable HTTP transport.
@@ -228,6 +232,15 @@ regression — that was [#98](https://github.com/dheerajjha/mcp-migrate/issues/9
 No rule is Python-only any more.
 [Issue #30](https://github.com/dheerajjha/mcp-migrate/issues/30) is closed on
 coverage; what remains is the grading decision in #172.
+
+**JavaScript is scanned, and a handful of rules read it.** `.js`/`.jsx`/
+`.mjs`/`.cjs` load and route through the same comment/string scanner as
+TypeScript, but the rule port is a separate, ongoing effort tracked in
+[#149](https://github.com/dheerajjha/mcp-migrate/issues/149) — currently 3
+of 21 rules (R006, R017, R021) read JavaScript. `check` reports findings
+from those and withholds the grade, same as a `PARTIAL` TypeScript tree
+did before R002 landed; the summary line names how many rules cover it so
+the number is never a stale claim.
 
 By default, `check` skips test code: anything under a `tests/`, `test/`,
 `testing/`, `fixtures/`, `examples/`, or `docs/` directory, plus `test_*.py`,
@@ -395,7 +408,7 @@ this most.
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/dheerajjha/mcp-migrate
-    rev: v0.4.0
+    rev: v0.5.0
     hooks:
       - id: mcp-migrate
 ```
@@ -412,6 +425,77 @@ and that isn't an oversight to optimise away: several rules are whole-project
 questions — R010 asks whether `server/discover` exists *anywhere* — and handed a
 partial view they fire wrongly. Cost of that choice, measured on 600 files
 (300 Python + 300 TypeScript): **~0.32 s**.
+
+## Run it in CI
+
+```yaml
+# .github/workflows/mcp-migrate.yml
+name: mcp-migrate
+on: [push, pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dheerajjha/mcp-migrate@v0.5.0
+```
+
+`v0.5.0` is the first tag that contains the action; until it is cut, `@main`
+works and `@v0.4.0` does not -- that tag predates this file. The action ref and
+the `version:` input below are independent: the ref picks the *action*, the
+input picks the *tool* it installs from PyPI.
+
+A breaking finding fails the job. Nothing else does, until you say so:
+
+```yaml
+      - uses: dheerajjha/mcp-migrate@v0.5.0
+        with:
+          path: src/my_server     # default: .
+          fail-on: deprecated     # breaking | deprecated | advisory | never
+          version: '0.4.0'        # pin the tool; default installs the latest
+```
+
+Pinning `version` is worth a thought rather than a default. Unpinned, a
+release that ports a rule can turn a green build red on a commit that changed
+nothing -- correctly, but without warning. Pinned, you choose when to find out.
+
+### Into the Security tab
+
+`check` already emits SARIF 2.1.0, so the findings can go where the rest of
+your code scanning lives:
+
+```yaml
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dheerajjha/mcp-migrate@v0.5.0
+        with:
+          sarif-file: results.sarif
+          fail-on: never          # let the Security tab hold them, not the build
+      - uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+          category: mcp-migrate
+```
+
+`fail-on: never` is deliberate there: a finding that is *recorded* and a
+finding that *blocks the merge* are different decisions, and uploading is the
+first without committing to the second.
+
+### Outputs
+
+| output | meaning |
+|---|---|
+| `grade` | `A`-`F`, or empty when the tree is ungradeable or `--rule` narrowed the run |
+| `score` | `0`-`100`, empty under the same conditions |
+| `findings` | total findings reported, regardless of `fail-on` |
+| `exit-code` | `0` clean, `1` findings at or above `fail-on`, `2` nothing scannable |
+
+`grade` is empty rather than `A` when the run was narrowed, for the same
+reason the CLI omits it: a grade computed from part of the rule set is not a
+grade. Gate on `exit-code`, not on an empty `grade` being falsy.
 
 ## Other commands
 
@@ -542,7 +626,7 @@ color using the table above):
 
 <!-- BOARD:START -->
 
-**16 servers checked** (7x A, 7x B, 1x C, 1x D)
+**18 servers checked** (7x A, 8x B, 1x C, 2x D)
 
 All of these were checked by this project, not submitted by the servers' maintainers -- so read it as a survey, not as adoption. If you maintain one of these, [submit your own entry](registry/README.md) and it becomes yours.
 
@@ -556,6 +640,7 @@ All of these were checked by this project, not submitted by the servers' maintai
 | [mcp-server-qdrant](https://github.com/qdrant/mcp-server-qdrant) | **A** | ready | python | Official MCP server for Qdrant that acts as a semantic memory layer for keeping and retrieving memories in the vector search engine. |
 | [mcp-server-tree-sitter](https://github.com/wrale/mcp-server-tree-sitter) | **A** | ready | python | MCP server providing tree-sitter code analysis so AI assistants get structure-aware access to codebases in many languages. |
 | [arxiv-mcp-server](https://github.com/blazickjp/arxiv-mcp-server) | **B** | ready | python | Search, download, and read arXiv papers, with semantic search and citation tools, over MCP. |
+| [mcp-obsidian](https://github.com/MarkusPfundstein/mcp-obsidian) | **B** | ready | python | MCP server that lets clients read, search, and modify Obsidian vault content through the Local REST API. |
 | [mcp-server-fetch](https://github.com/modelcontextprotocol/servers) | **B** | ready | python | Reference MCP server that fetches web pages and converts HTML to markdown so LLMs can read them in chunks. |
 | [mcp-server-sentry](https://github.com/modelcontextprotocol/servers-archived) | **B** | ready | python | Archived reference MCP server for retrieving and analyzing issues, stacktraces, and debugging info from Sentry.io. |
 | [mcp-server-sqlite](https://github.com/modelcontextprotocol/servers-archived) | **B** | ready | python | Archived reference MCP server for SQLite that runs SQL queries and auto-generates business insight memos. |
@@ -564,6 +649,7 @@ All of these were checked by this project, not submitted by the servers' maintai
 | [mcp-neo4j-cypher](https://github.com/neo4j-contrib/mcp-neo4j) | **B** | ready | python | MCP server for Neo4j that runs Cypher graph queries and supports Text2Cypher workflows over graph data. |
 | [mcp-atlassian](https://github.com/sooperset/mcp-atlassian) | **C** | migrating | python | MCP server for Atlassian products (Confluence and Jira), supporting both Cloud and Server/Data Center deployments. |
 | [mcp-server-git](https://github.com/modelcontextprotocol/servers) | **D** | ready | python | Reference MCP server for Git repository interaction, giving LLMs tools to read, search, and manipulate repos. |
+| [serena](https://github.com/oraios/serena) | **D** | migrating | python | Python MCP toolkit for coding with semantic retrieval and editing capabilities. |
 
 <!-- BOARD:END -->
 

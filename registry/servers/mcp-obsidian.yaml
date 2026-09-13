@@ -1,0 +1,11 @@
+name: mcp-obsidian
+repo: MarkusPfundstein/mcp-obsidian
+language: python
+grade: B
+score: 91
+checked_with: mcp-migrate 0.4.0
+spec: "2026-07-28"
+sha: 5ee0b84fa8319fd2fdf0db0ee1febb065e712a15
+status: ready
+notes: >-
+  MCP server that lets clients read, search, and modify Obsidian vault content through the Local REST API.

@@ -1,11 +1,21 @@
 [project]
 name = "mcp-migrate"
-version = "0.4.0"
+version = "0.5.0"
 description = "Find and fix what the MCP 2026-07-28 spec revision breaks in your server."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 dependencies = ["pyyaml>=6.0", "rich>=13.0"]
+
+# PyPI renders these as the sidebar on the project page. Without them that
+# page is a dead end: the description says what the tool does and offers no
+# way to reach the source, the issues, or anything else. PyPI is the busiest
+# surface this project has, so the dead end was costing more than it looked.
+[project.urls]
+Homepage = "https://dheerajjha.github.io/mcp-migrate/"
+Source = "https://github.com/dheerajjha/mcp-migrate"
+Issues = "https://github.com/dheerajjha/mcp-migrate/issues"
+Changelog = "https://github.com/dheerajjha/mcp-migrate/blob/main/CHANGELOG.md"
 
 [project.scripts]
 mcp-migrate = "mcp_migrate.cli:main"

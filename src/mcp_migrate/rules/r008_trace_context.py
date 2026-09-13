@@ -67,7 +67,13 @@ class NoTraceContextPropagation(Rule):
         # actually reading it.
         if any(project.search_code(r"traceparent")):
             return []
-        return [self.finding(MESSAGE)]
+        # The finding stays project-level -- "(project)" is the honest
+        # location for "nothing in this tree reads the header". The
+        # evidence file is only so SARIF has somewhere to anchor (#262),
+        # and the file that imports OpenTelemetry is the one a reader
+        # would open first anyway.
+        evidence, line = _first_otel_import(project)
+        return [self.finding(MESSAGE, evidence=evidence, evidence_line=line)]
 
     def _check_ts(self, project: Project) -> list[Finding]:
         # Same shape as Python: gate on OpenTelemetry actually being in
@@ -80,4 +86,34 @@ class NoTraceContextPropagation(Rule):
             return []
         if any(project.search_code(TS_PROPAGATION_EXTRACT_RX)):
             return []
-        return [self.finding(MESSAGE)]
+        # Same as the Python side: project-level finding, concrete SARIF
+        # anchor. The specifier match already tells us which file.
+        evidence = line = None
+        for f, i, _ in project.search_wire(TS_OTEL_SPECIFIER_RX):
+            evidence, line = f, i
+            break
+        return [self.finding(MESSAGE, evidence=evidence, evidence_line=line)]
+
+
+def _first_otel_import(project: Project):
+    """The file (and line) where OpenTelemetry first enters the project.
+
+    `Project.imports()` flattens every file's imports into one set, which
+    is the right shape for the gate above and the wrong one for pointing
+    at a file, so this walks the files directly.
+    """
+    import ast
+
+    for f in project.files:
+        if f.tree is None:
+            continue
+        for node in ast.walk(f.tree):
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                names = [node.module or ""]
+            else:
+                continue
+            if any("opentelemetry" in n for n in names):
+                return f, getattr(node, "lineno", None)
+    return None, None

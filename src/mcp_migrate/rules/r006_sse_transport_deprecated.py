@@ -4,10 +4,13 @@ from .base import Finding, Project, Rule
 
 PY_RX = r"sse_server|SseServerTransport|transport\s*=\s*[\"']sse[\"']|/sse\b"
 
-# TypeScript. The SDK class is `SSEServerTransport` (all-caps SSE, unlike
-# the Python `SseServerTransport`), and the other giveaway is an Express
-# route mounted at /sse -- which only ever appears as a string literal, so
-# this needs search_wire rather than search_code.
+# TypeScript and JavaScript share this pattern: the SDK class is
+# `SSEServerTransport` in both (all-caps SSE, unlike the Python
+# `SseServerTransport`), and the other giveaway is an Express route
+# mounted at /sse -- which only ever appears as a string literal, so this
+# needs search_wire rather than search_code. Neither half of the pattern
+# is TS-specific (no type annotation, no `import`-only assumption), so it
+# ports to JavaScript unchanged.
 TS_RX = (
     r"\bSSEServerTransport\b"
     r"|transport\s*:\s*[\"'`]sse[\"'`]"
@@ -22,12 +25,12 @@ class DeprecatedSSETransport(Rule):
     severity = "deprecated"
     spec_ref = "HTTP+SSE deprecated in favour of Streamable HTTP"
     fix = "Move to Streamable HTTP. HTTP+SSE stays in the spec for 12+ months, then goes."
-    languages = ("python", "typescript")
+    languages = ("python", "typescript", "javascript")
 
     MESSAGE = "HTTP+SSE transport is deprecated."
 
     def check(self, project: Project) -> list[Finding]:
-        if project.language == "typescript":
+        if project.language in ("typescript", "javascript"):
             # search_wire: `app.get("/sse", ...)` is a route, and routes are
             # string literals. A comment saying "we dropped SSE" is not.
             return [

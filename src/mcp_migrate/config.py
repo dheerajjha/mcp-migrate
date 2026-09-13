@@ -27,6 +27,7 @@ and is never mistaken for a pass, because it never produces one.
 """
 from __future__ import annotations
 
+import difflib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -49,6 +50,13 @@ STANDALONE_FILENAME = ".mcp-migrate.toml"
 # one learns both.
 _OFF_RX = re.compile(r"^(?:off|disabled|false)\s*(?:(?:--|:)\s*(?P<reason>.+))?$", re.IGNORECASE)
 _ON_RX = re.compile(r"^(?:on|enabled|true)$", re.IGNORECASE)
+
+# Every key `_parse_table` actually consumes. Both spellings of the tests
+# toggle are accepted (the reader takes either); the dash form is the one
+# the docstring and README use, so it is the only one a "did you mean"
+# hint ever suggests back.
+_KNOWN_KEYS = frozenset({"skip", "include-tests", "include_tests", "rules"})
+_HINT_KEYS = ("skip", "include-tests", "rules")
 
 
 @dataclass
@@ -109,6 +117,37 @@ def _parse_table(table: dict, *, source: Path) -> Config:
     elif rules_table:
         warnings.append(f"{source}: `[rules]` must be a table, ignoring")
 
+    # A key this parser doesn't consume used to fall off the end in silence
+    # -- the one misconfiguration the module let pass without the scrutiny it
+    # already applies one level down in `[rules]`. That silence is worse here
+    # than for an ordinary typo'd setting: a `skip` that never took effect or
+    # a rule toggle that never applied leaves the published grade different
+    # from the configured one, with no output that differs to reveal it, in a
+    # tool whose entire proposition is that the grade is trustworthy. So warn
+    # for every unrecognised key, and where the key is a recognisable mistake
+    # rather than noise, say what the right shape is.
+    is_standalone = source.name == STANDALONE_FILENAME
+    rules_label = "[rules]" if is_standalone else "[tool.mcp-migrate.rules]"
+    for key in table:
+        if key in _KNOWN_KEYS:
+            continue
+        if RULE_ID_RX.match(key):
+            warnings.append(
+                f"{source}: {key!r} is a rule id at the top level, ignoring "
+                f"-- rule toggles go in the {rules_label} table"
+            )
+        elif key == "tool" and is_standalone:
+            warnings.append(
+                f"{source}: unknown setting 'tool', ignoring -- "
+                f"`[tool.mcp-migrate]` is the pyproject.toml spelling; in "
+                f"{STANDALONE_FILENAME} the settings are top level "
+                f"(`skip`, `include-tests`, and a `[rules]` table)"
+            )
+        else:
+            near = difflib.get_close_matches(key, _HINT_KEYS, n=1)
+            hint = f" -- did you mean {near[0]!r}?" if near else ""
+            warnings.append(f"{source}: unknown setting {key!r}, ignoring{hint}")
+
     return Config(
         skip=frozenset(skip), include_tests=include_tests,
         disabled_rules=disabled, source=source, warnings=warnings,
@@ -129,18 +168,20 @@ def _load_toml(path: Path) -> dict | None | list[str]:
         return [f"{path}: invalid TOML, ignoring config ({e})"]
 
 
-def load_config(root: Path) -> Config:
-    """Load project config, or an empty one carrying only its warnings.
+def _load_config_at(level: Path) -> Config | None:
+    """Load config from one directory, or None if nothing there decides.
 
-    `pyproject.toml` wins if it exists at all, whether or not it actually
-    configures anything -- a project that has one and simply doesn't use
-    `[tool.mcp-migrate]` has given a complete answer ("nothing"), and going
-    on to also read a standalone file next to it would make the two files
-    silently fight over precedence. The standalone file is for projects
-    that have no `pyproject.toml` in the first place, which given what this
-    tool targets is most JavaScript and TypeScript ones.
+    `pyproject.toml` wins at a level if it exists at all, whether or not it
+    actually configures anything -- a project that has one and simply
+    doesn't use `[tool.mcp-migrate]` has given a complete answer
+    ("nothing") for that level, and going on to also read a standalone file
+    next to it would make the two files silently fight over precedence.
+    A section-less `pyproject.toml` returns None rather than an empty
+    config: in a monorepo the inner `pyproject.toml` is a packaging file
+    that says nothing about this tool, and treating its silence as an
+    answer would make `check src/` silently ignore the repo's real config.
     """
-    pyproject_path = root / "pyproject.toml"
+    pyproject_path = level / "pyproject.toml"
     if pyproject_path.is_file():
         data = _load_toml(pyproject_path)
         if isinstance(data, list):
@@ -151,9 +192,9 @@ def load_config(root: Path) -> Config:
             section = tool_table.get("mcp-migrate") or tool_table.get("mcp_migrate")
         if isinstance(section, dict):
             return _parse_table(section, source=pyproject_path)
-        return _empty()
+        return None
 
-    standalone_path = root / STANDALONE_FILENAME
+    standalone_path = level / STANDALONE_FILENAME
     if standalone_path.is_file():
         data = _load_toml(standalone_path)
         if isinstance(data, list):
@@ -162,4 +203,24 @@ def load_config(root: Path) -> Config:
             return _parse_table(data, source=standalone_path)
         return _empty()
 
-    return _empty()
+    return None
+
+
+def load_config(root: Path) -> Config:
+    """Load project config, or an empty one carrying only its warnings.
+
+    The config is searched for by walking up from `root`, so `check src/`
+    finds the repo's config at the repo root the way ruff, mypy, eslint, and
+    black all do. The walk stops at the first directory containing a `.git`
+    (the repo root), with the filesystem root as the backstop -- a stray
+    file in a parent directory outside the repo must never quietly change
+    someone's grade.
+    """
+    current = root.resolve()
+    while True:
+        found = _load_config_at(current)
+        if found is not None:
+            return found
+        if (current / ".git").exists() or current.parent == current:
+            return _empty()
+        current = current.parent
