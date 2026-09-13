@@ -47,6 +47,12 @@ REGISTRY = "https://registry.modelcontextprotocol.io/v0/servers?limit=100&versio
 GITHUB_API = "https://api.github.com/repos/{slug}"
 ROOT = Path(__file__).resolve().parent.parent
 
+# Scan with the tree this script lives in, not with whatever is installed:
+# the whole point of a reproducible scan is that the scanner is the one in
+# the checkout you are reading.
+sys.path.insert(0, str(ROOT / "src"))
+from mcp_migrate.sdk import declared_mcp_floor  # noqa: E402
+
 
 def _get(url: str, headers: dict | None = None, tries: int = 6):
     last = None
@@ -172,6 +178,22 @@ def scan(work: Path, slugs: list[str], binary: str) -> dict[str, dict]:
                 "grade": data.get("grade"),
                 "score": data.get("score"),
                 "files": data.get("files_scanned"),
+                # Recorded because a zero-finding result is ambiguous and the
+                # declared floor is what separates the two readings. A server
+                # written in the 2.x SDK spelling (`MCPServer`, `@app.tool()`)
+                # is not recognised as an MCP server at all yet, so it is
+                # scanned, produces nothing, and grades A without having been
+                # checked (#255). "Graded A" is therefore not the same claim
+                # as "verified clean", and any aggregate that reports an
+                # A-share without separating them is overstating it.
+                #
+                # This got easier to miss, not harder, once R010 stopped
+                # firing on everything (#257): while it fired on ~78% of
+                # servers it was accidentally acting as a canary that the
+                # project had been recognised at all.
+                "declared_mcp_floor": (
+                    list(declared_mcp_floor(d)) if declared_mcp_floor(d) else None
+                ),
                 "findings": [{"rule": f["rule"], "severity": f["severity"],
                               "path": f["path"], "line": f["line"]}
                              for f in data.get("findings", [])],
@@ -229,6 +251,40 @@ def aggregate(repos, sample, langs, scans, seed, scanner_version) -> dict:
         "score_median": (sorted(v["score"] for v in ok.values())[len(ok) // 2]
                          if ok else None),
         "zero_findings": sum(1 for v in ok.values() if not v["findings"]),
+        # A zero-finding result has two readings and this is what separates
+        # them. A server written in the 2.x SDK spelling is not recognised as
+        # an MCP server at all yet (#255): it is scanned, produces nothing,
+        # and grades A without having been checked. So the A-share is an
+        # upper bound on "clean", not a measurement of it, and publishing it
+        # undivided would overstate the ecosystem's readiness.
+        #
+        # `sdk_2x` is the population most likely to be unchecked rather than
+        # clean. `sdk_unknown` cannot be assigned either way -- most projects
+        # in the registry declare nothing readable.
+        "zero_findings_by_declared_sdk": {
+            "sdk_1x": sum(
+                1 for v in ok.values()
+                if not v["findings"]
+                and (v.get("declared_mcp_floor") or [9])[0] < 2
+            ),
+            "sdk_2x_or_later": sum(
+                1 for v in ok.values()
+                if not v["findings"]
+                and (v.get("declared_mcp_floor") or [0])[0] >= 2
+            ),
+            "sdk_unknown": sum(
+                1 for v in ok.values()
+                if not v["findings"] and not v.get("declared_mcp_floor")
+            ),
+        },
+        "declared_sdk": {
+            "sdk_1x": sum(1 for v in ok.values()
+                          if (v.get("declared_mcp_floor") or [9])[0] < 2),
+            "sdk_2x_or_later": sum(1 for v in ok.values()
+                                   if (v.get("declared_mcp_floor") or [0])[0] >= 2),
+            "sdk_unknown": sum(1 for v in ok.values()
+                               if not v.get("declared_mcp_floor")),
+        },
         "no_breaking_findings": sum(
             1 for v in ok.values()
             if not any(f["severity"] == "breaking" for f in v["findings"])),
