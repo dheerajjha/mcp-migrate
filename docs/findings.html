@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What the MCP 2026-07-28 revision actually breaks</title>
+<meta name="description" content="We scanned 578 Python MCP servers from the official registry against the 2026-07-28 spec revision. Mcp-Session-Id, the change that dominated the discussion, appears in 3.3% of them.">
+<link rel="canonical" href="https://dheerajjha.github.io/mcp-migrate/findings.html">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://dheerajjha.github.io/mcp-migrate/findings.html">
+<meta property="og:title" content="What the MCP 2026-07-28 revision actually breaks">
+<meta property="og:description" content="We scanned 578 Python MCP servers from the official registry against the 2026-07-28 spec revision. Mcp-Session-Id, the change that dominated the discussion, appears in 3.3% of them.">
+<meta property="og:image" content="https://github.com/dheerajjha/mcp-migrate/raw/main/docs/banner.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="What the MCP 2026-07-28 revision actually breaks">
+<meta name="twitter:description" content="We scanned 578 Python MCP servers from the official registry against the 2026-07-28 spec revision. Mcp-Session-Id, the change that dominated the discussion, appears in 3.3% of them.">
+<meta name="twitter:image" content="https://github.com/dheerajjha/mcp-migrate/raw/main/docs/banner.jpg">
+<style>
+:root{--bg:#fff;--fg:#1f2328;--mut:#59636e;--line:#d1d9e0;--soft:#f6f8fa;--acc:#0969da;
+--breaking:#f85149;--deprecated:#d29922;--advisory:#8b949e;--warn:#fff8c5;--warnline:#d4a72c}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1117;--fg:#e6edf3;
+--mut:#9198a1;--line:#2f3742;--soft:#151b23;--acc:#4493f8;--warn:#272115;--warnline:#9e6a03}}
+:root[data-theme="dark"]{--bg:#0d1117;--fg:#e6edf3;--mut:#9198a1;--line:#2f3742;--soft:#151b23;
+--acc:#4493f8;--warn:#272115;--warnline:#9e6a03}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);margin:0;
+font:17px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:0 20px}
+a{color:var(--acc);text-decoration:none} a:hover{text-decoration:underline}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.9em;
+background:var(--soft);padding:1px 5px;border-radius:4px}
+header{padding-block:56px 8px}
+h1{font-size:2rem;line-height:1.2;margin:0 0 18px;letter-spacing:-.02em}
+.standfirst{font-size:1.16rem;color:var(--mut);margin:0 0 8px}
+.byline{font-size:.86rem;color:var(--mut);border-top:1px solid var(--line);
+padding-top:14px;margin-top:26px}
+h2{font-size:1.3rem;margin:44px 0 4px;letter-spacing:-.01em}
+h3{font-size:1.02rem;margin:28px 0 4px}
+p{margin:14px 0}
+.scroll{overflow-x:auto;margin:22px 0}
+table{border-collapse:collapse;width:100%;font-size:.92rem}
+th{text-align:left;font-size:.73rem;text-transform:uppercase;letter-spacing:.05em;
+color:var(--mut);font-weight:600;padding:0 12px 8px 0;border-bottom:1px solid var(--line);
+white-space:nowrap}
+td{padding:9px 12px 9px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rid a{font-family:ui-monospace,monospace;font-weight:600}
+.sev{display:inline-block;font-size:.68rem;font-weight:600;text-transform:uppercase;
+letter-spacing:.04em;border-radius:4px;padding:2px 6px;color:#fff}
+.sev-breaking{background:var(--breaking)}
+.sev-deprecated{background:var(--deprecated)}
+.sev-advisory{background:var(--advisory)}
+.callout{background:var(--warn);border:1px solid var(--warnline);border-radius:8px;
+padding:16px 18px;margin:24px 0}
+.callout p{margin:8px 0} .callout p:first-child{margin-top:0} .callout p:last-child{margin-bottom:0}
+pre{background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+overflow-x:auto;font-size:.86rem;line-height:1.5}
+footer{padding-block:36px 64px;color:var(--mut);font-size:.88rem;
+border-top:1px solid var(--line);margin-top:52px}
+footer a{margin-right:16px}
+@media (max-width:560px){h1{font-size:1.55rem}body{font-size:16px}}
+</style>
+</head>
+<body>
+
+<header>
+<div class="wrap">
+<h1>What the MCP 2026-07-28 revision actually breaks</h1>
+<p class="standfirst">We scanned <strong>578</strong> Python MCP servers from the official
+registry. The change that dominated every discussion of this revision &mdash; protocol
+sessions and the <code>Mcp-Session-Id</code> header going away &mdash; appears in
+<strong>3.3%</strong> of them.</p>
+<p class="byline">Produced by <a href="https://github.com/dheerajjha/mcp-migrate">mcp-migrate</a>, which is a tool for finding
+exactly these problems, so read it with that in mind. Everything below is reproducible
+from a committed script and a committed data file; both are linked at the bottom.</p>
+</div>
+</header>
+
+<div class="wrap">
+
+<h2>The registry is smaller than it looks</h2>
+
+<p>The official MCP registry points at <strong>19,646</strong>
+unique GitHub repositories. That is up from <strong>14,249</strong> on 2026-08-01, a 38% increase in six weeks, while the dead-link rate barely moved (15.3% then, 14.4% now).</p>
+
+<p><strong>14.4% of them 404.</strong> In a random sample of
+3,000 &mdash; seeded, drawn from the full deduplicated population rather than
+an alphabetical prefix &mdash; 433 pointed at repositories that no longer
+exist publicly: deleted, renamed, or made private.</p>
+
+<p>Of the 2,567 live repositories in that sample:</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Language</th><th class="num">Repos</th><th class="num">Share</th></tr></thead>
+<tbody>
+<tr><td>TypeScript</td><td class="num">1047</td><td class="num">40.8%</td></tr>
+<tr><td>Python</td><td class="num">580</td><td class="num">22.6%</td></tr>
+<tr><td>(none detected)</td><td class="num">384</td><td class="num">15.0%</td></tr>
+<tr><td>JavaScript</td><td class="num">339</td><td class="num">13.2%</td></tr>
+<tr><td>Rust</td><td class="num">59</td><td class="num">2.3%</td></tr>
+<tr><td>Go</td><td class="num">52</td><td class="num">2.0%</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>The removals everyone discussed</h2>
+
+<p>These are the changes the 2026-07-28 changelog leads with, and the ones that filled the
+threads. Each row is the share of the 578 scanned servers where the pattern actually
+appears.</p>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Rule</th><th>What it finds</th><th class="num">Servers</th><th class="num">Share</th></tr></thead>
+<tbody>
+<tr><td class="rid"><a href="index.html#r001">R001</a></td><td>Uses Mcp-Session-Id, which no longer exists</td><td class="num">19</td><td class="num"><strong>3.3%</strong></td></tr>
+<tr><td class="rid"><a href="index.html#r009">R009</a></td><td>Still implements the initialize / notifications/initialized handshake</td><td class="num">58</td><td class="num"><strong>10.0%</strong></td></tr>
+<tr><td class="rid"><a href="index.html#r011">R011</a></td><td>Implements the removed ping request/response</td><td class="num">44</td><td class="num"><strong>7.6%</strong></td></tr>
+<tr><td class="rid"><a href="index.html#r013">R013</a></td><td>Uses resources/subscribe or resources/unsubscribe, replaced by subscriptions/listen</td><td class="num">4</td><td class="num"><strong>0.7%</strong></td></tr>
+<tr><td class="rid"><a href="index.html#r012">R012</a></td><td>Implements the removed logging/setLevel request</td><td class="num">3</td><td class="num"><strong>0.5%</strong></td></tr>
+<tr><td class="rid"><a href="index.html#r017">R017</a></td><td>Uses the old -32002 resource-not-found error code</td><td class="num">2</td><td class="num"><strong>0.3%</strong></td></tr>
+<tr><td class="rid"><a href="index.html#r014">R014</a></td><td>Implements SSE resumability (Last-Event-ID / event redelivery)</td><td class="num">7</td><td class="num"><strong>1.2%</strong></td></tr>
+</tbody>
+</table>
+</div>
+
+<p><strong>483 of 578 servers (83.6%) have nothing breaking to
+fix at all.</strong> Most never touched the transport directly; their framework did, and
+the framework absorbed the change.</p>
+
+<h2>Everything, ranked</h2>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Rule</th><th>Severity</th><th>What it finds</th><th class="num">Servers</th><th class="num">Share</th></tr></thead>
+<tbody>
+<tr><td class="rid"><a href="index.html#r010">R010</a></td><td><span class="sev sev-advisory">advisory</span></td><td>Registers MCP request handlers but never implements server/discover</td><td class="num">274</td><td class="num">47.4%</td></tr>
+<tr><td class="rid"><a href="index.html#r004">R004</a></td><td><span class="sev sev-advisory">advisory</span></td><td>tools/list order is not deterministic</td><td class="num">131</td><td class="num">22.7%</td></tr>
+<tr><td class="rid"><a href="index.html#r003">R003</a></td><td><span class="sev sev-advisory">advisory</span></td><td>Custom HTTP client does not send Mcp-Method (or Mcp-Name where required)</td><td class="num">68</td><td class="num">11.8%</td></tr>
+<tr><td class="rid"><a href="index.html#r009">R009</a></td><td><span class="sev sev-breaking">breaking</span></td><td>Still implements the initialize / notifications/initialized handshake</td><td class="num">58</td><td class="num">10.0%</td></tr>
+<tr><td class="rid"><a href="index.html#r016">R016</a></td><td><span class="sev sev-advisory">advisory</span></td><td>List/read results are returned without ttlMs / cacheScope</td><td class="num">49</td><td class="num">8.5%</td></tr>
+<tr><td class="rid"><a href="index.html#r015">R015</a></td><td><span class="sev sev-advisory">advisory</span></td><td>Results are returned without the required resultType field</td><td class="num">48</td><td class="num">8.3%</td></tr>
+<tr><td class="rid"><a href="index.html#r011">R011</a></td><td><span class="sev sev-breaking">breaking</span></td><td>Implements the removed ping request/response</td><td class="num">44</td><td class="num">7.6%</td></tr>
+<tr><td class="rid"><a href="index.html#r006">R006</a></td><td><span class="sev sev-deprecated">deprecated</span></td><td>Uses the deprecated HTTP+SSE transport</td><td class="num">25</td><td class="num">4.3%</td></tr>
+<tr><td class="rid"><a href="index.html#r001">R001</a></td><td><span class="sev sev-breaking">breaking</span></td><td>Uses Mcp-Session-Id, which no longer exists</td><td class="num">19</td><td class="num">3.3%</td></tr>
+<tr><td class="rid"><a href="index.html#r008">R008</a></td><td><span class="sev sev-advisory">advisory</span></td><td>Does not propagate OpenTelemetry trace context from _meta</td><td class="num">17</td><td class="num">2.9%</td></tr>
+<tr><td class="rid"><a href="index.html#r002">R002</a></td><td><span class="sev sev-breaking">breaking</span></td><td>Keeps per-connection state in a module-level dict</td><td class="num">12</td><td class="num">2.1%</td></tr>
+<tr><td class="rid"><a href="index.html#r020">R020</a></td><td><span class="sev sev-deprecated">deprecated</span></td><td>Uses Dynamic Client Registration (RFC 7591), now deprecated</td><td class="num">12</td><td class="num">2.1%</td></tr>
+<tr><td class="rid"><a href="index.html#r018">R018</a></td><td><span class="sev sev-breaking">breaking</span></td><td>Uses a server-initiated request replaced by Multi Round-Trip Requests</td><td class="num">8</td><td class="num">1.4%</td></tr>
+<tr><td class="rid"><a href="index.html#r005">R005</a></td><td><span class="sev sev-advisory">advisory</span></td><td>Server capabilities declare no extensions map</td><td class="num">7</td><td class="num">1.2%</td></tr>
+<tr><td class="rid"><a href="index.html#r014">R014</a></td><td><span class="sev sev-breaking">breaking</span></td><td>Implements SSE resumability (Last-Event-ID / event redelivery)</td><td class="num">7</td><td class="num">1.2%</td></tr>
+<tr><td class="rid"><a href="index.html#r013">R013</a></td><td><span class="sev sev-breaking">breaking</span></td><td>Uses resources/subscribe or resources/unsubscribe, replaced by subscriptions/listen</td><td class="num">4</td><td class="num">0.7%</td></tr>
+<tr><td class="rid"><a href="index.html#r012">R012</a></td><td><span class="sev sev-breaking">breaking</span></td><td>Implements the removed logging/setLevel request</td><td class="num">3</td><td class="num">0.5%</td></tr>
+<tr><td class="rid"><a href="index.html#r021">R021</a></td><td><span class="sev sev-advisory">advisory</span></td><td>Pins an older JSON Schema dialect than 2020-12</td><td class="num">3</td><td class="num">0.5%</td></tr>
+<tr><td class="rid"><a href="index.html#r007">R007</a></td><td><span class="sev sev-deprecated">deprecated</span></td><td>Depends on a deprecated core feature (Roots / Sampling / Logging)</td><td class="num">2</td><td class="num">0.3%</td></tr>
+<tr><td class="rid"><a href="index.html#r017">R017</a></td><td><span class="sev sev-breaking">breaking</span></td><td>Uses the old -32002 resource-not-found error code</td><td class="num">2</td><td class="num">0.3%</td></tr>
+<tr><td class="rid"><a href="index.html#r019">R019</a></td><td><span class="sev sev-breaking">breaking</span></td><td>Uses removed tasks/list or the removed blocking tasks/result</td><td class="num">1</td><td class="num">0.2%</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Grades</h2>
+
+<div class="scroll">
+<table>
+<thead><tr><th>Grade</th><th class="num">Servers</th><th class="num">Share</th></tr></thead>
+<tbody>
+<tr><td><strong>A</strong></td><td class="num">400</td><td class="num">69.2%</td></tr>
+<tr><td><strong>B</strong></td><td class="num">83</td><td class="num">14.4%</td></tr>
+<tr><td><strong>C</strong></td><td class="num">46</td><td class="num">8.0%</td></tr>
+<tr><td><strong>D</strong></td><td class="num">32</td><td class="num">5.5%</td></tr>
+<tr><td><strong>F</strong></td><td class="num">17</td><td class="num">2.9%</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout">
+<p><strong>Read the A column carefully &mdash; we cannot fully stand behind it.</strong></p>
+<p>A server written in the current (2.x) SDK spelling is not recognised as an MCP server by
+this scanner at all yet. It gets scanned, produces nothing, and grades A without having
+been checked. So an A here means &ldquo;we found nothing&rdquo;, which is not the same
+claim as &ldquo;there is nothing&rdquo;.</p>
+<p>174 servers produced zero findings. Split by the SDK version they declare, the
+gap is not subtle:</p>
+<table style="margin:12px 0">
+<thead><tr><th>Declares</th><th class="num">Servers</th><th class="num">Zero findings</th><th class="num">Rate</th></tr></thead>
+<tbody>
+<tr><td><code>mcp</code> 1.x</td><td class="num">289</td>
+<td class="num">12</td><td class="num">4%</td></tr>
+<tr><td><code>mcp</code> 2.x or later</td><td class="num">66</td>
+<td class="num">46</td>
+<td class="num"><strong>70%</strong></td></tr>
+<tr><td>nothing readable</td><td class="num">223</td>
+<td class="num">116</td><td class="num">52%</td></tr>
+</tbody>
+</table>
+<p>A server on the current SDK is <strong>17&times;</strong> more likely to come
+back completely empty than one on 1.x. The likeliest explanation is not that 2.x servers
+are cleaner &mdash; it is that we are not reading them. Tracked as
+<a href="https://github.com/dheerajjha/mcp-migrate/issues/255">#255</a>.</p>
+</div>
+
+<h2>What we got wrong, and how we know</h2>
+
+<p>An earlier version of this scan led with a different headline:
+<em>78.2% of servers do not implement <code>server/discover</code></em>. We were
+about to publish it. It was wrong, and the way it was wrong is worth more than the number
+was.</p>
+
+<p>R010 checked whether <code>server/discover</code> appeared in a project&rsquo;s own
+source. On the 2.x Python SDK it never does &mdash; <code>Server.__init__</code> registers
+the handler itself:</p>
+
+<pre>&gt;&gt;&gt; from mcp.server.lowlevel import Server
+&gt;&gt;&gt; Server("demo")._request_handlers        # already contains 'server/discover'</pre>
+
+<p>And on 1.x the method does not exist at all, so there is no handler anyone could add.
+The finding was unactionable in both directions: impossible on 1.x, unnecessary on 2.x. It
+was measuring where a string appears, not what a server implements.</p>
+
+<p>The tell was in the contributions, not the data. Two separate pull requests tried to
+write an autofixer for it and both emitted <code>@app.discover()</code> &mdash; an API in
+no version of the SDK. That is not two people being careless; that is what you get when
+you ask someone to scaffold an implementation of something that either cannot exist or
+already does.</p>
+
+<p>Corrected, R010 now reads the SDK a project declares and stays silent when it cannot
+tell. On our 18-server board, checked at pinned commits so the comparison is controlled,
+it fired on <strong>17 of 18</strong> before and <strong>14 of 18</strong> after. In this
+scan it appears on <strong>274 of 578</strong> servers (47.4%).</p>
+
+<p>We publish grades about other people&rsquo;s code. A false finding costs more than a
+missed one, and it costs most when it is the headline.</p>
+
+<h2>Method</h2>
+
+<p>The registry was crawled through
+<code>registry.modelcontextprotocol.io/v0/servers?version=latest</code>, paginated to
+exhaustion and deduplicated to 19,646 GitHub repositories. A seeded
+random sample of 3,000 was drawn from the full population &mdash; not a
+prefix; registry names are not randomly ordered, and an earlier pass that sampled
+alphabetically measured the dead-link rate at 35% instead of 14.4%.
+Primary language came from the GitHub API. Every Python repository in the sample was
+shallow-cloned, scanned, and deleted. Test directories are excluded by default, because
+back-compat tests deliberately exercise legacy transports and would otherwise punish
+well-tested projects.</p>
+
+<p>These are aggregates on purpose. We are not publishing a per-server grade for
+578 projects we have not read individually; the
+<a href="index.html#board">board</a> is where per-server grades go, and every entry on it
+was read by a human before it was recorded.</p>
+
+<p>Scanned with <code>scripts/ecosystem_scan.py, mcp-migrate 0.5.0</code>.</p>
+
+<pre>python scripts/ecosystem_scan.py --all</pre>
+
+</div>
+
+<footer>
+<div class="wrap">
+<a href="index.html">What the tool checks</a>
+<a href="https://github.com/dheerajjha/mcp-migrate/blob/main/data/ecosystem-scan.json">The data</a>
+<a href="https://github.com/dheerajjha/mcp-migrate/blob/main/scripts/ecosystem_scan.py">The script</a>
+<a href="https://github.com/dheerajjha/mcp-migrate">Source</a>
+<p style="margin:18px 0 0">Not affiliated with Anthropic or the Model Context Protocol
+project. If a number here disagrees with the committed data file, the data file is right
+and the page is a bug.</p>
+</div>
+</footer>
+
+</body>
+</html>

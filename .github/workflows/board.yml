@@ -14,6 +14,10 @@ on:
       - "scripts/render_board.py"
       - "scripts/render_badges.py"
       - "scripts/render_site.py"
+      - "scripts/render_findings.py"
+      # The report and the landing page both render from the scan data,
+      # so a refreshed scan has to regenerate both.
+      - "data/ecosystem-scan.json"
       # The landing page renders the rule set, so a reworded rule changes
       # the page even when no registry file moved.
       - "src/mcp_migrate/rules/**"
@@ -54,11 +58,14 @@ jobs:
       - name: Render the landing page
         run: python scripts/render_site.py
 
+      - name: Render the ecosystem report
+        run: python scripts/render_findings.py
+
       - name: Commit board update
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add README.md docs/badge docs/index.html
+          git add README.md docs/badge docs/index.html docs/findings.html
           if git diff --cached --quiet; then
             echo "Board, badges and landing page unchanged, nothing to commit."
             exit 0

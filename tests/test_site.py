@@ -137,3 +137,19 @@ def test_no_unresolved_template_braces(page):
 )
 def test_split_ref(ref, expected):
     assert split_ref(ref) == expected
+
+
+def test_the_landing_page_links_the_ecosystem_report(page):
+    """The report is the reason a stranger has anything to share. A page
+    nothing links to is a page nobody reads."""
+    import json
+
+    from render_site import SCAN
+
+    assert 'href="findings.html"' in page
+
+    if SCAN.exists():
+        scan = json.loads(SCAN.read_text())
+        # The headline number has to be the one the report renders from,
+        # or the two pages disagree about the same scan.
+        assert f'{scan["python_servers_scanned"]} Python servers' in page

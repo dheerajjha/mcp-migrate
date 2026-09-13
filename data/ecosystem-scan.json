@@ -1,5 +1,5 @@
 {
-  "generated_by": "scripts/ecosystem_scan.py, mcp-migrate 0.1.2+7abaeb1",
+  "generated_by": "scripts/ecosystem_scan.py, mcp-migrate 0.5.0",
   "spec": "2026-07-28",
   "method": {
     "registry": "registry.modelcontextprotocol.io/v0/servers?version=latest",
@@ -9,132 +9,141 @@
     "tests_excluded": true
   },
   "registry": {
-    "unique_github_repos": 14249,
+    "unique_github_repos": 19646,
     "sampled": 3000,
-    "dead_links": 458,
-    "dead_link_pct": 15.3,
-    "live": 2542
+    "dead_links": 433,
+    "dead_link_pct": 14.4,
+    "live": 2567
   },
   "languages_of_live_sample": {
-    "TypeScript": 1070,
-    "Python": 620,
-    "JavaScript": 383,
-    "null": 233,
-    "Go": 72,
-    "Rust": 52,
-    "HTML": 25,
-    "C#": 21,
-    "Dockerfile": 15,
+    "TypeScript": 1047,
+    "Python": 580,
+    "(none)": 384,
+    "JavaScript": 339,
+    "Rust": 59,
+    "Go": 52,
+    "HTML": 27,
+    "C#": 23,
+    "Dockerfile": 16,
     "Shell": 14,
-    "Swift": 6,
-    "Java": 5,
-    "C++": 3,
-    "PHP": 3,
-    "Solidity": 2,
-    "Kotlin": 2,
-    "Astro": 2,
-    "XSLT": 2,
-    "C": 2,
-    "Ruby": 1,
+    "Java": 4,
+    "Ruby": 3,
+    "Kotlin": 3,
+    "Dart": 2,
+    "Jupyter Notebook": 2,
+    "C++": 2,
+    "Swift": 2,
+    "PowerShell": 2,
     "MDX": 1,
-    "Jupyter Notebook": 1,
-    "Elixir": 1,
-    "Batchfile": 1,
-    "PowerShell": 1,
-    "Motoko": 1,
-    "Roff": 1,
-    "GDScript": 1,
-    "Lean": 1
+    "Go Template": 1,
+    "XSLT": 1,
+    "Typst": 1,
+    "Astro": 1,
+    "Nim": 1
   },
-  "python_servers_scanned": 620,
+  "python_servers_scanned": 578,
   "grades": {
-    "A": 424,
-    "B": 117,
-    "C": 52,
-    "D": 17,
-    "F": 10
+    "A": 400,
+    "B": 83,
+    "C": 46,
+    "D": 32,
+    "F": 17
   },
   "score_median": 97,
-  "zero_findings": 71,
-  "no_breaking_findings": 550,
+  "zero_findings": 174,
+  "zero_findings_by_declared_sdk": {
+    "sdk_1x": 12,
+    "sdk_2x_or_later": 46,
+    "sdk_unknown": 116
+  },
+  "declared_sdk": {
+    "sdk_1x": 289,
+    "sdk_2x_or_later": 66,
+    "sdk_unknown": 223
+  },
+  "no_breaking_findings": 483,
   "rule_prevalence": {
     "R010": {
-      "servers": 485,
-      "pct": 78.2
+      "servers": 274,
+      "pct": 47.4
     },
     "R004": {
-      "servers": 116,
-      "pct": 18.7
+      "servers": 131,
+      "pct": 22.7
     },
     "R003": {
-      "servers": 65,
-      "pct": 10.5
-    },
-    "R016": {
-      "servers": 60,
-      "pct": 9.7
-    },
-    "R006": {
-      "servers": 42,
-      "pct": 6.8
+      "servers": 68,
+      "pct": 11.8
     },
     "R009": {
-      "servers": 31,
-      "pct": 5.0
+      "servers": 58,
+      "pct": 10.0
+    },
+    "R016": {
+      "servers": 49,
+      "pct": 8.5
     },
     "R015": {
-      "servers": 30,
-      "pct": 4.8
-    },
-    "R008": {
-      "servers": 21,
-      "pct": 3.4
+      "servers": 48,
+      "pct": 8.3
     },
     "R011": {
-      "servers": 18,
-      "pct": 2.9
+      "servers": 44,
+      "pct": 7.6
     },
-    "R002": {
-      "servers": 11,
-      "pct": 1.8
-    },
-    "R007": {
-      "servers": 11,
-      "pct": 1.8
-    },
-    "R020": {
-      "servers": 10,
-      "pct": 1.6
+    "R006": {
+      "servers": 25,
+      "pct": 4.3
     },
     "R001": {
-      "servers": 10,
-      "pct": 1.6
+      "servers": 19,
+      "pct": 3.3
     },
-    "R014": {
-      "servers": 9,
-      "pct": 1.5
+    "R008": {
+      "servers": 17,
+      "pct": 2.9
+    },
+    "R020": {
+      "servers": 12,
+      "pct": 2.1
+    },
+    "R002": {
+      "servers": 12,
+      "pct": 2.1
     },
     "R018": {
-      "servers": 6,
-      "pct": 1.0
+      "servers": 8,
+      "pct": 1.4
     },
     "R005": {
-      "servers": 5,
-      "pct": 0.8
+      "servers": 7,
+      "pct": 1.2
+    },
+    "R014": {
+      "servers": 7,
+      "pct": 1.2
+    },
+    "R013": {
+      "servers": 4,
+      "pct": 0.7
     },
     "R021": {
       "servers": 3,
       "pct": 0.5
     },
-    "R013": {
-      "servers": 2,
-      "pct": 0.3
-    },
     "R012": {
+      "servers": 3,
+      "pct": 0.5
+    },
+    "R007": {
       "servers": 2,
       "pct": 0.3
     },
     "R017": {
+      "servers": 2,
+      "pct": 0.3
+    },
+    "R019": {
       "servers": 1,
       "pct": 0.2
     }

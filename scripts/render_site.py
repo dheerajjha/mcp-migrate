@@ -22,6 +22,7 @@ than rows that appear after a click.
 from __future__ import annotations
 
 import html
+import json
 import re
 import sys
 from pathlib import Path
@@ -36,6 +37,7 @@ from mcp_migrate.constants import GRADE_COLOR  # noqa: E402
 from mcp_migrate.rules import all_rules  # noqa: E402
 
 SERVERS = ROOT / "registry" / "servers"
+SCAN = ROOT / "data" / "ecosystem-scan.json"
 OUT = ROOT / "docs" / "index.html"
 
 SITE = "https://dheerajjha.github.io/mcp-migrate/"
@@ -130,6 +132,23 @@ def main() -> int:
     for x in entries:
         tally[x.get("grade")] = tally.get(x.get("grade"), 0) + 1
     summary = ", ".join(f"{tally[g]}× {g}" for g in "ABCDF" if g in tally)
+
+    # The ecosystem report's headline, read from the same file the report
+    # renders from. Hard-coding it here would be two pages claiming
+    # different numbers about the same scan, which is the failure this
+    # project keeps having to fix.
+    scan = json.loads(SCAN.read_text()) if SCAN.exists() else None
+    if scan:
+        r001 = scan["rule_prevalence"].get("R001", {"pct": 0.0})["pct"]
+        findings_line = (
+            f'<p class="note"><a href="findings.html"><strong>We scanned '
+            f'{scan["python_servers_scanned"]} Python servers from the official '
+            f'registry.</strong></a> The change that dominated every discussion of '
+            f'this revision &mdash; <code>Mcp-Session-Id</code> going away &mdash; '
+            f'appears in {r001:.1f}% of them.</p>'
+        )
+    else:
+        findings_line = ""
 
     n_breaking = sum(1 for r in rules if r.severity == "breaking")
     n_dep = sum(1 for r in rules if r.severity == "deprecated")
@@ -258,6 +277,7 @@ it drops straight into CI.</p>
 <li>SARIF for code scanning</li>
 <li>v{__version__}</li>
 </ul>
+{findings_line}
 </div>
 </header>
 
@@ -309,6 +329,7 @@ breaking pattern never lands on main in the first place.</p></div>
 
 <footer>
 <div class="wrap">
+<a href="findings.html">Ecosystem report</a>
 <a href="{REPO}">Source</a>
 <a href="https://pypi.org/project/mcp-migrate/">PyPI</a>
 <a href="https://github.com/marketplace/actions/mcp-migrate">GitHub Action</a>
