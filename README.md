@@ -18,6 +18,9 @@ uvx mcp-migrate check .
 uvx mcp-migrate fix . --write
 ```
 
+Every rule, with the spec change behind it, and a board of public servers
+graded against the revision: **<https://dheerajjha.github.io/mcp-migrate/>**
+
 ## `mcp-migrate check`
 
 ```
