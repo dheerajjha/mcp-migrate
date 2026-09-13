@@ -4,7 +4,79 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-13
+
+### Added
+
+- **A landing page, at a URL that had been answering 404.**
+  ([#271](https://github.com/dheerajjha/mcp-migrate/pull/271),
+  [#272](https://github.com/dheerajjha/mcp-migrate/pull/272))
+
+  GitHub Pages was enabled on this repo with nothing in `docs/` to serve, so
+  <https://dheerajjha.github.io/mcp-migrate/> returned 404 while reporting
+  "built" in settings. It now carries every rule with the spec change behind
+  it, and the board. `pyproject.toml` also gained `[project.urls]`, which it
+  had never had -- the PyPI page linked to nothing at all.
+
+- **An ecosystem report.**
+  ([#275](https://github.com/dheerajjha/mcp-migrate/pull/275))
+
+  <https://dheerajjha.github.io/mcp-migrate/findings.html> -- 578 Python
+  servers from the official registry, scanned against 2026-07-28.
+  `Mcp-Session-Id`, the change that dominated the discussion, appears in
+  3.3% of them; 83.6% have nothing breaking to fix. Generated from
+  `data/ecosystem-scan.json` and pinned by tests, so no figure on it can go
+  stale. Reproduce with `python scripts/ecosystem_scan.py --all`.
+
+- **A getting-started guide and a full rule reference.**
+  ([#241](https://github.com/dheerajjha/mcp-migrate/pull/241), thanks
+  @sinhphamvan) Both under `docs/`, both now pinned to the code by
+  `tests/test_docs_pages.py` ([#273](https://github.com/dheerajjha/mcp-migrate/pull/273)).
+
+### Changed
+
+- **R010 decides on the SDK a project declares, not on the project's own source.**
+  ([#257](https://github.com/dheerajjha/mcp-migrate/issues/257))
+
+  R010 fired on 16 of 16 board servers and told each of them to add a
+  `server/discover` handler. On `mcp` 2.x the SDK registers that handler in
+  `Server.__init__`, so the evidence is never in the project's source and
+  the finding was false; on 1.x the method does not exist at all, so there
+  was nothing anyone could add. Unactionable in both directions -- which is
+  why two contributors independently wrote fixers emitting `@app.discover()`,
+  an API in no version of the SDK.
+
+  It now reads the declared `mcp` floor: silent at `>= 2.0`, fires at
+  `< 2.0` with "upgrade" as the remediation, and **silent when it cannot
+  tell**. A declared floor is not a resolved version, and a finding nobody
+  can act on costs more than a missing one.
+
+  **This moves published grades.** Three board entries go up by 3 points
+  (`mcp-neo4j-cypher` B/89 -> B/92, `mcp-server-motherduck` and
+  `mcp-server-qdrant` A/97 -> A/100). If you have a badge, it may move.
+
 ### Fixed
+
+- **`check src/` no longer ignores the project's own config.**
+  ([#236](https://github.com/dheerajjha/mcp-migrate/issues/236), thanks @aryansk)
+
+  `load_config` read only the scan path, so pointing the tool at a
+  subdirectory silently discarded the repo's `pyproject.toml` or
+  `.mcp-migrate.toml` -- including every rule you had disabled. It now walks
+  up to the repository root (`.git` ceiling, filesystem root backstop), a
+  section-less inner `pyproject.toml` no longer stops the walk, and the
+  output prints where the config came from.
+
+- **R001 was grading the variable name, not the header.**
+  ([#267](https://github.com/dheerajjha/mcp-migrate/pull/267))
+
+  The Python path ran every alternative through `search_code`, which
+  discards string tokens. `Mcp-Session-Id` is not a valid Python
+  identifier, so it can only appear inside a string literal -- that
+  alternative could never match. Renaming a local away from
+  `mcp_session_id` turned a breaking finding into a clean A/100. The header
+  literal now goes through `search_wire`, anchored to a real access, so a
+  docstring or log message naming it still does not fire.
 
 - **Comment-out fixers no longer comment out import members.**
   ([#245](https://github.com/dheerajjha/mcp-migrate/issues/245))

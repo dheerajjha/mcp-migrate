@@ -26,7 +26,7 @@ graded against the revision: **<https://dheerajjha.github.io/mcp-migrate/>**
 ```
 $ uvx mcp-migrate check tests/fixtures/fixer_roundtrip
 
-mcp-migrate v0.5.0  ->  fixer_roundtrip
+mcp-migrate v0.6.0  ->  fixer_roundtrip
 2 Python files, 21 rules, spec 2026-07-28
 
             rule    where         what
@@ -204,7 +204,7 @@ coverage is complete the reason it gives is a decision, not a fraction:
 ```
 $ mcp-migrate check ./my-ts-server
 
-mcp-migrate v0.5.0  ->  my-ts-server
+mcp-migrate v0.6.0  ->  my-ts-server
 
 No grade for this one. Found 1 TypeScript. TypeScript is read by every rule,
 but whether it gets graded is still an open decision, not a coverage gap --
@@ -408,7 +408,7 @@ this most.
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/dheerajjha/mcp-migrate
-    rev: v0.5.0
+    rev: v0.6.0
     hooks:
       - id: mcp-migrate
 ```
