@@ -41,8 +41,8 @@ each rule's contribution is capped no matter how many times it fires.
 | Severity     | Cost per finding | Cap per rule |
 | ------------ | ----------------- | ------------ |
 | `breaking`   | -25                | -25           |
-| `deprecated` | -8                 | -12           |
-| `advisory`   | -3                 | -6            |
+| `deprecated` | -8                 | -8            |
+| `advisory`   | -3                 | -3            |
 
 Score starts at 100 and floors at 0. The letter grade:
 
