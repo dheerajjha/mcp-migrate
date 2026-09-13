@@ -321,6 +321,36 @@ def test_readme_precommit_rev_is_the_current_version():
         )
 
 
+def test_readme_action_refs_are_the_current_version():
+    """The `uses: dheerajjha/mcp-migrate@vX.Y.Z` pins in README's CI examples.
+
+    Same failure as the pre-commit `rev:` above and exactly as quiet:
+    GitHub resolves an old tag happily, so anyone copying the snippet gets
+    a working workflow running an older rule set, with nothing saying so.
+    It is worse than the `rev:` case in one respect -- the Action installs
+    mcp-migrate from PyPI at the pinned tag, so a stale pin here hands out
+    a stale *release*, not just a stale action.
+
+    These three had sat at v0.5.0 with nothing checking them, which is how
+    the `rev:` got to v0.2.0 while the project shipped 0.3.0 and 0.4.0.
+
+    Pinned to `__version__` rather than the newest git tag for the reason
+    the `rev:` test gives: tags are not always present in a CI checkout,
+    and the version in the package is what a release has to bump anyway.
+    """
+    from mcp_migrate import __version__
+
+    readme = (ROOT / "README.md").read_text()
+    refs = re.findall(r"uses:\s*dheerajjha/mcp-migrate@v(\d+\.\d+\.\d+)", readme)
+
+    assert refs, "README no longer pins the action to a version"
+    assert set(refs) == {__version__}, (
+        f"README pins the action at {sorted(set(refs))}, current version is "
+        f"{__version__}. Update every `uses: dheerajjha/mcp-migrate@v...` in "
+        f"README.md."
+    )
+
+
 def test_readme_cost_and_cap_table_matches_the_code():
     """README's `Cost per finding | Cap per rule` table, against WEIGHT and
     RULE_CAP.

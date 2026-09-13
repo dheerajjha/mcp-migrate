@@ -438,7 +438,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dheerajjha/mcp-migrate@v0.5.0
+      - uses: dheerajjha/mcp-migrate@v0.6.0
 ```
 
 `v0.5.0` is the first tag that contains the action; until it is cut, `@main`
@@ -449,7 +449,7 @@ input picks the *tool* it installs from PyPI.
 A breaking finding fails the job. Nothing else does, until you say so:
 
 ```yaml
-      - uses: dheerajjha/mcp-migrate@v0.5.0
+      - uses: dheerajjha/mcp-migrate@v0.6.0
         with:
           path: src/my_server     # default: .
           fail-on: deprecated     # breaking | deprecated | advisory | never
@@ -470,7 +470,7 @@ your code scanning lives:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: dheerajjha/mcp-migrate@v0.5.0
+      - uses: dheerajjha/mcp-migrate@v0.6.0
         with:
           sarif-file: results.sarif
           fail-on: never          # let the Security tab hold them, not the build
