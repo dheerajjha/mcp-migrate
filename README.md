@@ -203,8 +203,8 @@ $ mcp-migrate check ./my-ts-server
 
 mcp-migrate v0.5.0  ->  my-ts-server
 
-No grade for this one. Found 1 TypeScript. Every rule reads it now, but
-whether it gets graded is still an open decision, not a coverage gap --
+No grade for this one. Found 1 TypeScript. TypeScript is read by every rule,
+but whether it gets graded is still an open decision, not a coverage gap --
 see https://github.com/dheerajjha/mcp-migrate/issues/172.
 
   breaking    R001  server.ts:4  Mcp-Session-Id was removed from the Streamable HTTP transport.
