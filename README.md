@@ -26,7 +26,7 @@ graded against the revision: **<https://dheerajjha.github.io/mcp-migrate/>**
 ```
 $ uvx mcp-migrate check tests/fixtures/fixer_roundtrip
 
-mcp-migrate v0.6.0  ->  fixer_roundtrip
+mcp-migrate v0.7.0  ->  fixer_roundtrip
 2 Python files, 21 rules, spec 2026-07-28
 
             rule    where         what
@@ -204,7 +204,7 @@ coverage is complete the reason it gives is a decision, not a fraction:
 ```
 $ mcp-migrate check ./my-ts-server
 
-mcp-migrate v0.6.0  ->  my-ts-server
+mcp-migrate v0.7.0  ->  my-ts-server
 
 No grade for this one. Found 1 TypeScript. TypeScript is read by every rule,
 but whether it gets graded is still an open decision, not a coverage gap --
@@ -408,7 +408,7 @@ this most.
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/dheerajjha/mcp-migrate
-    rev: v0.6.0
+    rev: v0.7.0
     hooks:
       - id: mcp-migrate
 ```
@@ -438,7 +438,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dheerajjha/mcp-migrate@v0.6.0
+      - uses: dheerajjha/mcp-migrate@v0.7.0
 ```
 
 `v0.5.0` is the first tag that contains the action; until it is cut, `@main`
@@ -449,7 +449,7 @@ input picks the *tool* it installs from PyPI.
 A breaking finding fails the job. Nothing else does, until you say so:
 
 ```yaml
-      - uses: dheerajjha/mcp-migrate@v0.6.0
+      - uses: dheerajjha/mcp-migrate@v0.7.0
         with:
           path: src/my_server     # default: .
           fail-on: deprecated     # breaking | deprecated | advisory | never
@@ -470,7 +470,7 @@ your code scanning lives:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: dheerajjha/mcp-migrate@v0.6.0
+      - uses: dheerajjha/mcp-migrate@v0.7.0
         with:
           sarif-file: results.sarif
           fail-on: never          # let the Security tab hold them, not the build

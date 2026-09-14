@@ -4,6 +4,8 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-14
+
 ### Fixed
 
 - **Two rules describing the same fact are one finding, whatever line they
