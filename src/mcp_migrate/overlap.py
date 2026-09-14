@@ -142,21 +142,40 @@ def _merge_participants(members: list[Finding], rules: dict[str, Rule]) -> Findi
     The winner is the most severe rule; among equal severities, the earliest
     line; the deterministic tiebreak is rule id. Its location is kept (the
     reader still gets a real place to start), and every other participant's
-    message is appended so both pieces of advice survive.
+    advice is appended so nothing is lost.
+
+    Each distinct message is appended once. Grouping on the feature rather
+    than the line is precisely what makes a rule match the same fact twice in
+    one group, so appending every participant verbatim produced "Also flagged
+    by R018: ..." on an R018 finding -- quoting a rule back to itself -- and
+    the same R007 sentence three times over. What is worth keeping is the
+    advice, not the number of lines it was found on, and this text is read by
+    a person and handed to an agent.
     """
     ordered = sorted(
         members, key=lambda f: (_rank(f, rules), f.line if f.line is not None else 0, f.rule_id)
     )
     winner = ordered[0]
-    appended = "".join(
-        f" Also flagged by {f.rule_id}: {f.message}" for f in ordered[1:]
-    )
+
+    seen = {winner.message}
+    appended = []
+    for f in ordered[1:]:
+        if f.message in seen:
+            continue
+        seen.add(f.message)
+        appended.append(f" Also flagged by {f.rule_id}: {f.message}")
+
     return Finding(
         rule_id=winner.rule_id,
-        message=winner.message + appended,
+        message=winner.message + "".join(appended),
         path=winner.path,
         line=winner.line,
         snippet=winner.snippet,
+        # Carried, not dropped. A merged finding that loses these is a SARIF
+        # result with no location, and GitHub code scanning rejects the whole
+        # document over one of those (#262).
+        evidence_path=winner.evidence_path,
+        evidence_line=winner.evidence_line,
         feature=winner.feature,
     )
 

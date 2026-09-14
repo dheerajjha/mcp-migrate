@@ -4,6 +4,30 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Two rules describing the same fact are one finding, whatever line they
+  matched on.** ([#221](https://github.com/dheerajjha/mcp-migrate/issues/221),
+  [#250](https://github.com/dheerajjha/mcp-migrate/pull/250))
+
+  The R007/R018 merge keyed on `(path, line)`, so the pair only collapsed when
+  both rules happened to match the same line. `mcp-server-git` uses Roots, and
+  reported it four times at two severities: R007 on lines 12 and 464, R018 on
+  lines 11 and 468 — one fact, four findings, a grade of D.
+
+  Rules already classify every match into a named feature, and that
+  classification is the identity the merge wanted. Grouping on
+  `(path, feature)` needs no symbol resolution and no import-aware pass: the
+  claim being merged is "same feature", which the rules decided at match time.
+  The line key stays as a fallback for findings that carry no feature.
+
+  It also stops a false merge the line key was making: one busy line naming two
+  *different* features of the pair was being collapsed into a single finding.
+
+  `mcp-server-git` moves from **D/58 to C/66** at the same commit. The server
+  did not change; the double-count did. It is the only board entry affected —
+  all eighteen were re-graded to check.
+
 ## [0.6.0] - 2026-09-13
 
 ### Added

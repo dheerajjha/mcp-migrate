@@ -188,3 +188,50 @@ def test_check_merges_same_feature_across_lines_in_a_real_tree(tmp_path):
     assert len(r007) == 0, f"R007 findings should have been absorbed: {r007}"
     assert len(r018) == 1, f"expected one merged R018 finding, got {r018}"
     assert "Also flagged by R007" in r018[0].message
+
+
+def test_a_repeated_message_is_appended_once():
+    # Grouping on the feature rather than the line is what makes one rule
+    # match the same fact twice inside one group. Appending every participant
+    # verbatim quoted a rule back to itself -- "Also flagged by R018" on an
+    # R018 finding -- and repeated the other rule's sentence once per line it
+    # was found on. Measured on mcp-server-git before this: the same R007
+    # sentence three times over in a single message.
+    twice_each = [
+        Finding(rule_id="R018", message="Server-initiated roots/list was replaced.",
+                path=Path("server.py"), line=11, feature="Server-initiated roots/list"),
+        Finding(rule_id="R018", message="Server-initiated roots/list was replaced.",
+                path=Path("server.py"), line=468, feature="Server-initiated roots/list"),
+        Finding(rule_id="R007", message="Roots is deprecated. Use resource URIs instead.",
+                path=Path("server.py"), line=12, feature="Roots"),
+        Finding(rule_id="R007", message="Roots is deprecated. Use resource URIs instead.",
+                path=Path("server.py"), line=464, feature="Roots"),
+    ]
+
+    out = dedupe(twice_each, RULES)
+
+    assert len(out) == 1
+    assert out[0].rule_id == "R018"
+    assert out[0].line == 11
+    assert out[0].message.count("Also flagged by R007") == 1
+    # A rule is never quoted back to itself.
+    assert "Also flagged by R018" not in out[0].message
+
+
+def test_a_merged_finding_keeps_its_sarif_anchor():
+    # A project-level finding carries the file that made it fire so SARIF has
+    # somewhere to point. Losing that in the merge would put a result with no
+    # location into the document, and GitHub code scanning rejects the whole
+    # document over one of those (#262).
+    pair = [
+        Finding(rule_id="R007", message="Sampling is deprecated; plan a migration.",
+                path=Path("a.py"), line=2, evidence_path=Path("a.py"), evidence_line=2),
+        Finding(rule_id="R018", message="Server-initiated sampling/createMessage was replaced.",
+                path=Path("a.py"), line=2, evidence_path=Path("a.py"), evidence_line=2),
+    ]
+
+    out = dedupe(pair, RULES)
+
+    assert len(out) == 1
+    assert out[0].evidence_path == Path("a.py")
+    assert out[0].evidence_line == 2

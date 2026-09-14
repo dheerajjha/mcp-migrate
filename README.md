@@ -626,7 +626,7 @@ color using the table above):
 
 <!-- BOARD:START -->
 
-**18 servers checked** (7x A, 8x B, 1x C, 2x D)
+**18 servers checked** (7x A, 8x B, 2x C, 1x D)
 
 All of these were checked by this project, not submitted by the servers' maintainers -- so read it as a survey, not as adoption. If you maintain one of these, [submit your own entry](registry/README.md) and it becomes yours.
 
@@ -647,8 +647,8 @@ All of these were checked by this project, not submitted by the servers' maintai
 | [mcp-server-sqlite](https://github.com/modelcontextprotocol/servers-archived) | **B** | ready | python | Archived reference MCP server for SQLite that runs SQL queries and auto-generates business insight memos. |
 | [mcp-server-time](https://github.com/modelcontextprotocol/servers) | **B** | ready | python | Reference MCP server giving LLMs current time and timezone conversion using IANA timezone names. |
 | [excel-mcp-server](https://github.com/haris-musa/excel-mcp-server) | **B** | ready | python | Read, write, and format Excel workbooks (formulas, charts, pivot tables) over MCP, via SSE or Streamable HTTP. |
+| [mcp-server-git](https://github.com/modelcontextprotocol/servers) | **C** | ready | python | Reference MCP server for Git repository interaction, giving LLMs tools to read, search, and manipulate repos. |
 | [mcp-atlassian](https://github.com/sooperset/mcp-atlassian) | **C** | migrating | python | MCP server for Atlassian products (Confluence and Jira), supporting both Cloud and Server/Data Center deployments. |
-| [mcp-server-git](https://github.com/modelcontextprotocol/servers) | **D** | ready | python | Reference MCP server for Git repository interaction, giving LLMs tools to read, search, and manipulate repos. |
 | [serena](https://github.com/oraios/serena) | **D** | migrating | python | Python MCP toolkit for coding with semantic retrieval and editing capabilities. |
 
 <!-- BOARD:END -->
