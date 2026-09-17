@@ -1061,3 +1061,75 @@ def test_header_mention_in_docstring_comment_or_log_still_does_not_fire_r001(tmp
     )
     by_rule = _findings_by_rule(tmp_path)
     assert "R001" not in by_rule, by_rule.get("R001")
+
+
+def test_search_code_finds_code_match_after_string_on_same_line(tmp_path):
+    """#281: search_code() must not drop a line when an earlier match on that
+    line is inside a string. It walks all matches and yields the first match
+    outside content spans."""
+    (tmp_path / "srv.py").write_text(
+        'log("Mcp-Session-Id"); sid = req.headers[SESSION_ID]\n'
+        'msg = "WIDGET seen"; real_widget = WIDGET + 1\n'
+        'WIDGET = WIDGET + 2\n'
+    )
+    project = load_project(tmp_path)
+    hits = list(project.search_code(r"Mcp-Session-Id|SESSION_ID"))
+    assert len(hits) == 1
+    assert hits[0][1] == 1
+    assert "sid = req.headers[SESSION_ID]" in hits[0][2]
+
+    widget_hits = list(project.search_code(r"WIDGET"))
+    assert len(widget_hits) == 2
+    assert widget_hits[0][1] == 2
+    assert widget_hits[1][1] == 3
+
+
+def test_search_wire_finds_wire_match_after_prose_on_same_line(tmp_path):
+    """#281: search_wire() must not drop a line when an earlier match on that
+    line is inside prose (e.g. a triple-quoted string)."""
+    (tmp_path / "srv.py").write_text(
+        '"""calls resources/subscribe"""; handler = {"resources/subscribe": handle}\n'
+    )
+    project = load_project(tmp_path)
+    hits = list(project.search_wire(r"resources/subscribe"))
+    assert len(hits) == 1
+    assert hits[0][1] == 1
+    assert 'handler = {"resources/subscribe": handle}' in hits[0][2]
+
+
+def test_search_code_finds_code_match_after_block_comment_or_string_in_typescript(tmp_path):
+    """#281: TypeScript/JavaScript files also walk all matches in search_code."""
+    (tmp_path / "srv.ts").write_text(
+        '/* McpSessionId deprecated */ const s = req.headers[McpSessionId];\n'
+        'const label = "McpSessionId"; const sid = McpSessionId;\n'
+    )
+    project = load_project(tmp_path)
+    hits = list(project.search_code(r"McpSessionId"))
+    assert len(hits) == 2
+    assert hits[0][1] == 1
+    assert hits[1][1] == 2
+
+
+def test_search_wire_finds_wire_match_after_block_comment_in_typescript(tmp_path):
+    """#281: search_wire() in TypeScript finds wire string after block comment on same line."""
+    (tmp_path / "srv.ts").write_text(
+        '/* calls tools/list */ const h = {"method": "tools/list"};\n'
+    )
+    project = load_project(tmp_path)
+    hits = list(project.search_wire(r"tools/list"))
+    assert len(hits) == 1
+    assert hits[0][1] == 1
+
+
+def test_r001_fires_when_first_match_is_in_string_literal(tmp_path):
+    """#281: R001 must fire when a code match for mcp_session_id appears after
+    a string literal containing mcp_session_id on the same line."""
+    (tmp_path / "srv.py").write_text(
+        'log("handling mcp_session_id"); sid = mcp_session_id\n'
+    )
+    by_rule = _findings_by_rule(tmp_path)
+    assert "R001" in by_rule
+    findings = by_rule["R001"]
+    assert len(findings) == 1
+    assert findings[0].line == 1
+
