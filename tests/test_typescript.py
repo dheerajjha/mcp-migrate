@@ -1776,17 +1776,18 @@ def test_a_language_with_no_backend_still_exits_unscannable(tmp_path, capsys):
 
 
 def test_javascript_with_no_covered_finding_exits_zero_not_unscannable(tmp_path, capsys):
-    # #149 step 2 ported R006/R017/R021 to JavaScript and moved it into
+    # #149 step 2 ported R001/R006/R017/R021 to JavaScript and moved it into
     # `PARTIAL`, the same status TypeScript held while its own port was
-    # still in progress. R001 (Mcp-Session-Id) is not one of the three, so
+    # still in progress. R019 (removed tasks polling APIs) is not one of
+    # the four, so
     # this file has a real breaking pattern nothing here catches yet -- but
     # that is now "partial coverage", not "could not read", so it exits 0
     # exactly like a TypeScript tree whose only bug predates a rule port
     # (see test_clean_typescript_exits_zero). Exit 2 would misreport that
-    # nothing was read, when three rules did run over this file and found
+    # nothing was read, when four rules did run over this file and found
     # nothing they know how to flag.
     (tmp_path / "server.js").write_text(
-        'const sessionId = req.headers["Mcp-Session-Id"];\n'
+        'server.setRequestHandler(ListTasksRequestSchema, handler);\n'
     )
     exit_code = main(["check", str(tmp_path)])
     capsys.readouterr()
@@ -1811,16 +1812,16 @@ def test_javascript_exits_unscannable_when_the_selected_rule_does_not_cover_it(
     # Moving JavaScript into PARTIAL made `_checked_something` recognize
     # the language by name -- but `--rule` (or a config that disables a
     # rule) chooses a *subset* of rules, and the language-membership check
-    # alone can't see that. `--rule R001` runs a rule with no JavaScript
+    # alone can't see that. `--rule R019` runs a rule with no JavaScript
     # port at all, so zero rules actually look at this file even though a
-    # real Mcp-Session-Id bug sits in it. Exit 0 here would be the same
+    # real removed-tasks API reference sits in it. Exit 0 here would be the same
     # false "checked it, clean" this module's older JS tests guard
     # against, just reachable through `--rule` instead of through an
     # unported language.
     (tmp_path / "server.js").write_text(
-        'const sessionId = req.headers["Mcp-Session-Id"];\n'
+        'server.setRequestHandler(ListTasksRequestSchema, handler);\n'
     )
-    exit_code = main(["check", str(tmp_path), "--rule", "R001"])
+    exit_code = main(["check", str(tmp_path), "--rule", "R019"])
     capsys.readouterr()
     assert exit_code == 2
 
@@ -1930,7 +1931,7 @@ def _unwrapped(out: str) -> str:
 #
 # The exit codes above were right from the start; the sentence printed above
 # them was not. `unscannable_reason` explained the *rule set's* coverage
-# ("JavaScript is read by 3 of 21 rules -- enough to report findings") in
+# ("JavaScript is read by 4 of 21 rules -- enough to report findings") in
 # exactly the two shapes where none of those rules ran, so it appeared over
 # an empty findings list, directly under a headline saying nothing was
 # scannable. Both halves were true of the tool and false of the run.
@@ -1938,9 +1939,9 @@ def _unwrapped(out: str) -> str:
 
 def test_the_reason_does_not_promise_findings_when_no_rule_ran(tmp_path, capsys):
     (tmp_path / "server.js").write_text(
-        'const sessionId = req.headers["Mcp-Session-Id"];\n'
+        'server.setRequestHandler(ListTasksRequestSchema, handler);\n'
     )
-    assert main(["check", str(tmp_path), "--rule", "R001"]) == 2
+    assert main(["check", str(tmp_path), "--rule", "R019"]) == 2
     out = _unwrapped(capsys.readouterr().out)
     assert "Nothing scannable here." in out
     assert "no rule that ran reads JavaScript" in out
@@ -1950,13 +1951,13 @@ def test_the_reason_does_not_promise_findings_when_no_rule_ran(tmp_path, capsys)
 
 
 def test_a_config_that_disables_every_ported_rule_says_so_too(tmp_path, capsys):
-    # Same hole reached without `--rule`: config switches off all three
+    # Same hole reached without `--rule`: config switches off all four
     # rules that read JavaScript, so again nothing looked at the file.
     (tmp_path / "server.js").write_text(
         'const { SSEServerTransport } = require("@modelcontextprotocol/sdk/server/sse.js");\n'
     )
     (tmp_path / "pyproject.toml").write_text(
-        "[tool.mcp-migrate.rules]\nR006 = false\nR017 = false\nR021 = false\n"
+        "[tool.mcp-migrate.rules]\nR001 = false\nR006 = false\nR017 = false\nR021 = false\n"
     )
     assert main(["check", str(tmp_path)]) == 2
     out = _unwrapped(capsys.readouterr().out)
@@ -1972,19 +1973,19 @@ def test_a_language_that_was_read_is_still_described_by_its_coverage(tmp_path, c
     )
     assert main(["check", str(tmp_path)]) == 1
     out = _unwrapped(capsys.readouterr().out)
-    assert "JavaScript is read by 3 of 21 rules" in out
+    assert "JavaScript is read by 4 of 21 rules" in out
     assert "no rule that ran" not in out
 
 
 def test_one_language_read_and_one_not_is_described_per_language(tmp_path, capsys):
-    # `--rule R001` covers TypeScript but not JavaScript, so the two
+    # `--rule R019` covers TypeScript but not JavaScript, so the two
     # clauses must disagree with each other. The headline stays "No grade
     # for this one" because something genuinely was read.
     (tmp_path / "a.js").write_text('const x = 1;\n')
     (tmp_path / "b.ts").write_text(
-        'const sessionId = req.headers["Mcp-Session-Id"];\n'
+        'server.setRequestHandler(ListTasksRequestSchema, handler);\n'
     )
-    main(["check", str(tmp_path), "--rule", "R001"])
+    main(["check", str(tmp_path), "--rule", "R019"])
     out = _unwrapped(capsys.readouterr().out)
     assert "JavaScript was read by no rule that ran" in out
     assert "TypeScript is read by every rule" in out
@@ -1996,6 +1997,6 @@ def test_the_reason_survives_rich_markup(tmp_path, capsys):
     # "a config  table" -- the same class of bug #246 fixed for config
     # warnings. Assert on rendered output, which is where it showed.
     (tmp_path / "server.js").write_text('const x = 1;\n')
-    main(["check", str(tmp_path), "--rule", "R001"])
+    main(["check", str(tmp_path), "--rule", "R019"])
     out = _unwrapped(capsys.readouterr().out)
     assert "rules table in config" in out

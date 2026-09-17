@@ -42,6 +42,21 @@ TS_HEADER_RX = (
     r"|setHeader\s*\(\s*[\"'`]mcp-session-id[\"'`]"
 )
 
+# --- JavaScript -----------------------------------------------------------
+#
+# JavaScript uses the same identifier spellings as TypeScript, but the
+# header matcher is deliberately narrower. Porting R001 should not turn
+# arbitrary maps into HTTP headers, nor match names that merely end in
+# "headers" or "setHeader".
+JS_IDENT_RX = TS_IDENT_RX
+JS_HEADER_RX = (
+    r"(?<![\w$])headers?\s*(?:"
+    r"(?:\?\.)?\s*\[\s*[\"'`]mcp-session-id[\"'`]\s*\]"
+    r"|(?:\?\.|\.)\s*(?:get|set|delete)\s*\(\s*[\"'`]mcp-session-id[\"'`]"
+    r")"
+    r"|(?<![\w$])setHeader\s*\(\s*[\"'`]mcp-session-id[\"'`]"
+)
+
 
 class SessionIdRemoved(Rule):
     id = "R001"
@@ -52,13 +67,15 @@ class SessionIdRemoved(Rule):
         "Sessions are gone from the transport. Mint an explicit handle server-side "
         "and take it as an ordinary tool argument instead."
     )
-    languages = ("python", "typescript")
+    languages = ("python", "typescript", "javascript")
 
     MESSAGE = "Mcp-Session-Id was removed from the Streamable HTTP transport."
 
     def check(self, project: Project) -> list[Finding]:
         if project.language == "typescript":
             return self._check_ts(project)
+        if project.language == "javascript":
+            return self._check_js(project)
         return self._check_python(project)
 
     def _check_python(self, project: Project) -> list[Finding]:
@@ -79,6 +96,22 @@ class SessionIdRemoved(Rule):
         for f, line, text in project.search_wire(PY_HEADER_RX, flags=re.IGNORECASE):
             # mcp_session_id = request.headers.get("Mcp-Session-Id") hits
             # both patterns on one line -- that's one problem, not two.
+            if (str(f.path), line) in seen:
+                continue
+            seen.add((str(f.path), line))
+            out.append(self.finding(self.MESSAGE, f, line, text))
+
+        return sorted(out, key=lambda x: (str(x.path or ""), x.line or 0))
+
+    def _check_js(self, project: Project) -> list[Finding]:
+        seen: set[tuple[str, int]] = set()
+        out: list[Finding] = []
+
+        for f, line, text in project.search_code(JS_IDENT_RX, flags=re.IGNORECASE):
+            seen.add((str(f.path), line))
+            out.append(self.finding(self.MESSAGE, f, line, text))
+
+        for f, line, text in project.search_wire(JS_HEADER_RX, flags=re.IGNORECASE):
             if (str(f.path), line) in seen:
                 continue
             seen.add((str(f.path), line))

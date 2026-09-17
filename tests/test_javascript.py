@@ -11,13 +11,12 @@ tokenize as Python, `_content_spans` would return `None`, and every rule
 would silently fall back to *unfiltered* matching -- exactly the
 comment-and-docstring false positive `search_code` exists to prevent.
 
-Step 2 of #149 is porting the rules themselves. R006, R017, and R021 are
-the first three -- each has patterns that are spelled identically in
-JavaScript and TypeScript (a class name, a wire string, a URL/date
-literal), so `"javascript"` reaching the same branch as `"typescript"` was
-the entire port. The other eighteen rules key off `TS_*` patterns built
-around `import`/type-annotation idioms JavaScript doesn't have, and stay
-TypeScript-only until each is checked and ported individually.
+Step 2 of #149 is porting the rules themselves. R001, R006, R017, and R021
+are the first four. R006/R017/R021 use patterns spelled identically in
+JavaScript and TypeScript; R001 keeps the TypeScript matcher untouched and
+uses a conservative JavaScript header matcher so the port does not broaden
+existing TypeScript behavior. The other seventeen rules stay TypeScript-only
+until each is checked and ported individually.
 """
 from __future__ import annotations
 
@@ -141,7 +140,7 @@ def test_r021_stays_silent_without_an_explicit_dialect_pin():
 # `TEST_FILE_PATTERNS` already excluded `*.test.ts`/`*.spec.ts`/
 # `*.examples.ts` beside the module they cover, but had no JavaScript
 # spellings. That went unnoticed while no rule read JavaScript at all --
-# now that R006/R017/R021 do, a colocated `server.test.js` fixture (e.g.
+# now that R001/R006/R017/R021 do, a colocated `server.test.js` fixture (e.g.
 # a backward-compat test deliberately exercising the old -32002 code) is
 # scanned as production code and reported as a real `breaking` finding,
 # exactly what this exclusion list exists to prevent (see scan.py).

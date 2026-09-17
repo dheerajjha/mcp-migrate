@@ -394,7 +394,7 @@ def test_readme_cost_and_cap_table_matches_the_code():
 
 
 def test_readme_javascript_coverage_matches_the_code():
-    """README's "3 of 21 rules (R006, R017, R021) read JavaScript", against
+    """README's "4 of 21 rules (R001, R006, R017, R021) read JavaScript", against
     the rules themselves.
 
     The paragraph this pins was added in the same PR (#251) that made the

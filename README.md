@@ -236,8 +236,8 @@ coverage; what remains is the grading decision in #172.
 **JavaScript is scanned, and a handful of rules read it.** `.js`/`.jsx`/
 `.mjs`/`.cjs` load and route through the same comment/string scanner as
 TypeScript, but the rule port is a separate, ongoing effort tracked in
-[#149](https://github.com/dheerajjha/mcp-migrate/issues/149) — currently 3
-of 21 rules (R006, R017, R021) read JavaScript. `check` reports findings
+[#149](https://github.com/dheerajjha/mcp-migrate/issues/149) — currently 4
+of 21 rules (R001, R006, R017, R021) read JavaScript. `check` reports findings
 from those and withholds the grade, same as a `PARTIAL` TypeScript tree
 did before R002 landed; the summary line names how many rules cover it so
 the number is never a stale claim.
