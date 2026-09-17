@@ -93,12 +93,11 @@ class Project:
         for f in self.files:
             spans = self._spans_for(f)
             for i, line in enumerate(f.lines, start=1):
-                m = rx.search(line)
-                if not m:
-                    continue
-                if spans is not None and _in_content_span(i, m.start(), spans):
-                    continue
-                yield f, i, line.strip()
+                for m in rx.finditer(line):
+                    if spans is not None and _in_content_span(i, m.start(), spans):
+                        continue
+                    yield f, i, line.strip()
+                    break
 
     def search_wire(self, pattern: str, *, flags: int = 0):
         """Like `search`, but ignores matches inside comments and
@@ -126,12 +125,11 @@ class Project:
         for f in self.files:
             spans = self._prose_spans_for(f)
             for i, line in enumerate(f.lines, start=1):
-                m = rx.search(line)
-                if not m:
-                    continue
-                if spans is not None and _in_content_span(i, m.start(), spans):
-                    continue
-                yield f, i, line.strip()
+                for m in rx.finditer(line):
+                    if spans is not None and _in_content_span(i, m.start(), spans):
+                        continue
+                    yield f, i, line.strip()
+                    break
 
     @property
     def language(self) -> str | None:

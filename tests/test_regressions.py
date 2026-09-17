@@ -141,6 +141,30 @@ def test_search_code_falls_back_to_plain_search_on_tokenize_failure(tmp_path):
     assert len(hits) == 1
 
 
+def test_search_code_finds_later_code_match_after_string_match(tmp_path):
+    # First regex hit is inside a string; a later hit on the same line is
+    # real code. search() used to stop at the string and drop the line.
+    (tmp_path / "mod.py").write_text(
+        'log("Mcp-Session-Id"); sid = req.headers[SESSION_ID]
+'
+    )
+    project = load_project(tmp_path)
+    hits = list(project.search_code(r"Mcp-Session-Id|SESSION_ID"))
+    assert len(hits) == 1
+    assert hits[0][1] == 1
+
+
+def test_search_wire_finds_later_literal_after_prose_match(tmp_path):
+    (tmp_path / "mod.py").write_text(
+        '"""tools/list"""; method = "tools/list"
+'
+    )
+    project = load_project(tmp_path)
+    hits = list(project.search_wire(r"tools/list"))
+    assert len(hits) == 1
+    assert hits[0][1] == 1
+
+
 # --- 3. R003 requires MCP protocol surface in the same file ----------------
 
 REST_WRAPPER = FIXTURES / "rest_wrapper_no_mcp_surface"
