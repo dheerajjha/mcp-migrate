@@ -19,12 +19,14 @@ class LoggingSetLevelRemoved(Rule):
         "`_meta[\"io.modelcontextprotocol/logLevel\"]` on each incoming request instead "
         "of tracking one process-wide level."
     )
-    languages = ("python", "typescript")
+    languages = ("python", "typescript", "javascript")
 
     CODE_MESSAGE = "References the removed SetLevelRequest / logging/setLevel handler."
     WIRE_MESSAGE = "References the removed logging/setLevel JSON-RPC method."
 
     def check(self, project: Project) -> list[Finding]:
+        if project.language == "javascript":
+            return self._check_js(project)
         if project.language == "typescript":
             out: list[Finding] = []
             for f, line, text in project.search_code(TS_SET_LEVEL_CODE_RX.pattern):
@@ -42,4 +44,19 @@ class LoggingSetLevelRemoved(Rule):
         # find it. Scan the raw text for the literal instead.
         for f, line, text in project.search_wire(SET_LEVEL_WIRE_RX):
             out.append(self.finding(self.WIRE_MESSAGE, f, line, text))
+        return out
+
+    def _check_js(self, project: Project) -> list[Finding]:
+        out: list[Finding] = []
+        seen: set[tuple[str, int]] = set()
+        for message, matches in (
+            (self.CODE_MESSAGE, project.search_code(TS_SET_LEVEL_CODE_RX.pattern)),
+            (self.WIRE_MESSAGE, project.search_wire(SET_LEVEL_WIRE_RX)),
+        ):
+            for f, line, text in matches:
+                key = (f.path, line)
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(self.finding(message, f, line, text))
         return out

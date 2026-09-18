@@ -1931,7 +1931,7 @@ def _unwrapped(out: str) -> str:
 #
 # The exit codes above were right from the start; the sentence printed above
 # them was not. `unscannable_reason` explained the *rule set's* coverage
-# ("JavaScript is read by 4 of 21 rules -- enough to report findings") in
+# ("JavaScript is read by 5 of 21 rules -- enough to report findings") in
 # exactly the two shapes where none of those rules ran, so it appeared over
 # an empty findings list, directly under a headline saying nothing was
 # scannable. Both halves were true of the tool and false of the run.
@@ -1957,7 +1957,7 @@ def test_a_config_that_disables_every_ported_rule_says_so_too(tmp_path, capsys):
         'const { SSEServerTransport } = require("@modelcontextprotocol/sdk/server/sse.js");\n'
     )
     (tmp_path / "pyproject.toml").write_text(
-        "[tool.mcp-migrate.rules]\nR001 = false\nR006 = false\nR017 = false\nR021 = false\n"
+        "[tool.mcp-migrate.rules]\nR001 = false\nR006 = false\nR012 = false\nR017 = false\nR021 = false\n"
     )
     assert main(["check", str(tmp_path)]) == 2
     out = _unwrapped(capsys.readouterr().out)
@@ -1973,7 +1973,7 @@ def test_a_language_that_was_read_is_still_described_by_its_coverage(tmp_path, c
     )
     assert main(["check", str(tmp_path)]) == 1
     out = _unwrapped(capsys.readouterr().out)
-    assert "JavaScript is read by 4 of 21 rules" in out
+    assert "JavaScript is read by 5 of 21 rules" in out
     assert "no rule that ran" not in out
 
 

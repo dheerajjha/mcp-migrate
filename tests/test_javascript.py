@@ -26,6 +26,7 @@ import pytest
 
 from mcp_migrate.rules.base import Project, SourceFile
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
+from mcp_migrate.rules.r012_logging_set_level_removed import LoggingSetLevelRemoved
 from mcp_migrate.rules.r017_resource_not_found_code_changed import (
     ResourceNotFoundCodeChanged,
 )
@@ -104,6 +105,33 @@ def test_r006_finds_sse_in_a_commonjs_server():
 def test_r006_stays_silent_on_migrated_javascript_server():
     project = _js_project(CLEAN_JS)
     assert DeprecatedSSETransport().check(project) == []
+
+
+def test_r012_finds_removed_set_level_request_in_javascript():
+    project = _js_project('const req = new SetLevelRequest({ level: "debug" });\n')
+    findings = LoggingSetLevelRemoved().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 1
+
+
+def test_r012_finds_removed_set_level_wire_method_in_javascript():
+    project = _js_project('server.setRequestHandler("logging/setLevel", handler);\n')
+    findings = LoggingSetLevelRemoved().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 1
+
+
+def test_r012_deduplicates_code_and_wire_match_on_same_line():
+    project = _js_project('const req = new SetLevelRequest("logging/setLevel");\n')
+    assert len(LoggingSetLevelRemoved().check(project)) == 1
+
+
+def test_r012_ignores_comments_and_longer_wire_names_in_javascript():
+    project = _js_project(
+        '// SetLevelRequest used to handle logging/setLevel\n'
+        'const method = "logging/setLevelExtra";\n'
+    )
+    assert LoggingSetLevelRemoved().check(project) == []
 
 
 def test_r017_finds_the_old_resource_not_found_code_in_javascript():
