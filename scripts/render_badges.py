@@ -148,6 +148,29 @@ def load_entries() -> list[dict]:
     return entries
 
 
+def _owned_badge_files(out: Path) -> set[Path]:
+    """Return the JSON endpoint files the renderer is allowed to remove."""
+    return {path for path in out.rglob("*.json") if path.is_file()}
+
+
+def _prune_orphaned_badges(out: Path, expected: set[Path]) -> int:
+    """Remove renderer-owned endpoints no current registry entry produces."""
+    removed = 0
+    for path in _owned_badge_files(out) - expected:
+        path.unlink()
+        removed += 1
+
+    for directory in sorted(
+        (path for path in out.rglob("*") if path.is_dir()),
+        key=lambda path: len(path.parts),
+        reverse=True,
+    ):
+        if not any(directory.iterdir()):
+            directory.rmdir()
+
+    return removed
+
+
 def render(entries: list[dict], out: Path) -> tuple[int, list[str]]:
     """Write the endpoint documents.
 
@@ -167,15 +190,18 @@ def render(entries: list[dict], out: Path) -> tuple[int, list[str]]:
     out.mkdir(parents=True, exist_ok=True)
     problems: list[str] = []
     written = 0
+    expected: set[Path] = {out / "unknown.json"}
 
     by_repo: dict[str, list[dict]] = {}
 
     for entry in entries:
         name = str(entry.get("name", "")).strip()
         if name and "/" not in name and ".." not in name:
-            (out / f"{name}.json").write_text(
+            target = out / f"{name}.json"
+            target.write_text(
                 json.dumps(badge_for(entry), indent=2) + "\n", encoding="utf-8",
             )
+            expected.add(target)
             written += 1
         else:
             problems.append(f"entry with repo {entry.get('repo')!r} has an unusable name {name!r}")
@@ -195,6 +221,7 @@ def render(entries: list[dict], out: Path) -> tuple[int, list[str]]:
         target.write_text(
             json.dumps(badge_for_repo(group), indent=2) + "\n", encoding="utf-8",
         )
+        expected.add(target)
         written += 1
 
     # Served for anything not in the registry, so an unlisted repo renders
@@ -202,6 +229,7 @@ def render(entries: list[dict], out: Path) -> tuple[int, list[str]]:
     (out / "unknown.json").write_text(
         json.dumps(UNKNOWN, indent=2) + "\n", encoding="utf-8",
     )
+    _prune_orphaned_badges(out, expected)
 
     return written, problems
 

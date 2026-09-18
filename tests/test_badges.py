@@ -151,6 +151,27 @@ def test_a_malformed_entry_does_not_stop_the_others(tmp_path):
     assert written >= 2
 
 
+def test_render_prunes_orphaned_endpoints_and_empty_owner_directories(tmp_path):
+    render([entry(name="withdrawn", repo="oraios/serena")], tmp_path)
+    render([entry(name="current", repo="acme/current")], tmp_path)
+
+    assert not (tmp_path / "withdrawn.json").exists()
+    assert not (tmp_path / "oraios" / "serena.json").exists()
+    assert not (tmp_path / "oraios").exists()
+    assert (tmp_path / "current.json").exists()
+    assert (tmp_path / "acme" / "current.json").exists()
+    assert (tmp_path / "unknown.json").exists()
+
+
+def test_render_keeps_non_json_files_outside_its_ownership(tmp_path):
+    note = tmp_path / "keep.txt"
+    note.write_text("not an endpoint\n", encoding="utf-8")
+
+    render([entry()], tmp_path)
+
+    assert note.read_text(encoding="utf-8") == "not an endpoint\n"
+
+
 def test_output_stays_inside_the_badge_directory(tmp_path):
     render([entry(name="../escape", repo="../../etc/passwd")], tmp_path)
     for path in tmp_path.rglob("*.json"):
@@ -221,9 +242,12 @@ def test_the_committed_endpoints_are_what_the_renderer_produces_today(tmp_path):
 
     fresh_files = sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("*.json"))
     live_files = sorted(p.relative_to(committed) for p in committed.rglob("*.json"))
-    assert live_files == fresh_files, (
-        "docs/badge/ has files the renderer no longer produces (or is missing "
-        "new ones) -- run `python scripts/render_badges.py` and commit the result"
+    unexpected = sorted(set(live_files) - set(fresh_files))
+    missing = sorted(set(fresh_files) - set(live_files))
+    assert not unexpected and not missing, (
+        "docs/badge/ endpoint paths drift from the renderer: "
+        f"unexpected={unexpected or 'none'}; missing={missing or 'none'} -- "
+        "run `python scripts/render_badges.py` and commit the result"
     )
 
     stale = [
