@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, wire_method
 
 # `SubscribeRequest`/`UnsubscribeRequest` are the MCP SDK's own model names
 # -- distinctive, no false-positive risk.
@@ -15,8 +15,11 @@ SUBSCRIBE_CODE_RX = re.compile(r"\bSubscribeRequest\b|\bUnsubscribeRequest\b")
 TS_SUBSCRIBE_CODE_RX = re.compile(
     r"\b(?:Subscribe|Unsubscribe)Request(?:Params|Schema)?\b"
 )
+JS_SUBSCRIBE_CODE_RX = re.compile(
+    r"\bsetRequestHandler\s*\(\s*(?:Subscribe|Unsubscribe)Request(?:Params|Schema)?\b"
+)
 
-WIRE_RX = r"resources/subscribe|resources/unsubscribe"
+WIRE_RX = wire_method("resources/subscribe", "resources/unsubscribe")
 MESSAGE_CODE = "References the removed SubscribeRequest/UnsubscribeRequest handler."
 MESSAGE_WIRE = (
     "References the removed resources/subscribe or resources/unsubscribe "
@@ -33,11 +36,13 @@ class ResourceSubscriptionsReplaced(Rule):
         "resources/subscribe and resources/unsubscribe are gone. Move subscription "
         "management to the new subscriptions/listen call."
     )
-    languages = ("python", "typescript")
+    languages = ("python", "typescript", "javascript")
 
     def check(self, project: Project) -> list[Finding]:
         if project.language == "typescript":
             return self._check_ts(project)
+        if project.language == "javascript":
+            return self._check_js(project)
         return self._check_python(project)
 
     def _check_python(self, project: Project) -> list[Finding]:
@@ -63,6 +68,20 @@ class ResourceSubscriptionsReplaced(Rule):
                 # A dispatcher line can carry both signals at once, e.g.
                 # `case "resources/subscribe": return this.subscribe(SubscribeRequestSchema);`
                 # -- that's one removed-method usage, not two.
+                if (str(f.path), line) in seen:
+                    continue
+                seen.add((str(f.path), line))
+                out.append(self.finding(message, f, line, text))
+        return sorted(out, key=lambda x: (str(x.path or ""), x.line or 0))
+
+    def _check_js(self, project: Project) -> list[Finding]:
+        seen: set[tuple[str, int]] = set()
+        out: list[Finding] = []
+        for pattern, message, search in (
+            (JS_SUBSCRIBE_CODE_RX.pattern, MESSAGE_CODE, project.search_code),
+            (WIRE_RX, MESSAGE_WIRE, project.search_wire),
+        ):
+            for f, line, text in search(pattern):
                 if (str(f.path), line) in seen:
                     continue
                 seen.add((str(f.path), line))
