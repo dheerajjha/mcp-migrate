@@ -26,6 +26,9 @@ import pytest
 
 from mcp_migrate.rules.base import Project, SourceFile
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
+from mcp_migrate.rules.r013_subscriptions_replaced import (
+    ResourceSubscriptionsReplaced,
+)
 from mcp_migrate.rules.r012_logging_set_level_removed import LoggingSetLevelRemoved
 from mcp_migrate.rules.r017_resource_not_found_code_changed import (
     ResourceNotFoundCodeChanged,
@@ -132,6 +135,39 @@ def test_r012_ignores_comments_and_longer_wire_names_in_javascript():
         'const method = "logging/setLevelExtra";\n'
     )
     assert LoggingSetLevelRemoved().check(project) == []
+
+
+def test_r013_finds_removed_subscribe_request_symbols_in_javascript():
+    project = _js_project(
+        'const { SubscribeRequestSchema } = require("@modelcontextprotocol/sdk/types.js");\n'
+        "server.setRequestHandler(SubscribeRequestSchema, handler);\n"
+    )
+    findings = ResourceSubscriptionsReplaced().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 2
+
+
+def test_r013_finds_removed_resource_subscription_wire_methods_in_javascript():
+    project = _js_project('if (method === "resources/subscribe") return subscribe();\n')
+    findings = ResourceSubscriptionsReplaced().check(project)
+    assert len(findings) == 1
+    assert findings[0].line == 1
+
+
+def test_r013_deduplicates_code_and_wire_hits_on_one_javascript_line():
+    project = _js_project(
+        'case "resources/subscribe": return server.setRequestHandler(SubscribeRequestSchema, handler);\n'
+    )
+    assert len(ResourceSubscriptionsReplaced().check(project)) == 1
+
+
+def test_r013_ignores_comment_only_and_longer_identifier_mentions_in_javascript():
+    project = _js_project(
+        "// resources/subscribe and SubscribeRequestSchema were removed\n"
+        "const SubscribeRequester = makeHelper();\n"
+        'const method = "resources/subscriber";\n'
+    )
+    assert ResourceSubscriptionsReplaced().check(project) == []
 
 
 def test_r017_finds_the_old_resource_not_found_code_in_javascript():

@@ -1951,13 +1951,13 @@ def test_the_reason_does_not_promise_findings_when_no_rule_ran(tmp_path, capsys)
 
 
 def test_a_config_that_disables_every_ported_rule_says_so_too(tmp_path, capsys):
-    # Same hole reached without `--rule`: config switches off all four
+    # Same hole reached without `--rule`: config switches off all six
     # rules that read JavaScript, so again nothing looked at the file.
     (tmp_path / "server.js").write_text(
         'const { SSEServerTransport } = require("@modelcontextprotocol/sdk/server/sse.js");\n'
     )
     (tmp_path / "pyproject.toml").write_text(
-        "[tool.mcp-migrate.rules]\nR001 = false\nR006 = false\nR012 = false\nR017 = false\nR021 = false\n"
+        "[tool.mcp-migrate.rules]\nR001 = false\nR006 = false\nR012 = false\nR013 = false\nR017 = false\nR021 = false\n"
     )
     assert main(["check", str(tmp_path)]) == 2
     out = _unwrapped(capsys.readouterr().out)
@@ -1973,7 +1973,7 @@ def test_a_language_that_was_read_is_still_described_by_its_coverage(tmp_path, c
     )
     assert main(["check", str(tmp_path)]) == 1
     out = _unwrapped(capsys.readouterr().out)
-    assert "JavaScript is read by 5 of 21 rules" in out
+    assert "JavaScript is read by 6 of 21 rules" in out
     assert "no rule that ran" not in out
 
 
