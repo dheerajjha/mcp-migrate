@@ -1,0 +1,12 @@
+name: invisible-playwright-mcp
+repo: feder-cr/invisible_playwright_mcp
+language: python
+grade: A
+score: 97
+checked_with: mcp-migrate 0.9.0
+spec: "2026-07-28"
+sha: 94c9736610b6ca54ed115e6241d8637f4d25a4c3
+status: ready
+submitted_by: project
+notes: >-
+  MCP browser agent that lets assistants drive a real Firefox-based browser to navigate, click, type, read, and screenshot live web pages.
