@@ -4,6 +4,22 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-09-28
+
+### Fixed
+
+- **R001's fixer no longer gives up on two shapes it used to refuse.**
+  ([#245](https://github.com/dheerajjha/mcp-migrate/issues/245),
+  [#303](https://github.com/dheerajjha/mcp-migrate/pull/303), from @Li-AmG)
+  When the header read was a function's only statement, commenting it out
+  left an empty body. When it sat on a line that also closed a bracket, the
+  closing bracket went with it. Either way the guard refused the whole file,
+  so `fix --write` did nothing. Now the first shape keeps an indented `pass`
+  beside the TODO, and the second leaves the line in place with the TODO
+  above it. Both results parse, and a second run changes nothing.
+
+`check` is untouched, so no grade moves.
+
 ## [0.10.0] - 2026-09-28
 
 ### Added

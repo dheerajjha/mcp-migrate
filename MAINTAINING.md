@@ -4,7 +4,7 @@ Notes for whoever maintains this next. The architecture is readable from the
 code, so this file is deliberately not about architecture — it is about the
 things that cost someone a day to learn and are invisible in a diff.
 
-Accurate as of 0.10.0 (2026-09-28).
+Accurate as of 0.10.1 (2026-09-28).
 
 ## 1. What it is, in one sentence
 
@@ -18,7 +18,7 @@ package renames rather than the protocol changes.
 
 ```
 $ mcp-migrate check ./my-server
-mcp-migrate v0.10.0  ->  my-server
+mcp-migrate v0.10.1  ->  my-server
 17 Python files, 21 rules, spec 2026-07-28
 
             rule    where                        what
@@ -184,12 +184,12 @@ release.
 
 ## 6. Open work, in priority order
 
-1. **#245** — R001's fixer comments out a function's only statement, or a
-   line that closes a bracket, and the guard then refuses the whole file.
-   **Not** the import list: R001 only matches header and environment reads,
-   and never touches an import (an earlier note here said otherwise; a
-   contributor caught it by auditing the fixer before writing any code). #279 is the worked
-   example for the first shape. Labelled `mentored` and `good first issue`.
+1. **#305**: R001's fixer writes broken TypeScript when a header read closes
+   a bracket. There is no parse guard for TypeScript, so this one corrupts
+   rather than refuses. Check the other comment-out fixers for the same
+   exposure before fixing it in R001 alone. **#304** is the small Python
+   mirror image (a line that *opens* a bracket), a good first issue. #245
+   itself shipped in 0.10.1.
 2. **#105** — fixers insert comments inside string literals. The PEP 701 half
    is fixed (§3); the general case is not.
 3. **#255** — a server written against the current Python SDK (`mcp` 2.x) is
