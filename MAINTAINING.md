@@ -153,8 +153,13 @@ on 2026-09-17; applying "release when ahead" literally would have published a
 red tree over OIDC, which needs no human at the keyboard to stop it. Docs-only
 and test-only commits are not a reason to publish at all.
 
-The release is: changelog, version bump, PR, merge, tag, push tag. Then verify
-by installing from PyPI fresh — not by reading the green tick.
+The release is: changelog, version bump, PR, merge, tag, push tag, then the
+GitHub release from that version's changelog section (`gh release create
+vX.Y.Z --verify-tag --latest --notes-file …`). `release.yml` publishes to PyPI
+and nothing else. 0.8.0, 0.8.1 and 0.9.0 shipped without a release page, and
+for eleven days the Releases page called 0.7.1 the latest; they were
+backfilled on 2026-09-28. Then verify by installing from PyPI fresh — not by
+reading the green tick.
 
 Bump **minor** when a published grade moves or a documented field changes
 shape; **patch** otherwise. Docs-only and test-only commits do not need a
