@@ -55,7 +55,12 @@ class NoExtensionsDeclared(Rule):
         out: list[Finding] = []
         seen_files = set()
         # ServerCapabilities is only meaningful to R005 in files that
-        # independently show MCP surface.
+        # independently show MCP surface (#234). The gate matters more here
+        # than in most rules: R005 reports at most one finding per file, so
+        # a wrong hit does not just cost points, it silences the rule for
+        # that whole file. The same asymmetry is why a local `class
+        # ServerCapabilities` below shadows by position instead of excluding
+        # the file -- SDK evidence above the class still counts (#89).
         surface = mcp_surface_paths(project)
 
         # Approximate module-level name shadowing by source order. Once a

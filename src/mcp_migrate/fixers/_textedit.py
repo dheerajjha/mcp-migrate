@@ -400,11 +400,11 @@ def _py_comment_lines(
         for tok in g:
             if tok.type != tok_mod.COMMENT:
                 continue
-            line_no = tok.start[0]
-            line_text = source.splitlines()[line_no - 1]
-            if line_text[: tok.start[1]].strip():
+            # `tok.line` is the physical line the comment sits on. Splitting
+            # the whole source again for every comment made this quadratic.
+            if tok.line[: tok.start[1]].strip():
                 continue
-            lines.add(line_no)
+            lines.add(tok.start[0])
     except Exception:
         return all_lines
     return lines

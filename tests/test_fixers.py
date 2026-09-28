@@ -2041,6 +2041,32 @@ def test_r017_fixer_leaves_javascript_block_comment_only_mentions_alone():
     result = fix("ResourceNotFoundErrorCodeFixer", before, path="a.js")
     assert result.changed is False
     assert result.text == before
+
+
+def test_r017_fixer_leaves_an_indented_comment_alone():
+    # The shape #252 is about. `check` still fires on it, because its
+    # pattern starts at column 0; this pins the fixer's side, so fixing #252
+    # cannot quietly bring the rewrite back.
+    before = (
+        "def handler():\n"
+        "    # the old -32002 resource not found code was replaced\n"
+        "    return None\n"
+    )
+    result = fix("ResourceNotFoundErrorCodeFixer", before)
+    assert result.changed is False
+
+
+def test_r017_fixer_leaves_the_inside_of_a_block_comment_alone():
+    before = (
+        "function h() {\n"
+        "  /*\n"
+        "   * the old -32002 resource not found code was replaced\n"
+        "   */\n"
+        "  return null;\n"
+        "}\n"
+    )
+    result = fix("ResourceNotFoundErrorCodeFixer", before, path="a.ts")
+    assert result.changed is False
 # ---------------------------------------------------------------------------
 # Issue #105 -- String literal protection in fixers
 # ---------------------------------------------------------------------------
