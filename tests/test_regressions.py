@@ -956,6 +956,54 @@ def test_a_real_capabilities_declaration_still_fires(tmp_path):
     )
     assert "R005" in _findings_by_rule(tmp_path)
 
+def test_r005_ignores_local_capabilities_class_in_mcp_file(tmp_path):
+    (tmp_path / "srv.py").write_text(
+        "from mcp.server import Server\n"
+        'server = Server("demo")\n\n'
+        "class ServerCapabilities:\n"
+        "    max_connections: int = 4\n\n"
+        "caps = ServerCapabilities()\n"
+    )
+
+    assert "R005" not in _findings_by_rule(tmp_path)
+
+
+def test_r005_keeps_sdk_evidence_before_local_capabilities_class(tmp_path):
+    (tmp_path / "srv.py").write_text(
+        "from mcp.types import ServerCapabilities\n"
+        "caps = ServerCapabilities(tools={})\n\n"
+        "class ServerCapabilities:\n"
+        "    max_connections: int = 4\n"
+    )
+
+    by_rule = _findings_by_rule(tmp_path)
+
+    assert "R005" in by_rule
+    assert by_rule["R005"][0].line == 1
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        "export interface ServerCapabilities { flags: string[] }\n",
+        "export class ServerCapabilities { flags = [] }\n",
+    ],
+    ids=["interface", "class"],
+)
+def test_r005_typescript_capabilities_name_without_mcp_surface_is_silent(tmp_path, declaration):
+    (tmp_path / "server.ts").write_text(declaration)
+
+    assert "R005" not in _findings_by_rule(tmp_path)
+
+
+def test_r005_typescript_real_sdk_type_still_fires(tmp_path):
+    (tmp_path / "server.ts").write_text(
+        'import type { ServerCapabilities } from "@modelcontextprotocol/sdk/types.js";\n'
+        "const caps: ServerCapabilities = {};\n"
+    )
+
+    assert "R005" in _findings_by_rule(tmp_path)
+
 
 def test_the_surface_gate_is_not_fooled_by_a_longer_wire_name(tmp_path):
     """`logging/setLevelLatency` is a metric name, not MCP surface.

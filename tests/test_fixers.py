@@ -2020,6 +2020,27 @@ def test_r017_fixer_still_rewrites_an_unmarked_old_code():
     result = fix("ResourceNotFoundErrorCodeFixer", before, path="a.ts")
     assert result.changed
     assert "-32602" in result.text
+
+
+def test_r017_fixer_leaves_python_comment_only_mentions_alone():
+    before = "# Migration note: the old -32002 resource not found code was replaced in 2026-07-28.\n"
+    result = fix("ResourceNotFoundErrorCodeFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r017_fixer_leaves_typescript_comment_only_mentions_alone():
+    before = "// Migration note: the old -32002 resource not found code was replaced in 2026-07-28.\n"
+    result = fix("ResourceNotFoundErrorCodeFixer", before, path="a.ts")
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r017_fixer_leaves_javascript_block_comment_only_mentions_alone():
+    before = "/* Migration note: the old -32002 resource not found code was replaced in 2026-07-28. */\n"
+    result = fix("ResourceNotFoundErrorCodeFixer", before, path="a.js")
+    assert result.changed is False
+    assert result.text == before
 # ---------------------------------------------------------------------------
 # Issue #105 -- String literal protection in fixers
 # ---------------------------------------------------------------------------

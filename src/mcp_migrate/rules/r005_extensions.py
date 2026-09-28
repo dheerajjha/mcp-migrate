@@ -16,6 +16,7 @@ from .base import Finding, Project, Rule, mcp_surface_paths
 # advisory, and a wrong "you're missing extensions" aimed at code that
 # never spoke MCP is worse than a quiet miss.
 CAPS_RX = re.compile(r"\bServerCapabilities\b|\bserver_capabilities\b")
+LOCAL_CAPS_CLASS_RX = r"^\s*class\s+ServerCapabilities\b"
 EXTENSIONS_RX = re.compile(r"\bextensions\b")
 
 # --- TypeScript -----------------------------------------------------------
@@ -53,20 +54,27 @@ class NoExtensionsDeclared(Rule):
     def _check_python(self, project: Project) -> list[Finding]:
         out: list[Finding] = []
         seen_files = set()
-        # The TS path below already gates its weaker signal on an SDK
-        # import; this one had no gate at all, so a class of one's own
-        # named `ServerCapabilities` in a file that never mentions MCP read
-        # as an MCP capabilities declaration. Less overloaded than
-        # `register_client`, but the asymmetry is the point: R005 reports
-        # at most one finding per file, so a wrong hit silences the rule
-        # for that whole file as well as costing points. See #234.
+        # ServerCapabilities is only meaningful to R005 in files that
+        # independently show MCP surface.
         surface = mcp_surface_paths(project)
+
+        # Approximate module-level name shadowing by source order. Once a
+        # local ServerCapabilities class is defined, later matches are treated
+        # as local. Nested or conditional definitions are intentionally not
+        # resolved exactly.
+        local_caps_class_line = {}
+
+        for f, line, _ in project.search_code(LOCAL_CAPS_CLASS_RX):
+            local_caps_class_line.setdefault(f.path, line)
         # search_code: a comment/docstring that merely mentions
         # ServerCapabilities isn't a real capabilities declaration.
         for f, line, text in project.search_code(CAPS_RX.pattern):
             if f.path in seen_files:
                 continue
             if f.path not in surface:
+                continue
+            shadow_line = local_caps_class_line.get(f.path)
+            if shadow_line is not None and line >= shadow_line:
                 continue
             # Scoped to the file that declares capabilities, not the whole
             # project -- an unrelated module elsewhere that happens to
@@ -83,12 +91,15 @@ class NoExtensionsDeclared(Rule):
     def _check_ts(self, project: Project) -> list[Finding]:
         out: list[Finding] = []
         seen_files = set()
-
-        # Signal 1: explicit ServerCapabilities type reference.
+        surface = mcp_surface_paths(project)
+        # Signal 1: explicit ServerCapabilities type reference. The name can
+        # also belong to unrelated code, so require independent MCP surface.
         # search_code skips comments and string literals, so a JSDoc block
         # or a string mentioning the type is not a declaration.
         for f, line, text in project.search_code(TS_CAPS_TYPE_RX):
             if f.path in seen_files:
+                continue
+            if f.path not in surface:
                 continue
             if EXTENSIONS_RX.search(f.text):
                 continue
