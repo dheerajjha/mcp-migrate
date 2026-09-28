@@ -1,0 +1,7 @@
+# A 2.x server. The declared floor is what lets R010 answer "the SDK supplies
+# this" rather than "cannot tell": without it the rule stays silent for the
+# wrong reason, and this fixture would stop proving anything about R010.
+[project]
+name = "fixture-sdk2-server"
+version = "0.0.0"
+dependencies = ["mcp>=2.1"]

@@ -26,7 +26,10 @@ from mcp_migrate.rules.r007_deprecated_features import DeprecatedCoreFeatures
 from mcp_migrate.rules.r009_initialize_handshake_removed import (
     InitializeHandshakeStillImplemented,
 )
-from mcp_migrate.rules.r010_server_discover_missing import ServerDiscoverMissing
+from mcp_migrate.rules.r010_server_discover_missing import (
+    ServerDiscoverMissing,
+    _has_request_handlers,
+)
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
 from mcp_migrate.rules.r017_resource_not_found_code_changed import (
     ResourceNotFoundCodeChanged,
@@ -475,6 +478,28 @@ def test_r010_is_not_suppressed_by_a_wire_name_merely_containing_discover(tmp_pa
         "a wire name that merely *contains* server/discover is not an "
         "implementation of server/discover and must not suppress R010"
     )
+
+
+SDK2_SERVER = FIXTURES / "sdk2_server"
+
+
+def test_a_python_sdk_2x_server_is_recognised_as_one():
+    # #255. Written the way SDK 2.x says to (MCPServer, and handlers passed to
+    # Server() as constructor arguments), this server used to grade A with
+    # nothing found, because every rule's evidence was 1.x-shaped. The fixture
+    # was checked against mcp 2.2.0 rather than written from the migration
+    # guide, so when the next SDK major moves these names, this test should
+    # be the thing that fails first.
+    by_rule = _findings_by_rule(SDK2_SERVER)
+
+    # cache_hints defaults to None on both entry points in 2.x.
+    assert sorted(f.path.name for f in by_rule.get("R016", [])) == ["lowlevel.py", "server.py"]
+    # The SDK registers what R010 looks for; the declared 2.x floor says so.
+    assert "R010" not in by_rule
+    # And R010 is silent because it sees the handlers and then reads the 2.x
+    # floor, not because it saw nothing. Silent-by-blindness passes the line
+    # above too, which is how this went unnoticed in the first place.
+    assert _has_request_handlers(load_project(SDK2_SERVER).for_language("python"))
 
 
 # --- 7. R015/R016 must not demand fields the framework owns ----------------
