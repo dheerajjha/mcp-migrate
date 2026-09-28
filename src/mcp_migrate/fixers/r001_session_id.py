@@ -36,18 +36,18 @@ HEADER_ACCESS_RX = re.compile(
 _OPEN_TO_CLOSE = {"(": ")", "[": "]", "{": "}"}
 
 
-def _cross_line_closing_bracket_lines(source: str, path: Path) -> set[int]:
-    """Return lines that close a bracket opened on an earlier line.
+def _cross_line_bracket_lines(source: str, path: Path) -> set[int]:
+    """Return lines at either end of a bracket pair that crosses lines.
 
-    Commenting out one of these lines can remove an outer container's closing
-    delimiter along with the obsolete header access. Tokenization keeps
-    brackets in strings and comments out of the structural scan.
+    Commenting out either endpoint can remove a delimiter needed by the other
+    line. Tokenization keeps brackets in strings and comments out of the
+    structural scan.
     """
     if path.suffix.lower() not in {".py", ".pyi"}:
         return set()
 
     stack: list[tuple[str, int]] = []
-    closing_lines: set[int] = set()
+    cross_line_bracket_lines: set[int] = set()
     all_lines = set(range(1, len(source.splitlines()) + 1))
     try:
         tokens = tokenize.generate_tokens(io.StringIO(source).readline)
@@ -63,10 +63,11 @@ def _cross_line_closing_bracket_lines(source: str, path: Path) -> set[int]:
                 return all_lines
             _, open_line = stack.pop()
             if open_line < token.start[0]:
-                closing_lines.add(token.start[0])
+                cross_line_bracket_lines.add(open_line)
+                cross_line_bracket_lines.add(token.start[0])
     except (tokenize.TokenError, SyntaxError, IndentationError, ValueError):
         return all_lines
-    return closing_lines
+    return cross_line_bracket_lines
 
 
 class SessionIdHeaderFixer(Fixer):
@@ -80,7 +81,7 @@ class SessionIdHeaderFixer(Fixer):
         changes: list[str] = []
         str_lines = string_lines(source, path)
         sole_body = sole_function_body_lines(lines, path)
-        closes_outer_bracket = _cross_line_closing_bracket_lines(source, path)
+        crosses_line_bracket = _cross_line_bracket_lines(source, path)
 
         prefix = comment_prefix(path)
         todo = f"{prefix}{TODO}"
@@ -105,7 +106,7 @@ class SessionIdHeaderFixer(Fixer):
                 todo_added = not (out and out[-1].strip(" \t\n") == todo)
                 if todo_added:
                     out.append(f"{indent}{todo}{newline}")
-                if i in closes_outer_bracket:
+                if i in crosses_line_bracket:
                     out.append(raw_line)
                     if todo_added:
                         changes.append(

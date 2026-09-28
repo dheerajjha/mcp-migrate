@@ -141,6 +141,26 @@ def test_r001_leaves_a_line_that_closes_an_outer_bracket_in_place():
     assert twice.text == once.text
 
 
+def test_r001_leaves_a_line_that_opens_a_cross_line_bracket_in_place():
+    source = (
+        "def ctx(request):\n"
+        '    value = compute(request.headers.get("Mcp-Session-Id"),\n'
+        "                    default=None)\n"
+        "    return value\n"
+    )
+
+    once = fix("SessionIdHeaderFixer", source)
+    twice = fix("SessionIdHeaderFixer", once.text)
+
+    assert once.changed
+    assert '# TODO(mcp-migrate): replaced by an explicit handle argument' in once.text
+    assert '    value = compute(request.headers.get("Mcp-Session-Id"),\n' in once.text
+    assert '# value = compute(request.headers.get' not in once.text
+    ast.parse(once.text)
+    assert not twice.changed
+    assert twice.text == once.text
+
+
 # ---------------------------------------------------------------------------
 # R009 -- initialize / notifications/initialized handshake removed
 # ---------------------------------------------------------------------------
