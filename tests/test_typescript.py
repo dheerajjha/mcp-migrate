@@ -231,46 +231,6 @@ class ListTasksRequester {
     assert TasksPollingReplacesBlockingResult().check(project) == []
 
 
-def test_r019_finds_removed_task_methods_in_javascript(tmp_path):
-    code = """\
-export function listTasks() {
-  return { method: "tasks/list" };
-}
-
-export function waitForTask() {
-  return { method: "tasks/result" };
-}
-"""
-    project = load_project(_write(tmp_path, "tasks.js", code)).for_language("javascript")
-    findings = TasksPollingReplacesBlockingResult().check(project)
-    assert len(findings) == 2
-    assert [finding.line for finding in findings] == [2, 6]
-
-
-def test_r019_finds_task_schema_names_in_javascript(tmp_path):
-    code = """\
-const { ListTasksRequestSchema, GetTaskPayloadRequestSchema } = require("@modelcontextprotocol/sdk/types.js");
-
-server.setRequestHandler(ListTasksRequestSchema, async () => ({ tasks: [] }));
-"""
-    project = load_project(_write(tmp_path, "tasks_schema.js", code)).for_language(
-        "javascript"
-    )
-    findings = TasksPollingReplacesBlockingResult().check(project)
-    assert [finding.line for finding in findings] == [1, 3]
-
-
-def test_r019_ignores_javascript_comment_only_mentions(tmp_path):
-    code = """\
-// tasks/list and tasks/result were replaced by polling tasks/get.
-export const protocolVersion = "2026-07-28";
-"""
-    project = load_project(_write(tmp_path, "notes.js", code)).for_language(
-        "javascript"
-    )
-    assert TasksPollingReplacesBlockingResult().check(project) == []
-
-
 def test_r015_finds_missing_result_type_in_typescript(tmp_path):
     code = """\
 export function handle(request: { method: string; id: string | number }) {
@@ -1816,11 +1776,14 @@ def test_a_language_with_no_backend_still_exits_unscannable(tmp_path, capsys):
 
 
 def test_javascript_with_no_covered_finding_exits_zero_not_unscannable(tmp_path, capsys):
-    # JavaScript now has partial rule coverage including R019. This file
-    # uses a near-miss identifier the rule correctly ignores, so the run is
-    # still "read but clean" rather than "unscannable".
+    # JavaScript has partial rule coverage. This file holds a real breaking
+    # pattern -- per-connection state in process memory, which R002 finds
+    # in TypeScript -- that none of the rules ported to JavaScript reads.
+    # Partial coverage must still exit 0 ("read, nothing we check fired"),
+    # not 2 ("could not scan"). The fixture has to stay a genuine uncaught
+    # bug: a clean file would pass this test without testing anything.
     (tmp_path / "server.js").write_text(
-        'class ListTasksRequester { send() {} }\n'
+        'const sessions = new Map();\n'
     )
     exit_code = main(["check", str(tmp_path)])
     capsys.readouterr()
