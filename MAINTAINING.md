@@ -4,7 +4,7 @@ Notes for whoever maintains this next. The architecture is readable from the
 code, so this file is deliberately not about architecture — it is about the
 things that cost someone a day to learn and are invisible in a diff.
 
-Accurate as of 0.9.0 (2026-09-18).
+Accurate as of 0.10.0 (2026-09-28).
 
 ## 1. What it is, in one sentence
 
@@ -18,7 +18,7 @@ package renames rather than the protocol changes.
 
 ```
 $ mcp-migrate check ./my-server
-mcp-migrate v0.9.0  ->  my-server
+mcp-migrate v0.10.0  ->  my-server
 17 Python files, 21 rules, spec 2026-07-28
 
             rule    where                        what
@@ -179,19 +179,25 @@ release.
 
 ## 6. Open work, in priority order
 
-1. **#245** — still open for the `R001` import-member half. The
-   function-body half shipped in 0.7.1. Labelled `mentored`; a contributor is
-   already oriented on it.
+1. **#245** — R001's fixer comments out a function's only statement, or a
+   line that closes a bracket, and the guard then refuses the whole file.
+   **Not** the import list: R001 only matches header and environment reads,
+   and never touches an import (an earlier note here said otherwise; a
+   contributor caught it by auditing the fixer before writing any code). #279 is the worked
+   example for the first shape. Labelled `mentored` and `good first issue`.
 2. **#105** — fixers insert comments inside string literals. The PEP 701 half
    is fixed (§3); the general case is not.
 3. **#255** — a server written against the current Python SDK (`mcp` 2.x) is
    not recognised as an MCP server **at all**, and grades A. A false clean
    bill of health is the worst output this tool can produce.
-4. **#269 / #252** — R017 edits inside comments, and its regex matches at
-   column 0 regardless of indentation. Same rule, two defects; check whether
-   one fix covers both before filing work twice.
-5. **#89** — five rules decide "is this MCP?" too loosely and fire on
-   unrelated code. Upstream of a lot of false-positive reports.
+4. **#252** — R017's check matches from column 0 regardless of indentation,
+   so it still fires on indented and trailing comments. The fixer half (#269)
+   shipped in 0.10.0 and now skips every comment-only line, which makes
+   `check` the side that over-reports. Two fixer tests pin the shapes, so a
+   #252 fix cannot quietly bring the rewrite back.
+5. **#89** — R003, R006 and R011 decide "is this MCP?" too loosely and fire
+   on unrelated code. R005 and R020 are fixed (#234, #296). Upstream of a lot
+   of false-positive reports.
 6. **#259** — nothing verifies that published board grades still reproduce, so
    a rule change can move a grade silently. Pairs with the `checked_with` trap.
 7. **#172** — TypeScript is at 21 of 21 but the tool still says

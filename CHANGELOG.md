@@ -4,6 +4,38 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-28
+
+### Added
+
+- **R019 reads JavaScript**, taking JavaScript rule coverage from 5/21 to
+  6/21. ([#293](https://github.com/dheerajjha/mcp-migrate/pull/293), from
+  @motodriver) `tasks/list` and the blocking `tasks/result` were removed from
+  the spec, and a JavaScript server still calling them heard nothing. `.js`
+  routes through the TypeScript path, so comment-only mentions stay silent
+  exactly as they do in `.ts`.
+
+### Fixed
+
+- **R017's safe fixer no longer rewrites `-32002` inside comments.**
+  ([#269](https://github.com/dheerajjha/mcp-migrate/issues/269),
+  [#295](https://github.com/dheerajjha/mcp-migrate/pull/295), from
+  @motodriver) Under `--safe-only` it edited a migration note in a file
+  `check` had graded A, turning a true sentence about the old code into a
+  false one. It now skips every comment-only line: at column 0, indented, or
+  inside a `/* … */` block.
+- **R005 no longer fires on a class of your own named `ServerCapabilities`.**
+  ([#89](https://github.com/dheerajjha/mcp-migrate/issues/89),
+  [#296](https://github.com/dheerajjha/mcp-migrate/pull/296), from
+  @DevyanshMalhotra) In Python, a local class shadows the name from its
+  definition onward, so SDK evidence above it still counts. In TypeScript,
+  the bare type name now needs MCP surface in the same file, as it already
+  did in Python. Before this, `export interface ServerCapabilities {…}` in a
+  file with no MCP anywhere was a finding.
+
+No published grade moves: all 20 board entries re-grade identically at their
+pinned commits under this release.
+
 ## [0.9.0] - 2026-09-18
 
 ### Added
