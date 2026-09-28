@@ -107,6 +107,40 @@ def test_r001_idempotent():
     assert twice.text == once.text
 
 
+def test_r001_keeps_a_sole_function_body_parseable():
+    source = (
+        "def session_id(request):\n"
+        '    return request.headers.get("Mcp-Session-Id")\n'
+    )
+
+    once = fix("SessionIdHeaderFixer", source)
+    twice = fix("SessionIdHeaderFixer", once.text)
+
+    assert once.changed
+    assert '    # return request.headers.get("Mcp-Session-Id")\n' in once.text
+    assert once.text.endswith("    pass\n")
+    ast.parse(once.text)
+    assert not twice.changed
+    assert twice.text == once.text
+
+
+def test_r001_leaves_a_line_that_closes_an_outer_bracket_in_place():
+    source = (
+        "data = {\n"
+        '    "sid": request.headers.get("Mcp-Session-Id")}\n'
+    )
+
+    once = fix("SessionIdHeaderFixer", source)
+    twice = fix("SessionIdHeaderFixer", once.text)
+
+    assert once.changed
+    assert '    "sid": request.headers.get("Mcp-Session-Id")}\n' in once.text
+    assert '# "sid": request.headers.get' not in once.text
+    ast.parse(once.text)
+    assert not twice.changed
+    assert twice.text == once.text
+
+
 # ---------------------------------------------------------------------------
 # R009 -- initialize / notifications/initialized handshake removed
 # ---------------------------------------------------------------------------
