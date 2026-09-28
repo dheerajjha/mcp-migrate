@@ -487,6 +487,7 @@ def test_r010_is_not_suppressed_by_a_wire_name_merely_containing_discover(tmp_pa
 from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
 from mcp_migrate.rules.r016_cacheable_result_required import (
     CacheableResultMetadataMissing,
+    MESSAGE as R016_MESSAGE,
 )
 
 _LOWLEVEL_HANDLER = (
@@ -570,6 +571,52 @@ def test_r016_is_satisfied_by_cache_hints_configured_on_the_server(tmp_path):
         "a server that configures cache hints has handled this -- reporting it "
         "as still missing looks for the field in the wrong place"
     )
+
+
+def test_r016_is_satisfied_by_cache_hints_on_a_python_mcpserver(tmp_path):
+    # The 2.x high-level server forwards cache_hints to the low-level Server
+    # constructor, so this project-wide config should satisfy the rule too.
+    (tmp_path / "server.py").write_text(
+        "from mcp.server import CacheHint, MCPServer\n\n"
+        "mcp = MCPServer('demo', cache_hints={'tools/list': CacheHint(ttl_ms=5000)})\n\n"
+        "@mcp.tool()\n"
+        "def echo(text: str) -> str:\n"
+        "    return text\n"
+    )
+    project = load_project(tmp_path)
+    assert CacheableResultMetadataMissing().check(project) == [], (
+        "MCPServer forwards cache_hints to the same transport layer, so the "
+        "rule should not keep asking for ttlMs/cacheScope in handler code"
+    )
+
+
+def test_r016_flags_python_mcpserver_resource_without_cache_metadata(tmp_path):
+    (tmp_path / "server.py").write_text(
+        "from mcp.server import MCPServer\n\n"
+        "mcp = MCPServer('demo')\n\n"
+        "@mcp.resource('echo://static')\n"
+        "def echo_resource() -> str:\n"
+        "    return 'Echo!'\n"
+    )
+    project = load_project(tmp_path)
+    findings = CacheableResultMetadataMissing().check(project)
+    assert len(findings) == 1
+    assert findings[0].message == R016_MESSAGE
+    assert findings[0].line == 5
+
+
+def test_r016_flags_python_2x_lowlevel_constructor_resource_without_cache_metadata(tmp_path):
+    (tmp_path / "server.py").write_text(
+        "from mcp.server import Server\n\n"
+        "async def handle_read_resource(uri: str):\n"
+        "    return []\n\n"
+        "app = Server('demo', on_read_resource=handle_read_resource)\n"
+    )
+    project = load_project(tmp_path)
+    findings = CacheableResultMetadataMissing().check(project)
+    assert len(findings) == 1
+    assert findings[0].message == R016_MESSAGE
+    assert findings[0].line == 6
 
 
 def test_r016_still_fires_when_no_cache_metadata_exists_anywhere(tmp_path):

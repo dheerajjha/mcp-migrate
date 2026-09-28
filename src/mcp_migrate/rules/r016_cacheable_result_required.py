@@ -10,6 +10,17 @@ CACHEABLE_HANDLER_RX = re.compile(
     r"@[\w.]*\.(?:list_tools|list_prompts|list_resources|read_resource|"
     r"list_resource_templates)\s*\("
 )
+LOWLEVEL_CACHEABLE_CONSTRUCTOR_RX = re.compile(
+    r"\b(?:Server|MCPServer)\s*\([^)]*\bon_"
+    r"(?:list_tools|list_resources|read_resource|"
+    r"list_resource_templates|list_prompts)\s*="
+)
+MCPSERVER_CACHEABLE_DECORATOR_RX = re.compile(
+    r"\b\w*MCPServer\s*\("
+)
+HIGHLEVEL_CACHEABLE_DECORATOR_RX = re.compile(
+    r"@[\w.]*\.(?:tool|resource|prompt)\s*\("
+)
 
 # Presence check: a mention anywhere in code or string literals in the file is
 # enough to count the metadata as handled, because a wrong "still missing"
@@ -120,6 +131,21 @@ class CacheableResultMetadataMissing(Rule):
                 continue
             seen_files.add(f.path)
             out.append(self.finding(MESSAGE, f, line, text))
+        for f, line, text in project.search_code(LOWLEVEL_CACHEABLE_CONSTRUCTOR_RX.pattern):
+            if f.path in seen_files:
+                continue
+            if f.path in files_with_mention:
+                continue
+            seen_files.add(f.path)
+            out.append(self.finding(MESSAGE, f, line, text))
+        if any(project.search_code(MCPSERVER_CACHEABLE_DECORATOR_RX.pattern)):
+            for f, line, text in project.search_code(HIGHLEVEL_CACHEABLE_DECORATOR_RX.pattern):
+                if f.path in seen_files:
+                    continue
+                if f.path in files_with_mention:
+                    continue
+                seen_files.add(f.path)
+                out.append(self.finding(MESSAGE, f, line, text))
         return out
 
     def _check_ts(self, project: Project) -> list[Finding]:

@@ -10,6 +10,11 @@ LOWLEVEL_HANDLER_RX = re.compile(
     r"@[\w.]*\.(?:list_tools|call_tool|list_resources|read_resource|"
     r"list_prompts|get_prompt)\s*\("
 )
+LOWLEVEL_CONSTRUCTOR_HANDLER_RX = re.compile(
+    r"\b(?:Server|MCPServer)\s*\([^)]*\bon_"
+    r"(?:list_tools|call_tool|list_resources|read_resource|"
+    r"list_resource_templates|list_prompts|get_prompt)\s*="
+)
 # Evidence that FastMCP is in play at all. A bare `FastMCP(` misses the two
 # shapes real servers actually use, both verified against source:
 #   * subclassing -- `class QdrantMCPServer(FastMCP)` in mcp-server-qdrant,
@@ -21,6 +26,10 @@ LOWLEVEL_HANDLER_RX = re.compile(
 FASTMCP_EVIDENCE_RX = re.compile(
     r"\b\w*FastMCP\s*\(|"                    # FastMCP(...) / ErrorPreservingFastMCP(...)
     r"\bclass\s+\w+\s*\([^)]*\bFastMCP\b"    # class X(FastMCP) / class X(FastMCP[T])
+)
+MCPSERVER_EVIDENCE_RX = re.compile(
+    r"\b\w*MCPServer\s*\(|"
+    r"\bclass\s+\w+\s*\([^)]*\bMCPServer\b"
 )
 
 # FastMCP's own registration names (`.tool(`, `.resource(`, `.prompt(`) are far
@@ -106,7 +115,14 @@ TS_DISCOVER_CODE_RX = (
 def _has_request_handlers(project: Project) -> bool:
     if any(project.search_code(LOWLEVEL_HANDLER_RX.pattern)):
         return True
+    if any(project.search_code(LOWLEVEL_CONSTRUCTOR_HANDLER_RX.pattern)):
+        return True
     if any(project.search_code(FASTMCP_EVIDENCE_RX.pattern)) and (
+        any(project.search_code(FASTMCP_DECORATOR_RX.pattern))
+        or any(project.search_code(FASTMCP_FUNCTIONAL_RX.pattern))
+    ):
+        return True
+    if any(project.search_code(MCPSERVER_EVIDENCE_RX.pattern)) and (
         any(project.search_code(FASTMCP_DECORATOR_RX.pattern))
         or any(project.search_code(FASTMCP_FUNCTIONAL_RX.pattern))
     ):
@@ -275,6 +291,7 @@ def _first_handler_registration(project: Project):
     else:
         patterns = (
             LOWLEVEL_HANDLER_RX.pattern,
+            LOWLEVEL_CONSTRUCTOR_HANDLER_RX.pattern,
             FASTMCP_DECORATOR_RX.pattern,
             FASTMCP_FUNCTIONAL_RX.pattern,
         )
