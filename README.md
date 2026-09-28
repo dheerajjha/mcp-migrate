@@ -626,7 +626,7 @@ color using the table above):
 
 <!-- BOARD:START -->
 
-**18 servers checked** (8x A, 8x B, 2x C)
+**19 servers checked** (8x A, 8x B, 2x C, 1x F)
 
 All of these were checked by this project, not submitted by the servers' maintainers -- so read it as a survey, not as adoption. If you maintain one of these, [submit your own entry](registry/README.md) and it becomes yours.
 
@@ -638,7 +638,7 @@ All of these were checked by this project, not submitted by the servers' maintai
 | [cloudwatch-mcp-server](https://github.com/awslabs/mcp) | **A** | ready | python | AWS Labs MCP server for CloudWatch that gives troubleshooting agents alarm, metric, and log data for root cause analysis. |
 | [duckduckgo-mcp-server](https://github.com/nickclyde/duckduckgo-mcp-server) | **A** | ready | python | MCP server that provides web search through DuckDuckGo, with additional content fetching and parsing features. |
 | [dynamodb-mcp-server](https://github.com/awslabs/mcp) | **A** | ready | python | Official AWS DynamoDB MCP server providing expert data modeling guidance, validation, and cost analysis tools. |
-| [invisible-playwright-mcp](https://github.com/feder-cr/invisible_playwright_mcp) | **A** | ready | python | MCP browser agent that lets assistants drive a real Firefox-based browser to navigate, click, type, read, and screenshot live web pages. |
+| [financial-datasets-mcp-server](https://github.com/financial-datasets/mcp-server) | **A** | ready | python | MCP server for the Financial Datasets stock market API, exposing company financials, prices, and market news as tools. |
 | [mcp-server-tree-sitter](https://github.com/wrale/mcp-server-tree-sitter) | **A** | ready | python | MCP server providing tree-sitter code analysis so AI assistants get structure-aware access to codebases in many languages. |
 | [mcp-neo4j-cypher](https://github.com/neo4j-contrib/mcp-neo4j) | **B** | ready | python | MCP server for Neo4j that runs Cypher graph queries and supports Text2Cypher workflows over graph data. |
 | [arxiv-mcp-server](https://github.com/blazickjp/arxiv-mcp-server) | **B** | ready | python | Search, download, and read arXiv papers, with semantic search and citation tools, over MCP. |
@@ -650,6 +650,7 @@ All of these were checked by this project, not submitted by the servers' maintai
 | [excel-mcp-server](https://github.com/haris-musa/excel-mcp-server) | **B** | ready | python | Read, write, and format Excel workbooks (formulas, charts, pivot tables) over MCP, via SSE or Streamable HTTP. |
 | [mcp-server-git](https://github.com/modelcontextprotocol/servers) | **C** | ready | python | Reference MCP server for Git repository interaction, giving LLMs tools to read, search, and manipulate repos. |
 | [mcp-atlassian](https://github.com/sooperset/mcp-atlassian) | **C** | migrating | python | MCP server for Atlassian products (Confluence and Jira), supporting both Cloud and Server/Data Center deployments. |
+| [mcp-proxy](https://github.com/sparfenyuk/mcp-proxy) | **F** | migrating | python | Proxy that bridges stdio MCP clients with remote SSE or Streamable HTTP servers, and exposes local stdio servers over SSE. |
 
 <!-- BOARD:END -->
 

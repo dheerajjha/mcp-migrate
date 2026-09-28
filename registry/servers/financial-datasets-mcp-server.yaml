@@ -1,0 +1,12 @@
+name: financial-datasets-mcp-server
+repo: financial-datasets/mcp-server
+language: python
+grade: A
+score: 97
+checked_with: mcp-migrate 0.9.0
+spec: "2026-07-28"
+sha: 08e7a3dbb949d3d99bbd6d6f3a22e5f02973ec58
+status: ready
+submitted_by: project
+notes: >-
+  MCP server for the Financial Datasets stock market API, exposing company financials, prices, and market news as tools.
