@@ -4,6 +4,30 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-28
+
+### Fixed
+
+- **A server written for the Python SDK 2.x is recognised as one.**
+  ([#255](https://github.com/dheerajjha/mcp-migrate/issues/255),
+  [#307](https://github.com/dheerajjha/mcp-migrate/pull/307), from
+  @motodriver) In `mcp` 2.x, `FastMCP` became `MCPServer`, and handlers
+  arrive as `Server(...)` constructor arguments rather than decorators, so
+  R010 and R016 saw nothing. A 2.x server graded A with no findings at all.
+  Both now read the 2.x shapes. R016 fires, because `cache_hints` defaults to
+  `None` in 2.x (checked against `mcp` 2.2.0). R010 stays silent, since the
+  SDK registers that method itself, and it now does so because it read the
+  2.x floor, not because it saw nothing. Expect a 2.x server's grade to move.
+- **R001's fixer handles a header read on a line that opens a bracket.**
+  ([#304](https://github.com/dheerajjha/mcp-migrate/issues/304),
+  [#308](https://github.com/dheerajjha/mcp-migrate/pull/308), from
+  @charle-z) This is the mirror image of 0.10.1's closing-bracket case. The
+  line is kept, with the TODO above it, instead of the whole file being
+  refused.
+
+No published board grade moves: all 20 entries re-grade identically at their
+pinned commits.
+
 ## [0.10.1] - 2026-09-28
 
 ### Fixed
