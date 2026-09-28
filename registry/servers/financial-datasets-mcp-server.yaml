@@ -1,4 +1,4 @@
-name: mcp-server
+name: financial-datasets-mcp-server
 repo: financial-datasets/mcp-server
 language: python
 grade: A
