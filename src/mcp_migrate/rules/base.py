@@ -12,6 +12,18 @@ import tokenize
 from dataclasses import dataclass, field
 from pathlib import Path
 
+@dataclass(frozen=True)
+class Fires:
+    snippet: str
+    reason: str
+    language: str = "python"
+
+@dataclass(frozen=True)
+class Silent:
+    snippet: str
+    reason: str
+    language: str = "python"
+
 SEVERITIES = ("breaking", "deprecated", "advisory")
 
 # Token types that mark "content", not "code": comments and string/docstring
@@ -369,7 +381,7 @@ class Finding:
 
 class Rule:
     """Subclass this. Set the class attributes, implement check()."""
-
+    boundaries = ()
     id: str = ""
     title: str = ""
     severity: str = "advisory"  # breaking | deprecated | advisory

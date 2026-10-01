@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Fires, Project, Rule, Silent
 
 # `-32002` on its own is just a negative five-digit integer -- it could be
 # a port, a hash fragment, an unrelated sentinel, anything. What makes it a
@@ -50,7 +50,48 @@ class ResourceNotFoundCodeChanged(Rule):
         "params). Update whatever raises or checks for -32002 in this context."
     )
     languages = ("python", "typescript", "javascript")
-
+    boundaries = (
+        Fires(
+            snippet='raise McpError(-32002, "resource not found")',
+            reason="An exception uses the old resource-not-found code.",
+        ),
+        Fires(
+            snippet="RESOURCE_NOT_FOUND = -32002  # legacy code, now -32602",
+            reason="The old code is explicitly associated with resource-not-found.",
+        ),
+        Silent(
+            snippet="LEGACY_RESOURCE_NOT_FOUND = -32002",
+            reason="A deliberately named legacy constant should be ignored.",
+        ),
+        Silent(
+            snippet="# the old -32002 resource not found code was replaced",
+            reason="A standalone comment is not an active use of the code.",
+        ),
+        Silent(
+            snippet="TIMEOUT_CODE = -32002",
+            reason="The code is used for a timeout, not resource-not-found.",
+        ),
+        Fires(
+            snippet='return { code: -32002, message: "resource not found" };',
+            reason="A TypeScript response uses the old resource-not-found code.",
+            language="typescript",
+        ),
+        Fires(
+            snippet='return { code: -32002, message: "resource not found" };',
+            reason="A JavaScript response uses the old resource-not-found code.",
+            language="javascript",
+        ),
+        Silent(
+            snippet="// the old -32002 resource not found code was replaced",
+            reason="A TypeScript comment does not use the code.",
+            language="typescript",
+        ),
+        Silent(
+            snippet="const LEGACY_RESOURCE_NOT_FOUND = -32002;",
+            reason="A deliberately named TypeScript legacy constant should be ignored.",
+            language="typescript",
+        ),
+    )
     def check(self, project: Project) -> list[Finding]:
         # No language branch needed: the qualifying context is plain text
         # (a numeric literal plus nearby English words), not a
