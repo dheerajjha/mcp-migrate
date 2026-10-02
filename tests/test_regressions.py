@@ -19,7 +19,7 @@ import pytest
 
 from mcp_migrate.cli import run_check
 from mcp_migrate.grade import RULE_CAP, WEIGHT, score
-from mcp_migrate.rules.base import Finding, Rule
+from mcp_migrate.rules.base import Finding, Project, Rule, SourceFile, server_call_keywords
 from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r007_deprecated_features import DeprecatedCoreFeatures
@@ -500,6 +500,28 @@ def test_a_python_sdk_2x_server_is_recognised_as_one():
     # floor, not because it saw nothing. Silent-by-blindness passes the line
     # above too, which is how this went unnoticed in the first place.
     assert _has_request_handlers(load_project(SDK2_SERVER).for_language("python"))
+
+
+@pytest.mark.parametrize("source,expected", [
+    ('server = Server("demo", on_list_tools=handler)\n', [1]),
+    ('server = Server(\n    "demo",\n    on_list_tools=handler,\n)\n', [3]),
+    ('server = Server("demo", name="x",\n                on_list_tools=handler)\n', [2]),
+    ('server = mcp.server.Server(\n    "demo", on_list_tools=handler)\n', [2]),
+    # The keyword belongs to make(), not to Server().
+    ('server = Server("demo", handlers=make(on_list_tools=handler))\n', []),
+    ('"""Server(on_list_tools=...)"""\n# Server("d", on_list_tools=x)\n', []),
+    # Does not parse, so the one-line fallback answers.
+    ('server = Server("demo", on_list_tools=handler)\ndef broken(:\n', [1]),
+], ids=["one-line", "black", "later-line", "attribute", "nested", "prose", "unparseable"])
+def test_server_call_keywords_sees_the_call_however_it_is_wrapped(source, expected):
+    # #313: SDK 2.x handlers are constructor arguments, and a formatter puts
+    # `Server(` and `on_list_tools=` on different lines. The line-at-a-time
+    # regex in R010 and R016 missed that, the most common shape of all.
+    project = Project(
+        root=Path("."), files=[SourceFile(path=Path("s.py"), text=source, language="python")]
+    )
+    hits = server_call_keywords(project, ("on_list_tools",), r"\bServer\s*\([^)]*\bon_list_tools\s*=")
+    assert [line for _f, line, _text in hits] == expected
 
 
 # --- 7. R015/R016 must not demand fields the framework owns ----------------

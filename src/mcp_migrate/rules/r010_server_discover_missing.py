@@ -1,7 +1,7 @@
 import re
 
 from ..sdk import declared_mcp_floor
-from .base import Finding, Project, Rule, wire_method
+from .base import Finding, Project, Rule, server_call_keywords, wire_method
 
 # Evidence the project registers real MCP request handlers -- the
 # low-level SDK's own decorator names (list_tools, call_tool, ...) are
@@ -14,6 +14,13 @@ LOWLEVEL_CONSTRUCTOR_HANDLER_RX = re.compile(
     r"\b(?:Server|MCPServer)\s*\([^)]*\bon_"
     r"(?:list_tools|call_tool|list_resources|read_resource|"
     r"list_resource_templates|list_prompts|get_prompt)\s*="
+)
+# The same names as keywords, for server_call_keywords: the regex above only
+# sees a call whose handler sits on the `Server(` line, and is kept as the
+# fallback for a file that will not parse.
+LOWLEVEL_CONSTRUCTOR_HANDLERS = (
+    "on_list_tools", "on_call_tool", "on_list_resources", "on_read_resource",
+    "on_list_resource_templates", "on_list_prompts", "on_get_prompt",
 )
 # Evidence that FastMCP is in play at all. A bare `FastMCP(` misses the two
 # shapes real servers actually use, both verified against source:
@@ -115,7 +122,9 @@ TS_DISCOVER_CODE_RX = (
 def _has_request_handlers(project: Project) -> bool:
     if any(project.search_code(LOWLEVEL_HANDLER_RX.pattern)):
         return True
-    if any(project.search_code(LOWLEVEL_CONSTRUCTOR_HANDLER_RX.pattern)):
+    if server_call_keywords(
+        project, LOWLEVEL_CONSTRUCTOR_HANDLERS, LOWLEVEL_CONSTRUCTOR_HANDLER_RX.pattern
+    ):
         return True
     if any(project.search_code(FASTMCP_EVIDENCE_RX.pattern)) and (
         any(project.search_code(FASTMCP_DECORATOR_RX.pattern))
@@ -289,9 +298,13 @@ def _first_handler_registration(project: Project):
     if project.language == "typescript":
         patterns = (TS_LOWLEVEL_HANDLER_RX, TS_MCPSERVER_REGISTER_RX)
     else:
+        for f, i, _ in project.search_code(LOWLEVEL_HANDLER_RX.pattern):
+            return f, i
+        for f, i, _ in server_call_keywords(
+            project, LOWLEVEL_CONSTRUCTOR_HANDLERS, LOWLEVEL_CONSTRUCTOR_HANDLER_RX.pattern
+        ):
+            return f, i
         patterns = (
-            LOWLEVEL_HANDLER_RX.pattern,
-            LOWLEVEL_CONSTRUCTOR_HANDLER_RX.pattern,
             FASTMCP_DECORATOR_RX.pattern,
             FASTMCP_FUNCTIONAL_RX.pattern,
         )

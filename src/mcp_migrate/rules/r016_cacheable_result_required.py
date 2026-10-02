@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, server_call_keywords
 
 # Only the five *list-shaped* results are cacheable per SEP-2549 --
 # call_tool/get_prompt are not in that list, so a file that only
@@ -14,6 +14,12 @@ LOWLEVEL_CACHEABLE_CONSTRUCTOR_RX = re.compile(
     r"\b(?:Server|MCPServer)\s*\([^)]*\bon_"
     r"(?:list_tools|list_resources|read_resource|"
     r"list_resource_templates|list_prompts)\s*="
+)
+# The same names as keywords, for server_call_keywords; the regex above is
+# the fallback for a file that will not parse (see r010).
+LOWLEVEL_CACHEABLE_CONSTRUCTOR_HANDLERS = (
+    "on_list_tools", "on_list_resources", "on_read_resource",
+    "on_list_resource_templates", "on_list_prompts",
 )
 MCPSERVER_CACHEABLE_DECORATOR_RX = re.compile(
     r"\b\w*MCPServer\s*\("
@@ -131,7 +137,9 @@ class CacheableResultMetadataMissing(Rule):
                 continue
             seen_files.add(f.path)
             out.append(self.finding(MESSAGE, f, line, text))
-        for f, line, text in project.search_code(LOWLEVEL_CACHEABLE_CONSTRUCTOR_RX.pattern):
+        for f, line, text in server_call_keywords(
+            project, LOWLEVEL_CACHEABLE_CONSTRUCTOR_HANDLERS, LOWLEVEL_CACHEABLE_CONSTRUCTOR_RX.pattern
+        ):
             if f.path in seen_files:
                 continue
             if f.path in files_with_mention:
