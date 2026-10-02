@@ -4,6 +4,22 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-10-02
+
+### Fixed
+
+- **A Python SDK 2.x server formatted by black is recognised as one too.**
+  ([#314](https://github.com/dheerajjha/mcp-migrate/pull/314)) 0.11.0 taught
+  R010 and R016 that 2.x takes handlers as `Server(...)` constructor
+  arguments, but matched one line at a time. The way black writes that call,
+  `Server(` on a line of its own with `on_list_tools=` below it, still read as
+  a server with no handlers and graded clean. The arguments are now read from
+  the call itself, however it is wrapped, and comments and strings no longer
+  count as arguments.
+
+No published board grade moves: all 20 entries re-grade identically at their
+pinned commits.
+
 ## [0.11.0] - 2026-09-28
 
 ### Fixed

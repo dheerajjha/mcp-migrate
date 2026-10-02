@@ -4,7 +4,7 @@ Notes for whoever maintains this next. The architecture is readable from the
 code, so this file is deliberately not about architecture — it is about the
 things that cost someone a day to learn and are invisible in a diff.
 
-Accurate as of 0.11.0 (2026-09-28).
+Accurate as of 0.11.1 (2026-10-02).
 
 ## 1. What it is, in one sentence
 
@@ -18,7 +18,7 @@ package renames rather than the protocol changes.
 
 ```
 $ mcp-migrate check ./my-server
-mcp-migrate v0.11.0  ->  my-server
+mcp-migrate v0.11.1  ->  my-server
 17 Python files, 21 rules, spec 2026-07-28
 
             rule    where                        what
@@ -195,8 +195,11 @@ release.
    itself (`@app.subscribe_resource()` in 1.x, `on_subscribe_resource=` and
    `on_ping=` in 2.x). A 1.x server doing that grades A/100, which is a false
    clean bill of health, the worst output this tool can produce. **#255**
-   (SDK 2.x) is mostly done: detection shipped in 0.11.0, and
-   `tests/fixtures/sdk2_server` pins it. What's left is per-rule.
+   (SDK 2.x) is mostly done: detection shipped in 0.11.0, 0.11.1 made it see a
+   black-formatted `Server(` call, and `tests/fixtures/sdk2_server` pins both.
+   What's left is per-rule. Use `server_call_keywords` for constructor
+   arguments rather than a line regex. #313 (R013's half of #310) is
+   switching to it.
 4. **#252** — R017's check matches from column 0 regardless of indentation,
    so it still fires on indented and trailing comments. The fixer half (#269)
    shipped in 0.10.0 and now skips every comment-only line, which makes
