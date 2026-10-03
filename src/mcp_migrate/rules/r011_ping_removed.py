@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, server_call_keywords
 
 # `PingRequest` is the MCP SDK's own model name -- distinctive, essentially
 # never appears outside MCP code. In TypeScript the SDK exports
@@ -27,6 +27,14 @@ PING_DISPATCH_RX = re.compile(
     r"method\s*==\s*[\"']ping[\"']|case\s*[\"']ping[\"']|[{,]\s*[\"']ping[\"']\s*:"
 )
 
+# mcp 2.x registers the removed ping handler as a Server() constructor
+# argument, which contains neither PingRequest nor a "ping" dispatch string:
+#   Server("demo", on_ping=ping)
+# Distinctive enough that it does not need the generic-name gate `.tool(` does.
+# One-line fallback for files that do not parse. Multi-line and black-formatted
+# Server(...) calls are handled by server_call_keywords (#314).
+SDK_CONSTRUCTOR_KW_RX = r"\b(?:Server|MCPServer)\s*\([^)]*\bon_ping\s*="
+
 # --- TypeScript -----------------------------------------------------------
 #
 # Same two signals, adapted for TS syntax. `===` is the idiomatic equality
@@ -51,6 +59,7 @@ TS_MCP_SURFACE_RX = re.compile(
 
 MESSAGE_CODE = "References the removed PingRequest handler."
 MESSAGE_DISPATCH = "Dispatches the removed `ping` JSON-RPC method."
+MESSAGE_SDK = "Registers the removed ping handler through the SDK."
 
 
 class PingRemoved(Rule):
@@ -75,6 +84,12 @@ class PingRemoved(Rule):
             out.append(self.finding(MESSAGE_CODE, f, line, text))
         for f, line, text in project.search_code(PING_DISPATCH_RX.pattern):
             out.append(self.finding(MESSAGE_DISPATCH, f, line, text))
+        for f, line, text in server_call_keywords(
+            project,
+            ("on_ping",),
+            SDK_CONSTRUCTOR_KW_RX,
+        ):
+            out.append(self.finding(MESSAGE_SDK, f, line, text))
         return out
 
     def _check_ts(self, project: Project) -> list[Finding]:
