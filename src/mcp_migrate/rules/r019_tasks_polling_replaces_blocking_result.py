@@ -37,10 +37,10 @@ class TasksPollingReplacesBlockingResult(Rule):
         "tasks/get + tasks/update. Tasks itself moved out of core into the "
         "io.modelcontextprotocol/tasks extension -- declare it there instead."
     )
-    languages = ("python", "typescript")
+    languages = ("python", "typescript", "javascript")
 
     def check(self, project: Project) -> list[Finding]:
-        if project.language == "typescript":
+        if project.language in ("typescript", "javascript"):
             return self._check_ts(project)
         return self._check_python(project)
 
@@ -57,9 +57,9 @@ class TasksPollingReplacesBlockingResult(Rule):
         return out
 
     def _check_ts(self, project: Project) -> list[Finding]:
-        # Same two signals as Python: the SDK schema name is code, and the
-        # wire method name only ever exists inside a string literal, which
-        # search_code discards wholesale.
+        # TypeScript and JavaScript share the same two signals here: the SDK
+        # schema name is code, and the wire method name only ever exists
+        # inside a string literal, which search_code discards wholesale.
         seen: set[tuple[str, int]] = set()
         out: list[Finding] = []
         for pattern, message, search in (

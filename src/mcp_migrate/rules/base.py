@@ -12,6 +12,18 @@ import tokenize
 from dataclasses import dataclass, field
 from pathlib import Path
 
+@dataclass(frozen=True)
+class Fires:
+    snippet: str
+    reason: str
+    language: str = "python"
+
+@dataclass(frozen=True)
+class Silent:
+    snippet: str
+    reason: str
+    language: str = "python"
+
 SEVERITIES = ("breaking", "deprecated", "advisory")
 
 # Token types that mark "content", not "code": comments and string/docstring
@@ -186,6 +198,56 @@ class Project:
                 elif isinstance(node, ast.ImportFrom) and node.module:
                     names.add(node.module)
         return names
+
+
+# The SDK's server classes, as a call site names them: `Server(...)`,
+# `mcp.server.Server(...)`, `MCPServer(...)`.
+SDK_SERVER_CLASSES = frozenset({"Server", "MCPServer"})
+
+
+def server_call_keywords(
+    project: Project, names: tuple[str, ...], fallback_pattern: str
+) -> list[tuple[SourceFile, int, str]]:
+    """Where a `Server(...)` or `MCPServer(...)` call is passed one of `names`.
+
+    SDK 2.x takes low-level handlers as constructor arguments, and formatters
+    give each argument a line of its own: `Server(` alone, `on_list_tools=...`
+    further down. A line-at-a-time regex never sees the two together, so a
+    black-formatted 2.x server read as having no handlers at all. Walking the
+    call's keywords in the AST has no such blind spot, and a comment or a
+    string cannot pass for a keyword argument.
+
+    A file that does not parse keeps the one-line match, `fallback_pattern`,
+    so this never finds less than the regex it replaced.
+    """
+    wanted = frozenset(names)
+    out: list[tuple[SourceFile, int, str]] = []
+    for f in project.files:
+        if f.language != "python":
+            continue
+        tree = f.tree
+        if tree is None:
+            try:
+                tree = ast.parse(f.text)
+            except (SyntaxError, ValueError):
+                out.extend(Project(root=project.root, files=[f]).search_code(fallback_pattern))
+                continue
+        lines = f.lines
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            called = (
+                func.id if isinstance(func, ast.Name)
+                else func.attr if isinstance(func, ast.Attribute)
+                else None
+            )
+            if called not in SDK_SERVER_CLASSES:
+                continue
+            for keyword in node.keywords:
+                if keyword.arg in wanted:
+                    out.append((f, keyword.lineno, lines[keyword.lineno - 1].strip()))
+    return sorted(out, key=lambda hit: (str(hit[0].path), hit[1]))
 
 
 def _content_spans(text: str) -> list[tuple[tuple[int, int], tuple[int, int]]] | None:
@@ -369,7 +431,7 @@ class Finding:
 
 class Rule:
     """Subclass this. Set the class attributes, implement check()."""
-
+    boundaries = ()
     id: str = ""
     title: str = ""
     severity: str = "advisory"  # breaking | deprecated | advisory

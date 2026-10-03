@@ -4,7 +4,7 @@ Notes for whoever maintains this next. The architecture is readable from the
 code, so this file is deliberately not about architecture — it is about the
 things that cost someone a day to learn and are invisible in a diff.
 
-Accurate as of 0.9.0 (2026-09-18).
+Accurate as of 0.12.0 (2026-10-03).
 
 ## 1. What it is, in one sentence
 
@@ -18,7 +18,7 @@ package renames rather than the protocol changes.
 
 ```
 $ mcp-migrate check ./my-server
-mcp-migrate v0.9.0  ->  my-server
+mcp-migrate v0.12.0  ->  my-server
 17 Python files, 21 rules, spec 2026-07-28
 
             rule    where                        what
@@ -153,8 +153,13 @@ on 2026-09-17; applying "release when ahead" literally would have published a
 red tree over OIDC, which needs no human at the keyboard to stop it. Docs-only
 and test-only commits are not a reason to publish at all.
 
-The release is: changelog, version bump, PR, merge, tag, push tag. Then verify
-by installing from PyPI fresh — not by reading the green tick.
+The release is: changelog, version bump, PR, merge, tag, push tag, then the
+GitHub release from that version's changelog section (`gh release create
+vX.Y.Z --verify-tag --latest --notes-file …`). `release.yml` publishes to PyPI
+and nothing else. 0.8.0, 0.8.1 and 0.9.0 shipped without a release page, and
+for eleven days the Releases page called 0.7.1 the latest; they were
+backfilled on 2026-09-28. Then verify by installing from PyPI fresh — not by
+reading the green tick.
 
 Bump **minor** when a published grade moves or a documented field changes
 shape; **patch** otherwise. Docs-only and test-only commits do not need a
@@ -179,19 +184,27 @@ release.
 
 ## 6. Open work, in priority order
 
-1. **#245** — still open for the `R001` import-member half. The
-   function-body half shipped in 0.7.1. Labelled `mentored`; a contributor is
-   already oriented on it.
+1. **#305**: R001's fixer writes broken TypeScript when a header read closes
+   a bracket. There is no parse guard for TypeScript, so this one corrupts
+   rather than refuses. Check the other comment-out fixers for the same
+   exposure before fixing it in R001 alone. The Python side is done: #245
+   shipped in 0.10.1 and its mirror image, #304, in 0.11.0.
 2. **#105** — fixers insert comments inside string literals. The PEP 701 half
    is fixed (§3); the general case is not.
-3. **#255** — a server written against the current Python SDK (`mcp` 2.x) is
-   not recognised as an MCP server **at all**, and grades A. A false clean
-   bill of health is the worst output this tool can produce.
-4. **#269 / #252** — R017 edits inside comments, and its regex matches at
-   column 0 regardless of indentation. Same rule, two defects; check whether
-   one fix covers both before filing work twice.
-5. **#89** — five rules decide "is this MCP?" too loosely and fire on
-   unrelated code. Upstream of a lot of false-positive reports.
+3. **#310**: R011 misses `on_ping=` passed to a 2.x `Server(`. R013's half,
+   SDK-registered subscriptions, shipped in 0.12.0 (#313). **#255**
+   (SDK 2.x) is mostly done: detection shipped in 0.11.0, 0.11.1 made it see a
+   black-formatted `Server(` call, and `tests/fixtures/sdk2_server` pins both.
+   What's left is per-rule. Use `server_call_keywords` for constructor
+   arguments rather than a line regex; R010, R016 and R013 all do.
+4. **#252** — R017's check matches from column 0 regardless of indentation,
+   so it still fires on indented and trailing comments. The fixer half (#269)
+   shipped in 0.10.0 and now skips every comment-only line, which makes
+   `check` the side that over-reports. Two fixer tests pin the shapes, so a
+   #252 fix cannot quietly bring the rewrite back.
+5. **#89** — R003, R006 and R011 decide "is this MCP?" too loosely and fire
+   on unrelated code. R005 and R020 are fixed (#234, #296). Upstream of a lot
+   of false-positive reports.
 6. **#259** — nothing verifies that published board grades still reproduce, so
    a rule change can move a grade silently. Pairs with the `checked_with` trap.
 7. **#172** — TypeScript is at 21 of 21 but the tool still says

@@ -1,10 +1,24 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, server_call_keywords
 
 # `SubscribeRequest`/`UnsubscribeRequest` are the MCP SDK's own model names
 # -- distinctive, no false-positive risk.
 SUBSCRIBE_CODE_RX = re.compile(r"\bSubscribeRequest\b|\bUnsubscribeRequest\b")
+
+# The SDK also registers these without the request class name:
+#   @app.subscribe_resource()                         -- mcp 1.x Server
+#   Server("demo", on_subscribe_resource=subscribe)   -- mcp 2.x constructor
+# Distinctive enough that they do not need the generic-name gate `.tool(` does.
+# search_code (not raw search) so a docstring naming them stays silent.
+SDK_DECORATOR_RX = re.compile(
+    r"@[\w.]*\.(?:subscribe_resource|unsubscribe_resource)\s*\("
+)
+# One-line fallback for files that do not parse. Multi-line and black-formatted
+# Server(...) calls are handled by server_call_keywords (#314).
+SDK_CONSTRUCTOR_KW_RX = (
+    r"\b(?:Server|MCPServer)\s*\([^)]*\bon_(?:subscribe_resource|unsubscribe_resource)\s*="
+)
 
 # The TypeScript SDK exports Zod schemas for request handling, and that's
 # the name a server actually references -- `server.setRequestHandler(
@@ -18,6 +32,10 @@ TS_SUBSCRIBE_CODE_RX = re.compile(
 
 WIRE_RX = r"resources/subscribe|resources/unsubscribe"
 MESSAGE_CODE = "References the removed SubscribeRequest/UnsubscribeRequest handler."
+MESSAGE_SDK = (
+    "Registers the removed subscribe_resource/unsubscribe_resource handler "
+    "through the SDK."
+)
 MESSAGE_WIRE = (
     "References the removed resources/subscribe or resources/unsubscribe "
     "JSON-RPC method."
@@ -44,6 +62,14 @@ class ResourceSubscriptionsReplaced(Rule):
         out: list[Finding] = []
         for f, line, text in project.search_code(SUBSCRIBE_CODE_RX.pattern):
             out.append(self.finding(MESSAGE_CODE, f, line, text))
+        for f, line, text in project.search_code(SDK_DECORATOR_RX.pattern):
+            out.append(self.finding(MESSAGE_SDK, f, line, text))
+        for f, line, text in server_call_keywords(
+            project,
+            ("on_subscribe_resource", "on_unsubscribe_resource"),
+            SDK_CONSTRUCTOR_KW_RX,
+        ):
+            out.append(self.finding(MESSAGE_SDK, f, line, text))
         # resources/subscribe and resources/unsubscribe are JSON-RPC method
         # strings, not valid bare identifiers -- they can only appear
         # inside a STRING token, so search_code would never find them (see

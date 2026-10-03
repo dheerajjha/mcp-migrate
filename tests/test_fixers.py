@@ -107,6 +107,60 @@ def test_r001_idempotent():
     assert twice.text == once.text
 
 
+def test_r001_keeps_a_sole_function_body_parseable():
+    source = (
+        "def session_id(request):\n"
+        '    return request.headers.get("Mcp-Session-Id")\n'
+    )
+
+    once = fix("SessionIdHeaderFixer", source)
+    twice = fix("SessionIdHeaderFixer", once.text)
+
+    assert once.changed
+    assert '    # return request.headers.get("Mcp-Session-Id")\n' in once.text
+    assert once.text.endswith("    pass\n")
+    ast.parse(once.text)
+    assert not twice.changed
+    assert twice.text == once.text
+
+
+def test_r001_leaves_a_line_that_closes_an_outer_bracket_in_place():
+    source = (
+        "data = {\n"
+        '    "sid": request.headers.get("Mcp-Session-Id")}\n'
+    )
+
+    once = fix("SessionIdHeaderFixer", source)
+    twice = fix("SessionIdHeaderFixer", once.text)
+
+    assert once.changed
+    assert '    "sid": request.headers.get("Mcp-Session-Id")}\n' in once.text
+    assert '# "sid": request.headers.get' not in once.text
+    ast.parse(once.text)
+    assert not twice.changed
+    assert twice.text == once.text
+
+
+def test_r001_leaves_a_line_that_opens_a_cross_line_bracket_in_place():
+    source = (
+        "def ctx(request):\n"
+        '    value = compute(request.headers.get("Mcp-Session-Id"),\n'
+        "                    default=None)\n"
+        "    return value\n"
+    )
+
+    once = fix("SessionIdHeaderFixer", source)
+    twice = fix("SessionIdHeaderFixer", once.text)
+
+    assert once.changed
+    assert '# TODO(mcp-migrate): replaced by an explicit handle argument' in once.text
+    assert '    value = compute(request.headers.get("Mcp-Session-Id"),\n' in once.text
+    assert '# value = compute(request.headers.get' not in once.text
+    ast.parse(once.text)
+    assert not twice.changed
+    assert twice.text == once.text
+
+
 # ---------------------------------------------------------------------------
 # R009 -- initialize / notifications/initialized handshake removed
 # ---------------------------------------------------------------------------
@@ -2020,6 +2074,53 @@ def test_r017_fixer_still_rewrites_an_unmarked_old_code():
     result = fix("ResourceNotFoundErrorCodeFixer", before, path="a.ts")
     assert result.changed
     assert "-32602" in result.text
+
+
+def test_r017_fixer_leaves_python_comment_only_mentions_alone():
+    before = "# Migration note: the old -32002 resource not found code was replaced in 2026-07-28.\n"
+    result = fix("ResourceNotFoundErrorCodeFixer", before)
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r017_fixer_leaves_typescript_comment_only_mentions_alone():
+    before = "// Migration note: the old -32002 resource not found code was replaced in 2026-07-28.\n"
+    result = fix("ResourceNotFoundErrorCodeFixer", before, path="a.ts")
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r017_fixer_leaves_javascript_block_comment_only_mentions_alone():
+    before = "/* Migration note: the old -32002 resource not found code was replaced in 2026-07-28. */\n"
+    result = fix("ResourceNotFoundErrorCodeFixer", before, path="a.js")
+    assert result.changed is False
+    assert result.text == before
+
+
+def test_r017_fixer_leaves_an_indented_comment_alone():
+    # The shape #252 is about. `check` still fires on it, because its
+    # pattern starts at column 0; this pins the fixer's side, so fixing #252
+    # cannot quietly bring the rewrite back.
+    before = (
+        "def handler():\n"
+        "    # the old -32002 resource not found code was replaced\n"
+        "    return None\n"
+    )
+    result = fix("ResourceNotFoundErrorCodeFixer", before)
+    assert result.changed is False
+
+
+def test_r017_fixer_leaves_the_inside_of_a_block_comment_alone():
+    before = (
+        "function h() {\n"
+        "  /*\n"
+        "   * the old -32002 resource not found code was replaced\n"
+        "   */\n"
+        "  return null;\n"
+        "}\n"
+    )
+    result = fix("ResourceNotFoundErrorCodeFixer", before, path="a.ts")
+    assert result.changed is False
 # ---------------------------------------------------------------------------
 # Issue #105 -- String literal protection in fixers
 # ---------------------------------------------------------------------------

@@ -22,6 +22,112 @@ All notable changes to this project are documented here.
   keys in `--json` output, both omitted unless requested so existing
   consumers see unchanged output.
 
+## [0.12.0] - 2026-10-03
+
+### Fixed
+
+- **R013 sees resource subscriptions registered through the SDK itself.**
+  ([#310](https://github.com/dheerajjha/mcp-migrate/issues/310),
+  [#313](https://github.com/dheerajjha/mcp-migrate/pull/313), from
+  @HarshRajSinghania) R013 only recognised the request class names and the
+  wire strings, and a server that uses the SDK's own registration has
+  neither: `@app.subscribe_resource()` in 1.x, or `on_subscribe_resource=`
+  passed to `Server()` in 2.x. Such a server graded A/100 while implementing a
+  method the spec removed. Both shapes are found now, however the 2.x call is
+  wrapped, and a docstring or comment that names them stays silent. Expect the
+  grade of a server that does this to move.
+
+No published board grade moves: all 20 entries re-grade identically at their
+pinned commits.
+
+## [0.11.1] - 2026-10-02
+
+### Fixed
+
+- **A Python SDK 2.x server formatted by black is recognised as one too.**
+  ([#314](https://github.com/dheerajjha/mcp-migrate/pull/314)) 0.11.0 taught
+  R010 and R016 that 2.x takes handlers as `Server(...)` constructor
+  arguments, but matched one line at a time. The way black writes that call,
+  `Server(` on a line of its own with `on_list_tools=` below it, still read as
+  a server with no handlers and graded clean. The arguments are now read from
+  the call itself, however it is wrapped, and comments and strings no longer
+  count as arguments.
+
+No published board grade moves: all 20 entries re-grade identically at their
+pinned commits.
+
+## [0.11.0] - 2026-09-28
+
+### Fixed
+
+- **A server written for the Python SDK 2.x is recognised as one.**
+  ([#255](https://github.com/dheerajjha/mcp-migrate/issues/255),
+  [#307](https://github.com/dheerajjha/mcp-migrate/pull/307), from
+  @motodriver) In `mcp` 2.x, `FastMCP` became `MCPServer`, and handlers
+  arrive as `Server(...)` constructor arguments rather than decorators, so
+  R010 and R016 saw nothing. A 2.x server graded A with no findings at all.
+  Both now read the 2.x shapes. R016 fires, because `cache_hints` defaults to
+  `None` in 2.x (checked against `mcp` 2.2.0). R010 stays silent, since the
+  SDK registers that method itself, and it now does so because it read the
+  2.x floor, not because it saw nothing. Expect a 2.x server's grade to move.
+- **R001's fixer handles a header read on a line that opens a bracket.**
+  ([#304](https://github.com/dheerajjha/mcp-migrate/issues/304),
+  [#308](https://github.com/dheerajjha/mcp-migrate/pull/308), from
+  @charle-z) This is the mirror image of 0.10.1's closing-bracket case. The
+  line is kept, with the TODO above it, instead of the whole file being
+  refused.
+
+No published board grade moves: all 20 entries re-grade identically at their
+pinned commits.
+
+## [0.10.1] - 2026-09-28
+
+### Fixed
+
+- **R001's fixer no longer gives up on two shapes it used to refuse.**
+  ([#245](https://github.com/dheerajjha/mcp-migrate/issues/245),
+  [#303](https://github.com/dheerajjha/mcp-migrate/pull/303), from @Li-AmG)
+  When the header read was a function's only statement, commenting it out
+  left an empty body. When it sat on a line that also closed a bracket, the
+  closing bracket went with it. Either way the guard refused the whole file,
+  so `fix --write` did nothing. Now the first shape keeps an indented `pass`
+  beside the TODO, and the second leaves the line in place with the TODO
+  above it. Both results parse, and a second run changes nothing.
+
+`check` is untouched, so no grade moves.
+
+## [0.10.0] - 2026-09-28
+
+### Added
+
+- **R019 reads JavaScript**, taking JavaScript rule coverage from 5/21 to
+  6/21. ([#293](https://github.com/dheerajjha/mcp-migrate/pull/293), from
+  @motodriver) `tasks/list` and the blocking `tasks/result` were removed from
+  the spec, and a JavaScript server still calling them heard nothing. `.js`
+  routes through the TypeScript path, so comment-only mentions stay silent
+  exactly as they do in `.ts`.
+
+### Fixed
+
+- **R017's safe fixer no longer rewrites `-32002` inside comments.**
+  ([#269](https://github.com/dheerajjha/mcp-migrate/issues/269),
+  [#295](https://github.com/dheerajjha/mcp-migrate/pull/295), from
+  @motodriver) Under `--safe-only` it edited a migration note in a file
+  `check` had graded A, turning a true sentence about the old code into a
+  false one. It now skips every comment-only line: at column 0, indented, or
+  inside a `/* … */` block.
+- **R005 no longer fires on a class of your own named `ServerCapabilities`.**
+  ([#89](https://github.com/dheerajjha/mcp-migrate/issues/89),
+  [#296](https://github.com/dheerajjha/mcp-migrate/pull/296), from
+  @DevyanshMalhotra) In Python, a local class shadows the name from its
+  definition onward, so SDK evidence above it still counts. In TypeScript,
+  the bare type name now needs MCP surface in the same file, as it already
+  did in Python. Before this, `export interface ServerCapabilities {…}` in a
+  file with no MCP anywhere was a finding.
+
+No published grade moves: all 20 board entries re-grade identically at their
+pinned commits under this release.
+
 ## [0.9.0] - 2026-09-18
 
 ### Added

@@ -17,7 +17,11 @@ from pathlib import Path
 
 import pytest
 
-from mcp_migrate.rules.r010_server_discover_missing import ServerDiscoverMissing
+from mcp_migrate.rules.r010_server_discover_missing import (
+    ServerDiscoverMissing,
+    _first_handler_registration,
+    _has_request_handlers,
+)
 from mcp_migrate.scan import load_project
 from mcp_migrate.sdk import _floor_from_requirement, declared_mcp_floor
 
@@ -136,6 +140,67 @@ def test_r010_is_silent_on_a_declared_2x_project(tmp_path):
           '[project]\nname = "x"\nversion = "0"\ndependencies = ["mcp>=2.0.0"]\n')
 
     assert check_r010(tmp_path) == []
+
+
+def test_r010_is_silent_on_a_declared_2x_mcpserver_project(tmp_path):
+    """The 2.x high-level server shape is still a real MCP server, so the
+    handler-evidence gate must open before the 2.x floor silences the rule."""
+    write(
+        tmp_path,
+        "server.py",
+        "from mcp.server.mcpserver import MCPServer\n\n"
+        "mcp = MCPServer('demo')\n\n"
+        "@mcp.tool()\n"
+        "def echo(text: str) -> str:\n"
+        "    return text\n",
+    )
+    write(tmp_path, "pyproject.toml",
+          '[project]\nname = "x"\nversion = "0"\ndependencies = ["mcp>=2.0.0"]\n')
+
+    assert check_r010(tmp_path) == []
+
+
+def test_r010_detects_python_2x_mcpserver_handler_evidence(tmp_path):
+    """Step 1 of #255: the high-level 2.x MCPServer shape must still count as
+    a real MCP server before the 2.x floor decides whether to stay silent."""
+    write(
+        tmp_path,
+        "server.py",
+        "from mcp.server.mcpserver import MCPServer\n\n"
+        "mcp = MCPServer('demo')\n\n"
+        "@mcp.tool()\n"
+        "def echo(text: str) -> str:\n"
+        "    return text\n",
+    )
+
+    project = load_project(tmp_path)
+    assert _has_request_handlers(project), (
+        "a Python 2.x MCPServer using @mcp.tool() is a real MCP server and "
+        "must open R010's handler-evidence gate"
+    )
+    evidence, line = _first_handler_registration(project)
+    assert evidence is not None and evidence.path.name == "server.py"
+    assert line == 5
+
+
+def test_r010_detects_python_2x_lowlevel_constructor_handlers(tmp_path):
+    write(
+        tmp_path,
+        "server.py",
+        "from mcp.server import Server\n\n"
+        "async def handle_list_tools():\n"
+        "    return []\n\n"
+        "app = Server('demo', on_list_tools=handle_list_tools)\n",
+    )
+
+    project = load_project(tmp_path)
+    assert _has_request_handlers(project), (
+        "a Python 2.x low-level Server that registers handlers via constructor "
+        "callbacks must count as an MCP server"
+    )
+    evidence, line = _first_handler_registration(project)
+    assert evidence is not None and evidence.path.name == "server.py"
+    assert line == 6
 
 
 def test_r010_fires_on_a_declared_1x_project(tmp_path):

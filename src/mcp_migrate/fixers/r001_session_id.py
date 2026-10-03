@@ -11,10 +11,12 @@ leaves a TODO exactly where the human needs to look next. Confidence
 """
 from __future__ import annotations
 
+import io
 import re
+import tokenize
 from pathlib import Path
 
-from ._textedit import string_lines
+from ._textedit import sole_function_body_lines, string_lines
 from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567"
@@ -31,6 +33,42 @@ HEADER_ACCESS_RX = re.compile(
     re.IGNORECASE,
 )
 
+_OPEN_TO_CLOSE = {"(": ")", "[": "]", "{": "}"}
+
+
+def _cross_line_bracket_lines(source: str, path: Path) -> set[int]:
+    """Return lines at either end of a bracket pair that crosses lines.
+
+    Commenting out either endpoint can remove a delimiter needed by the other
+    line. Tokenization keeps brackets in strings and comments out of the
+    structural scan.
+    """
+    if path.suffix.lower() not in {".py", ".pyi"}:
+        return set()
+
+    stack: list[tuple[str, int]] = []
+    cross_line_bracket_lines: set[int] = set()
+    all_lines = set(range(1, len(source.splitlines()) + 1))
+    try:
+        tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+        for token in tokens:
+            if token.type != tokenize.OP:
+                continue
+            if token.string in _OPEN_TO_CLOSE:
+                stack.append((token.string, token.start[0]))
+                continue
+            if token.string not in _OPEN_TO_CLOSE.values():
+                continue
+            if not stack or _OPEN_TO_CLOSE[stack[-1][0]] != token.string:
+                return all_lines
+            _, open_line = stack.pop()
+            if open_line < token.start[0]:
+                cross_line_bracket_lines.add(open_line)
+                cross_line_bracket_lines.add(token.start[0])
+    except (tokenize.TokenError, SyntaxError, IndentationError, ValueError):
+        return all_lines
+    return cross_line_bracket_lines
+
 
 class SessionIdHeaderFixer(Fixer):
     rule_id = "R001"
@@ -42,6 +80,8 @@ class SessionIdHeaderFixer(Fixer):
         out: list[str] = []
         changes: list[str] = []
         str_lines = string_lines(source, path)
+        sole_body = sole_function_body_lines(lines, path)
+        crosses_line_bracket = _cross_line_bracket_lines(source, path)
 
         prefix = comment_prefix(path)
         todo = f"{prefix}{TODO}"
@@ -63,10 +103,27 @@ class SessionIdHeaderFixer(Fixer):
                 body = stripped.rstrip("\n")
                 # Idempotency: if the line right above is already our TODO
                 # (e.g. a previous fixer run), don't insert a second one.
-                if not (out and out[-1].strip(" \t\n") == todo):
+                todo_added = not (out and out[-1].strip(" \t\n") == todo)
+                if todo_added:
                     out.append(f"{indent}{todo}{newline}")
-                out.append(f"{indent}{prefix}{body}{newline}")
-                changes.append(f"line {i}: commented out Mcp-Session-Id header access, added TODO")
+                if i in crosses_line_bracket:
+                    out.append(raw_line)
+                    if todo_added:
+                        changes.append(
+                            f"line {i}: added TODO for Mcp-Session-Id header access"
+                        )
+                elif i in sole_body:
+                    out.append(f"{indent}{prefix}{body}\n{indent}pass{newline}")
+                    changes.append(
+                        f"line {i}: commented out Mcp-Session-Id header access, "
+                        "added TODO and pass"
+                    )
+                else:
+                    out.append(f"{indent}{prefix}{body}{newline}")
+                    changes.append(
+                        f"line {i}: commented out Mcp-Session-Id header access, "
+                        "added TODO"
+                    )
             else:
                 out.append(raw_line)
 

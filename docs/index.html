@@ -95,7 +95,7 @@ it drops straight into CI.</p>
 <li>10 breaking &middot; 3 deprecated &middot; 8 advisory</li>
 <li>Python &middot; TypeScript (partial)</li>
 <li>SARIF for code scanning</li>
-<li>v0.9.0</li>
+<li>v0.12.0</li>
 </ul>
 <p class="note"><a href="findings.html"><strong>We scanned 578 Python servers from the official registry.</strong></a> The change that dominated every discussion of this revision &mdash; <code>Mcp-Session-Id</code> going away &mdash; appears in 3.3% of them.</p>
 </div>
@@ -104,7 +104,7 @@ it drops straight into CI.</p>
 <section>
 <div class="wrap">
 <h2>The readiness board</h2>
-<p class="lede">17 public MCP servers, graded against 2026-07-28 (7× A, 8× B, 2× C).
+<p class="lede">20 public MCP servers, graded against 2026-07-28 (9× A, 8× B, 2× C, 1× F).
 Every row here was produced by this project scanning a public repository. It is a survey, not a list of adopters &mdash; nobody below has endorsed this tool. If you maintain one of them, <a href="https://github.com/dheerajjha/mcp-migrate/blob/main/registry/README.md">submit your own entry</a> and it becomes yours to correct.</p>
 <div class="scroll">
 <table>
@@ -116,6 +116,8 @@ Every row here was produced by this project scanning a public repository. It is 
 <tr><td class="s"><a href="https://github.com/awslabs/mcp">cloudwatch-mcp-server</a><span class="repo">awslabs/mcp</span></td><td><span class="g" style="background:#3fb950">A</span></td><td class="num">97/100</td><td class="lang">python</td><td class="what">AWS Labs MCP server for CloudWatch that gives troubleshooting agents alarm, metric, and log data for root cause analysis.</td></tr>
 <tr><td class="s"><a href="https://github.com/nickclyde/duckduckgo-mcp-server">duckduckgo-mcp-server</a><span class="repo">nickclyde/duckduckgo-mcp-server</span></td><td><span class="g" style="background:#3fb950">A</span></td><td class="num">97/100</td><td class="lang">python</td><td class="what">MCP server that provides web search through DuckDuckGo, with additional content fetching and parsing features.</td></tr>
 <tr><td class="s"><a href="https://github.com/awslabs/mcp">dynamodb-mcp-server</a><span class="repo">awslabs/mcp</span></td><td><span class="g" style="background:#3fb950">A</span></td><td class="num">97/100</td><td class="lang">python</td><td class="what">Official AWS DynamoDB MCP server providing expert data modeling guidance, validation, and cost analysis tools.</td></tr>
+<tr><td class="s"><a href="https://github.com/financial-datasets/mcp-server">financial-datasets-mcp-server</a><span class="repo">financial-datasets/mcp-server</span></td><td><span class="g" style="background:#3fb950">A</span></td><td class="num">97/100</td><td class="lang">python</td><td class="what">MCP server for the Financial Datasets stock market API, exposing company financials, prices, and market news as tools.</td></tr>
+<tr><td class="s"><a href="https://github.com/feder-cr/invisible_playwright_mcp">invisible-playwright-mcp</a><span class="repo">feder-cr/invisible_playwright_mcp</span></td><td><span class="g" style="background:#3fb950">A</span></td><td class="num">97/100</td><td class="lang">python</td><td class="what">MCP browser agent that lets assistants drive a real Firefox-based browser to navigate, click, type, read, and screenshot live web pages.</td></tr>
 <tr><td class="s"><a href="https://github.com/wrale/mcp-server-tree-sitter">mcp-server-tree-sitter</a><span class="repo">wrale/mcp-server-tree-sitter</span></td><td><span class="g" style="background:#3fb950">A</span></td><td class="num">97/100</td><td class="lang">python</td><td class="what">MCP server providing tree-sitter code analysis so AI assistants get structure-aware access to codebases in many languages.</td></tr>
 <tr><td class="s"><a href="https://github.com/neo4j-contrib/mcp-neo4j">mcp-neo4j-cypher</a><span class="repo">neo4j-contrib/mcp-neo4j</span></td><td><span class="g" style="background:#2ea043">B</span></td><td class="num">92/100</td><td class="lang">python</td><td class="what">MCP server for Neo4j that runs Cypher graph queries and supports Text2Cypher workflows over graph data.</td></tr>
 <tr><td class="s"><a href="https://github.com/blazickjp/arxiv-mcp-server">arxiv-mcp-server</a><span class="repo">blazickjp/arxiv-mcp-server</span></td><td><span class="g" style="background:#2ea043">B</span></td><td class="num">91/100</td><td class="lang">python</td><td class="what">Search, download, and read arXiv papers, with semantic search and citation tools, over MCP.</td></tr>
@@ -127,6 +129,7 @@ Every row here was produced by this project scanning a public repository. It is 
 <tr><td class="s"><a href="https://github.com/haris-musa/excel-mcp-server">excel-mcp-server</a><span class="repo">haris-musa/excel-mcp-server</span></td><td><span class="g" style="background:#2ea043">B</span></td><td class="num">89/100</td><td class="lang">python</td><td class="what">Read, write, and format Excel workbooks (formulas, charts, pivot tables) over MCP, via SSE or Streamable HTTP.</td></tr>
 <tr><td class="s"><a href="https://github.com/modelcontextprotocol/servers">mcp-server-git</a><span class="repo">modelcontextprotocol/servers</span></td><td><span class="g" style="background:#d29922">C</span></td><td class="num">66/100</td><td class="lang">python</td><td class="what">Reference MCP server for Git repository interaction, giving LLMs tools to read, search, and manipulate repos.</td></tr>
 <tr><td class="s"><a href="https://github.com/sooperset/mcp-atlassian">mcp-atlassian</a><span class="repo">sooperset/mcp-atlassian</span></td><td><span class="g" style="background:#d29922">C</span></td><td class="num">64/100</td><td class="lang">python</td><td class="what">MCP server for Atlassian products (Confluence and Jira), supporting both Cloud and Server/Data Center deployments.</td></tr>
+<tr><td class="s"><a href="https://github.com/sparfenyuk/mcp-proxy">mcp-proxy</a><span class="repo">sparfenyuk/mcp-proxy</span></td><td><span class="g" style="background:#f85149">F</span></td><td class="num">34/100</td><td class="lang">python</td><td class="what">Proxy that bridges stdio MCP clients with remote SSE or Streamable HTTP servers, and exposes local stdio servers over SSE.</td></tr>
 </tbody>
 </table>
 </div>
@@ -192,7 +195,7 @@ breaking pattern never lands on main in the first place.</p></div>
 <a href="https://github.com/dheerajjha/mcp-migrate/blob/main/registry/README.md">Add your server</a>
 <a href="https://github.com/dheerajjha/mcp-migrate/issues">Issues</a>
 <p style="margin:18px 0 0">MIT licensed. Not affiliated with Anthropic or the Model
-Context Protocol project. Generated from the registry and the rule set at v0.9.0
+Context Protocol project. Generated from the registry and the rule set at v0.12.0
 &mdash; if this page and the tool disagree, the tool is right and it is a bug.</p>
 </div>
 </footer>
