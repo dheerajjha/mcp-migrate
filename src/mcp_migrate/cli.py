@@ -719,6 +719,21 @@ def cmd_check(args) -> int:
     write_baseline_arg = getattr(args, "write_baseline", None)
     write_baseline_path = Path(write_baseline_arg) if write_baseline_arg else None
 
+    if write_baseline_path is not None and rule_ids is not None:
+        # A baseline written from a `--rule`-restricted run only records
+        # the selected rule(s)' findings. Every other rule's findings are
+        # then absent from the file, so the very next ordinary run (no
+        # `--rule`) sees all of them as "new" and fails the build the
+        # baseline was meant to stop failing -- adopting it breaks the
+        # build harder than having no baseline at all. Refused before
+        # anything runs, same as `fix`'s `--write`/`--dry-run` check above.
+        console.print(
+            "[bold red]--write-baseline with --rule is refused:[/bold red] it would "
+            "record only the selected rule(s)' findings, making every other rule's "
+            "findings look new the next time this runs without --rule."
+        )
+        return 2
+
     result = run_check_detailed(
         root, include_tests=args.include_tests, rule_ids=rule_ids, config=cfg,
         baseline_path=baseline_path,

@@ -209,6 +209,36 @@ def test_write_baseline_records_every_current_finding(tmp_path, capsys):
     assert any(e["rule"] == "R001" for e in data["findings"])
 
 
+def test_write_baseline_with_rule_is_refused_and_writes_nothing(tmp_path, capsys):
+    # A baseline written from only R001's findings would make every OTHER
+    # rule's findings look "new" the next time this runs without --rule --
+    # adopting it would break the build harder than having no baseline.
+    body = "import httpx\n" + f"{PY_TRIGGER}\n"
+    root = project(tmp_path, "server.py", body)
+    baseline_path = tmp_path / "baseline.json"
+
+    code = main(["check", str(root), "--write-baseline", str(baseline_path), "--rule", "R001"])
+
+    assert code == 2
+    assert not baseline_path.exists(), "the combination must write nothing, not a partial file"
+    assert "--write-baseline with --rule" in capsys.readouterr().out
+
+
+def test_write_baseline_alone_still_records_every_finding_after_the_rule_guard(tmp_path):
+    # Regression guard for the --rule refusal above: it must only fire when
+    # BOTH flags are given, never narrow plain --write-baseline.
+    body = "import httpx\n" + f"{PY_TRIGGER}\n"
+    root = project(tmp_path, "server.py", body)
+    baseline_path = tmp_path / "baseline.json"
+
+    code = main(["check", str(root), "--write-baseline", str(baseline_path)])
+
+    assert code == 0
+    result = run_check_detailed(root)
+    data = json.loads(baseline_path.read_text())
+    assert len(data["findings"]) == len(result.findings)
+
+
 def test_write_baseline_exits_clean_even_with_breaking_findings(tmp_path):
     body = "import httpx\n" + f"{PY_TRIGGER}\n"
     root = project(tmp_path, "server.py", body)
