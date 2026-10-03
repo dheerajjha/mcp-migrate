@@ -4,7 +4,7 @@ Notes for whoever maintains this next. The architecture is readable from the
 code, so this file is deliberately not about architecture — it is about the
 things that cost someone a day to learn and are invisible in a diff.
 
-Accurate as of 0.11.1 (2026-10-02).
+Accurate as of 0.12.0 (2026-10-03).
 
 ## 1. What it is, in one sentence
 
@@ -18,7 +18,7 @@ package renames rather than the protocol changes.
 
 ```
 $ mcp-migrate check ./my-server
-mcp-migrate v0.11.1  ->  my-server
+mcp-migrate v0.12.0  ->  my-server
 17 Python files, 21 rules, spec 2026-07-28
 
             rule    where                        what
@@ -191,15 +191,12 @@ release.
    shipped in 0.10.1 and its mirror image, #304, in 0.11.0.
 2. **#105** — fixers insert comments inside string literals. The PEP 701 half
    is fixed (§3); the general case is not.
-3. **#310**: R013 and R011 miss removed methods registered through the SDK
-   itself (`@app.subscribe_resource()` in 1.x, `on_subscribe_resource=` and
-   `on_ping=` in 2.x). A 1.x server doing that grades A/100, which is a false
-   clean bill of health, the worst output this tool can produce. **#255**
+3. **#310**: R011 misses `on_ping=` passed to a 2.x `Server(`. R013's half,
+   SDK-registered subscriptions, shipped in 0.12.0 (#313). **#255**
    (SDK 2.x) is mostly done: detection shipped in 0.11.0, 0.11.1 made it see a
    black-formatted `Server(` call, and `tests/fixtures/sdk2_server` pins both.
    What's left is per-rule. Use `server_call_keywords` for constructor
-   arguments rather than a line regex. #313 (R013's half of #310) is
-   switching to it.
+   arguments rather than a line regex; R010, R016 and R013 all do.
 4. **#252** — R017's check matches from column 0 regardless of indentation,
    so it still fires on indented and trailing comments. The fixer half (#269)
    shipped in 0.10.0 and now skips every comment-only line, which makes

@@ -4,6 +4,24 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-03
+
+### Fixed
+
+- **R013 sees resource subscriptions registered through the SDK itself.**
+  ([#310](https://github.com/dheerajjha/mcp-migrate/issues/310),
+  [#313](https://github.com/dheerajjha/mcp-migrate/pull/313), from
+  @HarshRajSinghania) R013 only recognised the request class names and the
+  wire strings, and a server that uses the SDK's own registration has
+  neither: `@app.subscribe_resource()` in 1.x, or `on_subscribe_resource=`
+  passed to `Server()` in 2.x. Such a server graded A/100 while implementing a
+  method the spec removed. Both shapes are found now, however the 2.x call is
+  wrapped, and a docstring or comment that names them stays silent. Expect the
+  grade of a server that does this to move.
+
+No published board grade moves: all 20 entries re-grade identically at their
+pinned commits.
+
 ## [0.11.1] - 2026-10-02
 
 ### Fixed
