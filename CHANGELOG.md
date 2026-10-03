@@ -4,6 +4,24 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-03
+
+### Fixed
+
+- **R011 sees the removed ping handler registered through the SDK.**
+  ([#310](https://github.com/dheerajjha/mcp-migrate/issues/310),
+  [#317](https://github.com/dheerajjha/mcp-migrate/pull/317), from
+  @HarshRajSinghania) SDK 2.x accepts `on_ping=` as a `Server()` constructor
+  argument, which contains neither `PingRequest` nor a `"ping"` dispatch
+  string, so a server passing it graded as if it did not implement ping. It is
+  found now, however the call is wrapped. `on_ping=` passed to any other call,
+  or named in a docstring or comment, stays silent. This completes #310: R013
+  got the same treatment in 0.12.0. Expect the grade of a server that does this
+  to move.
+
+No published board grade moves: all 20 entries re-grade identically at their
+pinned commits.
+
 ## [0.12.0] - 2026-10-03
 
 ### Fixed
