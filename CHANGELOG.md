@@ -4,6 +4,24 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **A baseline file, so an existing project can adopt `check` in CI
+  incrementally.** ([#181](https://github.com/dheerajjha/mcp-migrate/issues/181))
+  `mcp-migrate check . --write-baseline .mcp-migrate-baseline.json` records
+  every current finding; `check . --baseline .mcp-migrate-baseline.json`
+  then lets only *new* findings fail the build via `--fail-on`. A baselined
+  finding still counts toward the grade exactly as before -- a baseline
+  changes what can block a merge, never what the letter means, so bulk-
+  baselining does not also bulk-improve a score. Matching is keyed on the
+  rule and the finding's source line content rather than its line number,
+  so it survives an unrelated line being inserted above it. `--write-baseline`
+  fully regenerates the file each run, which doubles as the prune mechanism:
+  a fixed finding simply isn't written back. New `baseline` key in
+  `[tool.mcp-migrate]`/`.mcp-migrate.toml`; new `baseline`/`baseline_write`
+  keys in `--json` output, both omitted unless requested so existing
+  consumers see unchanged output.
+
 ## [0.9.0] - 2026-09-18
 
 ### Added

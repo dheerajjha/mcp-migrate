@@ -179,6 +179,10 @@
           },
           "fix": {
             "type": "string"
+          },
+          "new": {
+            "type": "boolean",
+            "description": "present only when a baseline is active (top-level `baseline` key present). true if this finding did not match the baseline, i.e. it's what --fail-on evaluates; false if it matched and only still counts toward the grade."
           }
         }
       }
@@ -291,6 +295,76 @@
       "description": "problems found while reading project config -- malformed TOML, an unrecognised rule id, a value that isn't understood. Config that couldn't be read falls back to defaults rather than failing the run, so these are surfaced here instead.",
       "items": {
         "type": "string"
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "description": "present only when --baseline (or a `baseline` config key) was used. A baselined finding still counts toward `grade`/`score`/`counts` exactly as it always did -- this only says which findings are new since the baseline was recorded, which is what --fail-on evaluates when this is present.",
+      "required": ["path", "new", "known", "stale"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "new": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "count of findings not matched by the baseline. --fail-on is evaluated against these, not against every finding, when a baseline is active."
+        },
+        "known": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "count of findings matched by the baseline. Still counted in `counts`/`grade`/`score` above -- a baseline never changes what those mean."
+        },
+        "stale": {
+          "type": "array",
+          "description": "baseline entries that matched nothing this run -- the underlying finding was fixed, or the code moved in a way the snippet key no longer recognises. Re-running --write-baseline drops these.",
+          "items": {
+            "type": "object",
+            "required": ["rule", "path", "snippet"],
+            "additionalProperties": false,
+            "properties": {
+              "rule": {
+                "type": "string",
+                "pattern": "^R[0-9]{3}$"
+              },
+              "path": {
+                "type": ["string", "null"]
+              },
+              "snippet": {
+                "type": ["string", "null"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "baseline_write": {
+      "type": "object",
+      "description": "present only when --write-baseline was used this run.",
+      "required": ["path", "recorded", "new_since_last", "resolved", "prior_warning"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "recorded": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "every finding just written to `path`, replacing its previous contents entirely."
+        },
+        "new_since_last": {
+          "type": ["integer", "null"],
+          "description": "how many of `recorded` were not in the file's prior contents. null when the file did not exist before this run -- there is no prior version to diff against."
+        },
+        "resolved": {
+          "type": ["integer", "null"],
+          "description": "how many findings from the file's prior contents are absent from `recorded` -- fixed since the last write, and dropped by this one. null under the same condition as new_since_last."
+        },
+        "prior_warning": {
+          "type": ["string", "null"],
+          "description": "set if the file existed but could not be understood (malformed JSON, wrong shape) -- its prior contents were treated as empty rather than failing the run."
+        }
       }
     }
   },

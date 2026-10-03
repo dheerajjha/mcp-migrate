@@ -250,6 +250,66 @@ posts a literal `{"method": "tools/list"}` payload, is evidence your project
 is well tested -- not evidence the server itself is broken. Pass
 `--include-tests` to scan those paths too.
 
+### Adopting this incrementally: a baseline file
+
+Suppression (above) says *"this finding is wrong, or deliberate, forever."*
+A baseline says something different: *"this finding is real, I know about
+it, I'm not fixing it in this PR."* Without one, adopting `check` in CI on an
+existing server is all-or-nothing -- fix every `breaking` finding today, or
+don't gate on it at all.
+
+```bash
+mcp-migrate check . --write-baseline .mcp-migrate-baseline.json
+```
+
+```
+recorded 27 finding(s) to .mcp-migrate-baseline.json
+```
+
+Commit that file, then point CI at it:
+
+```bash
+mcp-migrate check . --baseline .mcp-migrate-baseline.json
+```
+
+A finding recorded in the baseline **still counts toward the grade** --
+exactly as if the baseline didn't exist. What changes is `--fail-on`: only
+findings *not* in the baseline can fail the build. A project that starts at
+Grade F stays Grade F until the code actually improves; it just stops
+blocking every unrelated PR on debt that predates the tool. Bulk-baselining
+your way to a passing CI run does not bulk-baseline your way to a better
+grade -- those are deliberately different claims.
+
+Matching survives reformatting: a baseline entry is keyed on the rule and
+the finding's source line content, not its line number, so inserting an
+unrelated line above a baselined finding doesn't make it look new. A finding
+whose actual content changes (a different header name, a different error
+code) *does* count as new -- the key is loose enough to survive
+reindentation, not so loose it stops meaning anything.
+
+`--write-baseline` fully regenerates the file from whatever `check` finds
+that run, which is also how a project prunes it: fix something, run
+`--write-baseline` again, and the resolved finding simply isn't written back.
+Running plain `--baseline` (without `--write-baseline`) against a file with
+stale entries reports them instead of silently carrying them forever:
+
+```
+2 baselined finding(s) no longer present. Re-run --write-baseline to prune them.
+```
+
+`baseline = ".mcp-migrate-baseline.json"` in `[tool.mcp-migrate]` (or a
+standalone `.mcp-migrate.toml`) sets a project-wide default the same way
+`skip`/`include-tests` do -- `--baseline` on the command line always wins. A
+missing baseline file is not an error: every finding is simply new, which is
+what lets a team add `--baseline` to CI before the file exists in the branch
+being checked.
+
+`--json` adds a `baseline` object (`path`, `new`, `known`, `stale`) and a
+`"new": true|false` key on each item in `findings`, both omitted entirely
+when no baseline was requested -- existing consumers see unchanged output.
+`--write-baseline` in `--json` mode adds a `baseline_write` object instead.
+Full shapes in [`schemas/check-json.schema.json`](schemas/check-json.schema.json).
+
 ### Project config
 
 Everything above is a flag, which means it has to be retyped on every
@@ -260,6 +320,7 @@ invocation and can't be shared with a team or with CI. Put it in
 [tool.mcp-migrate]
 skip = ["vendor/", "generated/"]
 include-tests = false
+baseline = ".mcp-migrate-baseline.json"
 
 [tool.mcp-migrate.rules]
 R008 = "off"                                          # no reason recorded
