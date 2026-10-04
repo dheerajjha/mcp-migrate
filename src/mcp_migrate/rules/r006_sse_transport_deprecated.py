@@ -1,22 +1,18 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, mcp_surface_paths
 
-PY_RX = r"sse_server|SseServerTransport|transport\s*=\s*[\"']sse[\"']|/sse\b"
+PY_RX = r"sse_server|SseServerTransport|transport\s*=\s*[\"']sse[\"']"
 
-# TypeScript and JavaScript share this pattern: the SDK class is
-# `SSEServerTransport` in both (all-caps SSE, unlike the Python
-# `SseServerTransport`), and the other giveaway is an Express route
-# mounted at /sse -- which only ever appears as a string literal, so this
-# needs search_wire rather than search_code. Neither half of the pattern
-# is TS-specific (no type annotation, no `import`-only assumption), so it
-# ports to JavaScript unchanged.
-TS_RX = (
+# TypeScript and JavaScript share these patterns. SSEServerTransport and
+# transport: "sse" are distinctive enough to stand alone. An Express /sse
+# route is ambiguous, so it is gated on MCP surface in check().
+TS_STRONG_RX = (
     r"\bSSEServerTransport\b"
     r"|transport\s*:\s*[\"'`]sse[\"'`]"
-    r"|\.(?:get|post|all)\s*\(\s*[\"'`]/sse[\"'`]"
-    r"|[\"'`]/sse(?:/[^\"'`]*)?[\"'`]"
 )
+
+TS_ROUTE_RX = r"\.(?:get|post|all)\s*\(\s*[\"'`]/sse[\"'`]"
 
 
 class DeprecatedSSETransport(Rule):
@@ -31,15 +27,31 @@ class DeprecatedSSETransport(Rule):
 
     def check(self, project: Project) -> list[Finding]:
         if project.language in ("typescript", "javascript"):
-            # search_wire: `app.get("/sse", ...)` is a route, and routes are
-            # string literals. A comment saying "we dropped SSE" is not.
-            return [
-                self.finding(self.MESSAGE, f, line, text)
-                for f, line, text in project.search_wire(TS_RX)
-            ]
-        # search_code: a comment explaining that SSE is deprecated, or a
-        # log/URL string that happens to contain "/sse", isn't a real use
-        # of the transport.
+            out: list[Finding] = []
+            seen = set()
+
+            # search_wire, not search_code: `app.get("/sse", ...)` is a route, and
+            # routes are string literals that search_code would skip. A comment
+            # saying "we dropped SSE" is not a route either way.
+            # Distinctive SDK/configuration signals do not need an MCP-surface gate.
+            for f, line, text in project.search_wire(TS_STRONG_RX):
+                seen.add((f.path, line))
+                out.append(self.finding(self.MESSAGE, f, line, text))
+
+            # An ordinary application can expose its own /sse route, so only treat
+            # the route as MCP transport evidence when the same file speaks MCP.
+            surface = mcp_surface_paths(project)
+            for f, line, text in project.search_wire(TS_ROUTE_RX):
+                if f.path not in surface:
+                    continue
+                if (f.path, line) in seen:
+                    continue
+                seen.add((f.path, line))
+                out.append(self.finding(self.MESSAGE, f, line, text))
+
+            return out
+        # search_code skips comments and string literals, so a bare "/sse"
+        # path cannot be Python transport evidence here.
         return [
             self.finding(self.MESSAGE, f, line, text)
             for f, line, text in project.search_code(PY_RX)
