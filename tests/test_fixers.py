@@ -1046,6 +1046,47 @@ def test_r011_strips_member_when_comment_rides_on_the_import_line():
     ast.parse(result.text)
 
 
+BRACKET_CLOSER_CASES = [
+    ("InitializeHandshakeFixer", "InitializeRequestSchema"),
+    ("PingRemovedFixer", "PingRequestSchema"),
+    ("LoggingSetLevelRemovedFixer", "SetLevelRequestSchema"),
+    ("SubscriptionsReplacedFixer", "SubscribeRequestSchema"),
+]
+
+
+@pytest.mark.parametrize("name,schema", BRACKET_CLOSER_CASES)
+@pytest.mark.parametrize("path", ["server.ts", "server.js"])
+def test_comment_out_fixer_keeps_cross_line_bracket_closers(name, schema, path):
+    before = (
+        "const h = {\n"
+        f"  ping: server.setRequestHandler({schema}, handler)}};\n"
+        "export default h;\n"
+    )
+
+    result = fix(name, before, path=path)
+
+    assert result.changed
+    assert f"//   ping: server.setRequestHandler({schema}, handler)}};" not in result.text
+    assert f"  ping: server.setRequestHandler({schema}, handler)}};" in result.text
+    assert "// TODO(mcp-migrate)" in result.text
+    assert result.text.endswith("export default h;\n")
+
+
+@pytest.mark.parametrize("name,schema", BRACKET_CLOSER_CASES)
+def test_comment_out_fixer_cross_line_bracket_guard_is_idempotent(name, schema):
+    before = (
+        "const h = {\n"
+        f"  ping: server.setRequestHandler({schema}, handler)}};\n"
+        "export default h;\n"
+    )
+
+    once = fix(name, before, path="server.ts")
+    twice = fix(name, once.text, path="server.ts")
+
+    assert twice.changed is False
+    assert twice.text == once.text
+
+
 # ---------------------------------------------------------------------------
 # #245 -- the other half: the only statement in a function body
 # ---------------------------------------------------------------------------
