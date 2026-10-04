@@ -141,6 +141,23 @@ def test_r001_leaves_a_line_that_closes_an_outer_bracket_in_place():
     assert twice.text == once.text
 
 
+def test_r001_leaves_a_typescript_line_that_closes_an_outer_bracket_in_place():
+    source = (
+        "const data = {\n"
+        '  sid: req.headers["mcp-session-id"]};\n'
+        "return data;\n"
+    )
+
+    once = fix("SessionIdHeaderFixer", source, path="server.ts")
+    twice = fix("SessionIdHeaderFixer", once.text, path="server.ts")
+
+    assert once.changed
+    assert '  sid: req.headers["mcp-session-id"]};\n' in once.text
+    assert '// sid: req.headers["mcp-session-id"]};\n' not in once.text
+    assert not twice.changed
+    assert twice.text == once.text
+
+
 def test_r001_leaves_a_line_that_opens_a_cross_line_bracket_in_place():
     source = (
         "def ctx(request):\n"
