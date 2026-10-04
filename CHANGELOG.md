@@ -4,10 +4,13 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-04
+
 ### Added
 
 - **A baseline file, so an existing project can adopt `check` in CI
-  incrementally.** ([#181](https://github.com/dheerajjha/mcp-migrate/issues/181))
+  incrementally.** ([#181](https://github.com/dheerajjha/mcp-migrate/issues/181),
+  [#318](https://github.com/dheerajjha/mcp-migrate/pull/318), from @sstej44)
   `mcp-migrate check . --write-baseline .mcp-migrate-baseline.json` records
   every current finding; `check . --baseline .mcp-migrate-baseline.json`
   then lets only *new* findings fail the build via `--fail-on`. A baselined
@@ -23,6 +26,9 @@ All notable changes to this project are documented here.
   New `baseline` key in `[tool.mcp-migrate]`/`.mcp-migrate.toml`; new
   `baseline`/`baseline_write` keys in `--json` output, both omitted unless
   requested so existing consumers see unchanged output.
+
+No published board grade moves: all 20 entries re-grade identically at their
+pinned commits.
 
 ## [0.13.0] - 2026-10-03
 
