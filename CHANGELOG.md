@@ -4,6 +4,21 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-10-05
+
+### Fixed
+
+- **The R009, R011, R012 and R013 fixers no longer write broken TypeScript.**
+  ([#323](https://github.com/dheerajjha/mcp-migrate/issues/323),
+  [#325](https://github.com/dheerajjha/mcp-migrate/pull/325), from
+  @kocaemre) Like R001's before 0.15.0, they commented out a flagged line even
+  when it also closed a bracket opened on an earlier line, and in TypeScript and
+  JavaScript that broken file was written. They now keep such a line, with the
+  TODO above it. The same shape in Python used to be refused by the parse guard,
+  and now it is fixed.
+
+`check` is untouched, so no grade moves.
+
 ## [0.15.0] - 2026-10-04
 
 ### Fixed
