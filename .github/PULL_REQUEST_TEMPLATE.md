@@ -19,6 +19,7 @@
 - [ ] Fixtures added under `tests/fixtures/<rule-id>/`
 - [ ] At least one test added and passing (`pytest`)
 - [ ] `mcp-migrate rules` lists the new rule
+- [ ] If this changes published board grades or grade mechanics, include `python scripts/regrade_board.py` results and say whether any `registry/servers/*.yaml` entries were updated
 
 ## Fixer
 

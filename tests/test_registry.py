@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+import regrade_board as rgr
 import render_board as rb
 import validate_registry as vr
 
@@ -373,3 +374,115 @@ def test_validate_accepts_a_well_formed_disabled_rules_list(tmp_path, monkeypatc
 
     errs = vr.validate(servers_dir / "acme-notes.yaml")
     assert not [e for e in errs if "disabled_rules" in e], errs
+
+
+# --- regrade_board.py ----------------------------------------------------
+
+VALID_ENTRY_WITH_SHA = VALID_ENTRY + "sha: 0123456789abcdef0\n"
+
+
+def test_regrade_board_loads_required_entry_fields(tmp_path):
+    path = _write(tmp_path, "acme-notes.yaml", VALID_ENTRY_WITH_SHA)
+    [entry] = rgr.load_entries([path])
+    assert entry.name == "acme-notes"
+    assert entry.repo == "acme/notes-mcp"
+    assert entry.sha == "0123456789abcdef0"
+    assert entry.path == ""
+    assert entry.grade == "A"
+    assert entry.score == 97
+    assert entry.checked_with == "mcp-migrate 0.1.0"
+
+
+def test_regrade_board_groups_entries_by_repo_and_sha(tmp_path):
+    a = _write(
+        tmp_path,
+        "first.yaml",
+        VALID_ENTRY_WITH_SHA.replace("name: acme-notes", "name: first"),
+    )
+    b = _write(
+        tmp_path,
+        "second.yaml",
+        VALID_ENTRY_WITH_SHA
+        .replace("name: acme-notes", "name: second")
+        .replace("repo: acme/notes-mcp", "repo: acme/other"),
+    )
+    c = _write(
+        tmp_path,
+        "third.yaml",
+        VALID_ENTRY_WITH_SHA
+        .replace("name: acme-notes", "name: third")
+        .replace("sha: 0123456789abcdef0", "sha: fedcba9876543210"),
+    )
+    entries = rgr.load_entries([a, b, c])
+    groups = rgr.group_entries(entries)
+    assert set(groups) == {
+        ("acme/notes-mcp", "0123456789abcdef0"),
+        ("acme/other", "0123456789abcdef0"),
+        ("acme/notes-mcp", "fedcba9876543210"),
+    }
+    assert [entry.name for entry in groups[("acme/notes-mcp", "0123456789abcdef0")]] == ["first"]
+
+
+def test_regrade_board_drift_patch_mentions_file_and_new_values(tmp_path):
+    path = _write(tmp_path, "acme-notes.yaml", VALID_ENTRY_WITH_SHA)
+    [entry] = rgr.load_entries([path])
+    drift = rgr.Drift(
+        entry=entry,
+        actual=rgr.ScanResult(grade="C", score=66, checked_with="mcp-migrate 0.15.1"),
+    )
+    patch = rgr.drift_patch(drift)
+    assert "acme-notes.yaml" in patch
+    assert "grade: C" in patch
+    assert "score: 66" in patch
+    assert "checked_with: mcp-migrate 0.15.1" in patch
+
+
+def test_regrade_board_json_output_reports_drifts_and_problems(tmp_path):
+    path = _write(tmp_path, "acme-notes.yaml", VALID_ENTRY_WITH_SHA)
+    [entry] = rgr.load_entries([path])
+    payload = rgr.as_json(
+        [entry],
+        [rgr.Drift(entry=entry, actual=rgr.ScanResult("B", 91, "mcp-migrate 0.15.1"))],
+        ["clone failed"],
+    )
+    assert '"entries_checked": 1' in payload
+    assert '"recorded_grade": "A"' in payload
+    assert '"grade": "B"' in payload
+    assert '"clone failed"' in payload
+
+
+def test_regrade_board_main_succeeds_when_everything_reproduces(tmp_path, monkeypatch, capsys):
+    path = _write(tmp_path, "acme-notes.yaml", VALID_ENTRY_WITH_SHA)
+    monkeypatch.setattr(rgr, "SERVERS", tmp_path)
+
+    def fake_find(entries, *, workspace):
+        assert [entry.name for entry in entries] == ["acme-notes"]
+        return [], []
+
+    monkeypatch.setattr(rgr, "find_drifts", fake_find)
+    assert rgr.main([]) == 0
+    out = capsys.readouterr().out
+    assert "Checked 1 board entry across 1 pinned repo@sha group." in out
+    assert "All pinned board entries reproduce their recorded grade and score." in out
+
+
+def test_regrade_board_main_fails_when_drift_exists(tmp_path, monkeypatch, capsys):
+    path = _write(tmp_path, "acme-notes.yaml", VALID_ENTRY_WITH_SHA)
+    monkeypatch.setattr(rgr, "SERVERS", tmp_path)
+    [entry] = rgr.load_entries([path])
+
+    def fake_find(entries, *, workspace):
+        return [rgr.Drift(entry=entry, actual=rgr.ScanResult("C", 66, "mcp-migrate 0.15.1"))], []
+
+    monkeypatch.setattr(rgr, "find_drifts", fake_find)
+    assert rgr.main([]) == 1
+    out = capsys.readouterr().out
+    assert "DRIFT acme-notes: recorded A/97 -> current C/66" in out
+    assert "checked_with: mcp-migrate 0.15.1" in out
+
+
+def test_regrade_board_main_rejects_unknown_entry_name(tmp_path, monkeypatch):
+    _write(tmp_path, "acme-notes.yaml", VALID_ENTRY_WITH_SHA)
+    monkeypatch.setattr(rgr, "SERVERS", tmp_path)
+    with pytest.raises(SystemExit):
+        rgr.main(["missing-entry"])
