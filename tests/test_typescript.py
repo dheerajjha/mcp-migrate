@@ -1181,6 +1181,17 @@ export const protocolVersion = "2026-07-28";
     assert ResourceNotFoundCodeChanged().check(project) == []
 
 
+def test_r017_ignores_indented_typescript_comment_only_mentions(tmp_path):
+    code = """\
+export function handle() {
+  // The old -32002 resource not found code is replaced by -32602.
+  return 1;
+}
+"""
+    project = load_project(_write(tmp_path, "notes.ts", code)).for_language("typescript")
+    assert ResourceNotFoundCodeChanged().check(project) == []
+
+
 # --- R021: older JSON Schema dialect than 2020-12 --------------------------
 
 def test_r021_finds_old_dialect_pin_in_typescript(tmp_path):

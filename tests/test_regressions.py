@@ -318,6 +318,16 @@ def test_r017_fires_on_title_case_resource_not_found(tmp_path):
     assert hit_files == {"lower.py", "upper.py"}
 
 
+def test_r017_ignores_indented_python_comment_only_mentions(tmp_path):
+    (tmp_path / "server.py").write_text(
+        "def handle():\n"
+        "    # The old -32002 resource not found code was replaced\n"
+        "    return 1\n"
+    )
+    project = load_project(tmp_path)
+    assert ResourceNotFoundCodeChanged().check(project) == []
+
+
 def test_r020_does_not_fire_on_an_unrelated_register_method(tmp_path):
     # A generic "register a client" method in, say, a CRM or billing
     # system has nothing to do with OAuth Dynamic Client Registration --

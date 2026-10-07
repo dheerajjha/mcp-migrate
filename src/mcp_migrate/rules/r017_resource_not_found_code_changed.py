@@ -8,8 +8,9 @@ from .base import Finding, Fires, Project, Rule, Silent
 # lookup failing, which is the one thing the old -32002 convention meant.
 # Requiring both on one line trades a few missed multi-line cases for a
 # large cut in accidental matches on an otherwise-generic number.
-RESOURCE_NOT_FOUND_RX = re.compile(
-    r"(?=.*-32002\b)(?=.*(?:resource|not[_ ]?found|notfound))", re.IGNORECASE
+CODE_RX = re.compile(r"-32002\b")
+RESOURCE_NOT_FOUND_CONTEXT_RX = re.compile(
+    r"(?:resource|not[_ ]?found|notfound)", re.IGNORECASE
 )
 
 # A *name* that already says "this is the old code". Someone who writes
@@ -105,9 +106,9 @@ class ResourceNotFoundCodeChanged(Rule):
         # a string/identifier, and being lenient about *where* the context
         # comes from doesn't create a false positive on its own -- the
         # numeric literal still has to be there too.
-        for f, line, text in project.search_wire(
-            RESOURCE_NOT_FOUND_RX.pattern, flags=re.IGNORECASE
-        ):
+        for f, line, text in project.search_wire(CODE_RX.pattern):
+            if not RESOURCE_NOT_FOUND_CONTEXT_RX.search(text):
+                continue
             if _is_deliberate_legacy_constant(text):
                 continue
             out.append(self.finding(
