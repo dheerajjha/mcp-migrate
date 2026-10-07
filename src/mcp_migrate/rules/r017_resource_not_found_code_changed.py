@@ -69,6 +69,14 @@ class ResourceNotFoundCodeChanged(Rule):
             reason="A standalone comment is not an active use of the code.",
         ),
         Silent(
+            snippet="def handler():\n    # the old -32002 resource not found code was replaced\n    return None\n",
+            reason="An indented comment is prose too, not only one at column 0 (#252).",
+        ),
+        Silent(
+            snippet="code = lookup()  # the old -32002 resource not found code",
+            reason="The only -32002 on the line is in its trailing comment.",
+        ),
+        Silent(
             snippet="TIMEOUT_CODE = -32002",
             reason="The code is used for a timeout, not resource-not-found.",
         ),
