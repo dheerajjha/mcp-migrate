@@ -4,7 +4,7 @@ Notes for whoever maintains this next. The architecture is readable from the
 code, so this file is deliberately not about architecture — it is about the
 things that cost someone a day to learn and are invisible in a diff.
 
-Accurate as of 0.15.1 (2026-10-05).
+Accurate as of 0.16.0 (2026-10-07).
 
 ## 1. What it is, in one sentence
 
@@ -18,7 +18,7 @@ package renames rather than the protocol changes.
 
 ```
 $ mcp-migrate check ./my-server
-mcp-migrate v0.15.1  ->  my-server
+mcp-migrate v0.16.0  ->  my-server
 17 Python files, 21 rules, spec 2026-07-28
 
             rule    where                        what
@@ -161,6 +161,11 @@ for eleven days the Releases page called 0.7.1 the latest; they were
 backfilled on 2026-09-28. Then verify by installing from PyPI fresh — not by
 reading the green tick.
 
+Before tagging a release that changes a rule, run `uv run python
+scripts/regrade_board.py`. It re-scans every board entry at its pinned
+commit, takes about a minute, and prints the YAML to update when a
+published grade has moved.
+
 Bump **minor** when a published grade moves or a documented field changes
 shape; **patch** otherwise. Docs-only and test-only commits do not need a
 release.
@@ -192,17 +197,14 @@ release.
    What's left is per-rule. Use `server_call_keywords` for constructor
    arguments rather than a line regex. R010, R011, R013 and R016 all do; #310
    (SDK-registered removed methods) closed with 0.13.0.
-3. **#252** — R017's check matches from column 0 regardless of indentation,
-   so it still fires on indented and trailing comments. The fixer half (#269)
-   shipped in 0.10.0 and now skips every comment-only line, which makes
-   `check` the side that over-reports. Two fixer tests pin the shapes, so a
-   #252 fix cannot quietly bring the rewrite back.
-4. **#89** — R003 and R011 decide "is this MCP?" too loosely and fire on
+3. **#89** — R003 and R011 decide "is this MCP?" too loosely and fire on
    unrelated code. R005, R006 and R020 are fixed (#234, #296, #321). Upstream of a lot
    of false-positive reports.
-5. **#259** — nothing verifies that published board grades still reproduce, so
-   a rule change can move a grade silently. Pairs with the `checked_with` trap.
-6. **#172** — TypeScript is at 21 of 21 but the tool still says
+4. **#259**: `scripts/regrade_board.py` (#327) re-checks the board when someone
+   runs it, as the release steps in §4 now do. Still open: the weekly scheduled
+   job that runs it and opens an issue on drift, so it doesn't depend on anyone
+   remembering.
+5. **#172** — TypeScript is at 21 of 21 but the tool still says
    "partial — 21 of 21". A one-line honesty bug with a stale premise behind it.
 
 **Rejected, do not re-investigate:** re-requiring fork-PR approval (§3) — the
