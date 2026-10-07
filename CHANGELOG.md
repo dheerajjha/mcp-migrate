@@ -4,6 +4,46 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-10-05
+
+### Fixed
+
+- **The R009, R011, R012 and R013 fixers no longer write broken TypeScript.**
+  ([#323](https://github.com/dheerajjha/mcp-migrate/issues/323),
+  [#325](https://github.com/dheerajjha/mcp-migrate/pull/325), from
+  @kocaemre) Like R001's before 0.15.0, they commented out a flagged line even
+  when it also closed a bracket opened on an earlier line, and in TypeScript and
+  JavaScript that broken file was written. They now keep such a line, with the
+  TODO above it. The same shape in Python used to be refused by the parse guard,
+  and now it is fixed.
+
+`check` is untouched, so no grade moves.
+
+## [0.15.0] - 2026-10-04
+
+### Fixed
+
+- **R006 stops reading every `/sse` string as the deprecated transport.**
+  ([#89](https://github.com/dheerajjha/mcp-migrate/issues/89),
+  [#321](https://github.com/dheerajjha/mcp-migrate/pull/321), from
+  @DevyanshMalhotra) In TypeScript and JavaScript, any string literal starting
+  with `/sse` was a finding. That includes `"/sse/icons/status.svg"`, and also
+  an ordinary Express SSE endpoint in an app with no MCP at all. The bare
+  string no longer counts, and an `/sse` route counts only in a file that
+  speaks MCP. `SSEServerTransport` and `transport: "sse"` still fire on their
+  own. Expect grades to rise for code that only *mentioned* `/sse`.
+- **R001's fixer no longer writes broken TypeScript.**
+  ([#305](https://github.com/dheerajjha/mcp-migrate/issues/305),
+  [#322](https://github.com/dheerajjha/mcp-migrate/pull/322), from
+  @motodriver) When the flagged header read sat on a line that also opened or
+  closed a bracket, the fixer commented the bracket out with it. Python had a
+  parse guard that refused the file, but TypeScript and JavaScript had nothing,
+  so the broken file was written. The line is now kept, with the TODO above it,
+  in all three languages. The same gap in four other fixers is #323.
+
+No published board grade moves: all 20 entries re-grade identically at their
+pinned commits.
+
 ## [0.14.0] - 2026-10-04
 
 ### Added

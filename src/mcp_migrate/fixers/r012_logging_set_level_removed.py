@@ -13,7 +13,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ._textedit import sole_function_body_lines, strip_import_members
+from ._textedit import cross_line_bracket_lines, sole_function_body_lines, strip_import_members
 from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://modelcontextprotocol.io/specification/2026-07-28/changelog"
@@ -72,6 +72,7 @@ class LoggingSetLevelRemovedFixer(Fixer):
         # A body's only statement cannot be commented out without emptying
         # the block; those lines get a `pass` under them (#245).
         sole_body = sole_function_body_lines(lines, path)
+        cross_line_brackets = cross_line_bracket_lines(source, path)
 
         for i, raw_line in enumerate(lines, start=1):
             stripped = raw_line.lstrip(" \t")
@@ -92,7 +93,7 @@ class LoggingSetLevelRemovedFixer(Fixer):
                 if not (out and out[-1].strip(" \t\n") == todo):
                     out.append(f"{indent}{todo}{newline}")
                     todo_added = True
-                if _safe_to_comment_out(raw_line):
+                if _safe_to_comment_out(raw_line) and i not in cross_line_brackets:
                     if i in sole_body:
                         # #245: the body's only statement. The comment gives
                         # up its line ending so `pass` starts a line of its own.

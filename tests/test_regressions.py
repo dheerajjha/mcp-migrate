@@ -1109,6 +1109,57 @@ def test_r005_typescript_real_sdk_type_still_fires(tmp_path):
     assert "R005" in _findings_by_rule(tmp_path)
 
 
+def test_r006_typescript_sse_asset_path_without_mcp_is_silent(tmp_path):
+    (tmp_path / "app.ts").write_text(
+        'const iconUrl = "/sse/icons/status.svg";\n'
+    )
+
+    assert "R006" not in _findings_by_rule(tmp_path)
+
+
+def test_r006_typescript_sse_route_without_mcp_is_silent(tmp_path):
+    (tmp_path / "app.ts").write_text(
+        'app.get("/sse", (req, res) => {\n'
+        '    res.write("data: hello\\n\\n");\n'
+        "});\n"
+    )
+
+    assert "R006" not in _findings_by_rule(tmp_path)
+
+
+def test_r006_typescript_sse_route_with_mcp_surface_still_fires(tmp_path):
+    (tmp_path / "server.ts").write_text(
+        'import { Server } from "@modelcontextprotocol/sdk/server/index.js";\n'
+        'app.get("/sse", handler);\n'
+    )
+
+    assert "R006" in _findings_by_rule(tmp_path)
+
+
+def test_r006_javascript_transport_class_still_fires_without_other_surface(tmp_path):
+    (tmp_path / "server.js").write_text(
+        'const transport = new SSEServerTransport("/messages", res);\n'
+    )
+
+    assert "R006" in _findings_by_rule(tmp_path)
+
+
+def test_r006_python_transport_class_still_fires(tmp_path):
+    (tmp_path / "server.py").write_text(
+        'transport = SseServerTransport("/messages/")\n'
+    )
+
+    assert "R006" in _findings_by_rule(tmp_path)
+
+
+def test_r006_typescript_transport_property_still_fires_without_other_surface(tmp_path):
+    (tmp_path / "server.ts").write_text(
+        'const config = { transport: "sse" };\n'
+    )
+
+    assert "R006" in _findings_by_rule(tmp_path)
+
+
 def test_the_surface_gate_is_not_fooled_by_a_longer_wire_name(tmp_path):
     """`logging/setLevelLatency` is a metric name, not MCP surface.
 

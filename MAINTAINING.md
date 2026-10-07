@@ -4,7 +4,7 @@ Notes for whoever maintains this next. The architecture is readable from the
 code, so this file is deliberately not about architecture — it is about the
 things that cost someone a day to learn and are invisible in a diff.
 
-Accurate as of 0.14.0 (2026-10-04).
+Accurate as of 0.15.1 (2026-10-05).
 
 ## 1. What it is, in one sentence
 
@@ -18,7 +18,7 @@ package renames rather than the protocol changes.
 
 ```
 $ mcp-migrate check ./my-server
-mcp-migrate v0.14.0  ->  my-server
+mcp-migrate v0.15.1  ->  my-server
 17 Python files, 21 rules, spec 2026-07-28
 
             rule    where                        what
@@ -184,30 +184,25 @@ release.
 
 ## 6. Open work, in priority order
 
-1. **#305**: R001's fixer writes broken TypeScript when a header read closes
-   a bracket. There is no parse guard for TypeScript, so this one corrupts
-   rather than refuses. Check the other comment-out fixers for the same
-   exposure before fixing it in R001 alone. The Python side is done: #245
-   shipped in 0.10.1 and its mirror image, #304, in 0.11.0.
-2. **#105** — fixers insert comments inside string literals. The PEP 701 half
+1. **#105** — fixers insert comments inside string literals. The PEP 701 half
    is fixed (§3); the general case is not.
-3. **#255** (SDK 2.x) is mostly done: detection shipped in 0.11.0, 0.11.1
+2. **#255** (SDK 2.x) is mostly done: detection shipped in 0.11.0, 0.11.1
    made it see a black-formatted `Server(` call, and
    `tests/fixtures/sdk2_server` pins both.
    What's left is per-rule. Use `server_call_keywords` for constructor
    arguments rather than a line regex. R010, R011, R013 and R016 all do; #310
    (SDK-registered removed methods) closed with 0.13.0.
-4. **#252** — R017's check matches from column 0 regardless of indentation,
+3. **#252** — R017's check matches from column 0 regardless of indentation,
    so it still fires on indented and trailing comments. The fixer half (#269)
    shipped in 0.10.0 and now skips every comment-only line, which makes
    `check` the side that over-reports. Two fixer tests pin the shapes, so a
    #252 fix cannot quietly bring the rewrite back.
-5. **#89** — R003, R006 and R011 decide "is this MCP?" too loosely and fire
-   on unrelated code. R005 and R020 are fixed (#234, #296). Upstream of a lot
+4. **#89** — R003 and R011 decide "is this MCP?" too loosely and fire on
+   unrelated code. R005, R006 and R020 are fixed (#234, #296, #321). Upstream of a lot
    of false-positive reports.
-6. **#259** — nothing verifies that published board grades still reproduce, so
+5. **#259** — nothing verifies that published board grades still reproduce, so
    a rule change can move a grade silently. Pairs with the `checked_with` trap.
-7. **#172** — TypeScript is at 21 of 21 but the tool still says
+6. **#172** — TypeScript is at 21 of 21 but the tool still says
    "partial — 21 of 21". A one-line honesty bug with a stale premise behind it.
 
 **Rejected, do not re-investigate:** re-requiring fork-PR approval (§3) — the
