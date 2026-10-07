@@ -4,6 +4,32 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-07
+
+### Fixed
+
+- **R017 no longer fires on `-32002` mentioned in a comment.**
+  ([#252](https://github.com/dheerajjha/mcp-migrate/issues/252),
+  [#328](https://github.com/dheerajjha/mcp-migrate/pull/328), from
+  @motodriver) Its pattern matched from column 0, so a comment was only
+  excluded when it started there. An indented comment, or a code line whose
+  only `-32002` sat in a trailing comment, was a breaking finding. The rule now
+  matches the code itself and then looks for resource or not-found context on
+  the line. Real uses still fire, including `RESOURCE_NOT_FOUND = -32002  #
+  legacy code`. Expect grades to rise for code that only mentioned the old
+  code in a comment.
+
+### Added
+
+- **`scripts/regrade_board.py`**
+  ([#327](https://github.com/dheerajjha/mcp-migrate/pull/327), from
+  @motodriver) re-checks every board entry at its pinned commit and prints
+  the YAML to fix when a published grade no longer reproduces. It isn't part
+  of the package; it's how a rules change proves it didn't move the board.
+
+No published board grade moves: `scripts/regrade_board.py` reproduces all 20
+entries on this release.
+
 ## [0.15.1] - 2026-10-05
 
 ### Fixed
