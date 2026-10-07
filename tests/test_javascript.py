@@ -201,6 +201,17 @@ def test_r017_stays_silent_without_the_resource_not_found_context():
     assert ResourceNotFoundCodeChanged().check(project) == []
 
 
+def test_r017_ignores_indented_javascript_comment_only_mentions():
+    code = (
+        'function handle() {\n'
+        '  // The old -32002 resource not found code was replaced\n'
+        '  return 1;\n'
+        '}\n'
+    )
+    project = _js_project(code)
+    assert ResourceNotFoundCodeChanged().check(project) == []
+
+
 def test_r021_finds_an_old_json_schema_dialect_in_javascript():
     code = 'const schema = { $schema: "http://json-schema.org/draft-07/schema#" };\n'
     project = _js_project(code)
