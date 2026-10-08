@@ -4,6 +4,27 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-10-08
+
+### Added
+
+- **R013 reads JavaScript**, taking JavaScript rule coverage to 7/21.
+  ([#287](https://github.com/dheerajjha/mcp-migrate/issues/287),
+  [#294](https://github.com/dheerajjha/mcp-migrate/pull/294), from
+  @motodriver) It uses the TypeScript matchers, so a `require()` of
+  `SubscribeRequestSchema` counts the same way a TypeScript `import` does.
+
+### Fixed
+
+- **R013's wire match is bounded at the end.** `resources/subscriber` and other
+  longer names no longer read as the removed `resources/subscribe`, in Python or
+  in TypeScript.
+
+R012 now declares its detection boundaries in all three languages (#330).
+
+No published board grade moves: `scripts/regrade_board.py` reproduces all 20
+entries on this release.
+
 ## [0.16.0] - 2026-10-07
 
 ### Fixed
