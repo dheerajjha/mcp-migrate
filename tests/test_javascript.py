@@ -148,8 +148,7 @@ def test_r013_finds_removed_subscribe_request_symbols_in_javascript():
         "server.setRequestHandler(SubscribeRequestSchema, handler);\n"
     )
     findings = ResourceSubscriptionsReplaced().check(project)
-    assert len(findings) == 1
-    assert findings[0].line == 2
+    assert [finding.line for finding in findings] == [1, 2]
 
 
 def test_r013_finds_removed_resource_subscription_wire_methods_in_javascript():
@@ -173,6 +172,15 @@ def test_r013_ignores_comment_only_and_longer_identifier_mentions_in_javascript(
         'const method = "resources/subscriber";\n'
     )
     assert ResourceSubscriptionsReplaced().check(project) == []
+
+
+def test_r013_reaches_javascript_files_through_the_cli(tmp_path, capsys):
+    (tmp_path / "subscriptions.js").write_text(
+        'const method = "resources/subscribe";\n'
+    )
+    main(["check", "--format", "json", "--rule", "R013", str(tmp_path)])
+    findings = json.loads(capsys.readouterr().out)["findings"]
+    assert [(f["rule"], f["line"]) for f in findings] == [("R013", 1)]
 
 
 def test_r019_finds_removed_task_methods_in_javascript():

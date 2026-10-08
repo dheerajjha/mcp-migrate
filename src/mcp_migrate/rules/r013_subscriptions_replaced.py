@@ -29,9 +29,6 @@ SDK_CONSTRUCTOR_KW_RX = (
 TS_SUBSCRIBE_CODE_RX = re.compile(
     r"\b(?:Subscribe|Unsubscribe)Request(?:Params|Schema)?\b"
 )
-JS_SUBSCRIBE_CODE_RX = re.compile(
-    r"\bsetRequestHandler\s*\(\s*(?:Subscribe|Unsubscribe)Request(?:Params|Schema)?\b"
-)
 
 WIRE_RX = wire_method("resources/subscribe", "resources/unsubscribe")
 MESSAGE_CODE = "References the removed SubscribeRequest/UnsubscribeRequest handler."
@@ -101,15 +98,4 @@ class ResourceSubscriptionsReplaced(Rule):
         return sorted(out, key=lambda x: (str(x.path or ""), x.line or 0))
 
     def _check_js(self, project: Project) -> list[Finding]:
-        seen: set[tuple[str, int]] = set()
-        out: list[Finding] = []
-        for pattern, message, search in (
-            (JS_SUBSCRIBE_CODE_RX.pattern, MESSAGE_CODE, project.search_code),
-            (WIRE_RX, MESSAGE_WIRE, project.search_wire),
-        ):
-            for f, line, text in search(pattern):
-                if (str(f.path), line) in seen:
-                    continue
-                seen.add((str(f.path), line))
-                out.append(self.finding(message, f, line, text))
-        return sorted(out, key=lambda x: (str(x.path or ""), x.line or 0))
+        return self._check_ts(project)

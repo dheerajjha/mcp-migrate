@@ -31,6 +31,9 @@ from mcp_migrate.rules.r010_server_discover_missing import (
     _has_request_handlers,
 )
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
+from mcp_migrate.rules.r013_subscriptions_replaced import (
+    ResourceSubscriptionsReplaced,
+)
 from mcp_migrate.rules.r017_resource_not_found_code_changed import (
     ResourceNotFoundCodeChanged,
 )
@@ -142,6 +145,21 @@ def test_search_code_falls_back_to_plain_search_on_tokenize_failure(tmp_path):
     assert project.files, "file with a syntax error should still be loaded (tree=None is fine)"
     hits = list(project.search_code(r"WIDGET"))
     assert len(hits) == 1
+
+
+@pytest.mark.parametrize(
+    ("filename", "language", "source"),
+    [
+        ("server.py", "python", 'method = "resources/subscriber"\n'),
+        ("server.ts", "typescript", 'const method = "resources/subscriber";\n'),
+    ],
+)
+def test_r013_ignores_longer_resource_subscription_wire_names(
+    tmp_path, filename, language, source
+):
+    (tmp_path / filename).write_text(source)
+    project = load_project(tmp_path).for_language(language)
+    assert ResourceSubscriptionsReplaced().check(project) == []
 
 
 # --- 3. R003 requires MCP protocol surface in the same file ----------------
