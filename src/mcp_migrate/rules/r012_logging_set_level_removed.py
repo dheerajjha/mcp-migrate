@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule, wire_method
+from .base import Finding, Fires, Project, Rule, Silent, wire_method
 
 # `SetLevelRequest`/`SetLevelRequestParams` are the MCP SDK's own model
 # names for this request -- distinctive, no false-positive risk.
@@ -20,6 +20,78 @@ class LoggingSetLevelRemoved(Rule):
         "of tracking one process-wide level."
     )
     languages = ("python", "typescript", "javascript")
+    boundaries = (
+        Fires(
+            snippet="request: SetLevelRequest",
+            reason="The removed SDK request type is active Python code.",
+        ),
+        Fires(
+            snippet='METHODS = {"logging/setLevel": handle_set_level}',
+            reason="A dispatch table still exposes the removed wire method.",
+        ),
+        Silent(
+            snippet="# SetLevelRequest used to handle logging/setLevel",
+            reason="A comment that only describes the old request is not an implementation.",
+        ),
+        Silent(
+            snippet='METRIC = "logging/setLevelLatency"',
+            reason="A longer metric name is not the removed JSON-RPC method.",
+        ),
+        Silent(
+            snippet="factory = SetLevelRequesterFactory()",
+            reason="An unrelated identifier with a longer suffix is not an SDK request type.",
+        ),
+        Fires(
+            snippet="const params: SetLevelRequestParams = {};",
+            reason="The removed SDK params type is active TypeScript code.",
+            language="typescript",
+        ),
+        Fires(
+            snippet='server.setRequestHandler("logging/setLevel", handler);',
+            reason="A TypeScript handler still registers the removed wire method.",
+            language="typescript",
+        ),
+        Silent(
+            snippet="// SetLevelRequest used to handle logging/setLevel",
+            reason="A TypeScript comment is prose, not active MCP surface.",
+            language="typescript",
+        ),
+        Silent(
+            snippet='const method = "logging/setLevelExtra";',
+            reason="A longer TypeScript wire name is outside the method boundary.",
+            language="typescript",
+        ),
+        Silent(
+            snippet="const factory = new SetLevelRequestBuilder();",
+            reason="A longer TypeScript identifier is not an SDK request type.",
+            language="typescript",
+        ),
+        Fires(
+            snippet='const req = new SetLevelRequest({ level: "debug" });',
+            reason="JavaScript constructs the removed SDK request type.",
+            language="javascript",
+        ),
+        Fires(
+            snippet='server.setRequestHandler("logging/setLevel", handler);',
+            reason="A JavaScript handler still registers the removed wire method.",
+            language="javascript",
+        ),
+        Silent(
+            snippet="// SetLevelRequest used to handle logging/setLevel",
+            reason="A JavaScript comment is prose, not active MCP surface.",
+            language="javascript",
+        ),
+        Silent(
+            snippet='const method = "logging/setLevelExtra";',
+            reason="A longer JavaScript wire name is outside the method boundary.",
+            language="javascript",
+        ),
+        Silent(
+            snippet="const factory = new SetLevelRequestBuilder();",
+            reason="A longer JavaScript identifier is not an SDK request type.",
+            language="javascript",
+        ),
+    )
 
     CODE_MESSAGE = "References the removed SetLevelRequest / logging/setLevel handler."
     WIRE_MESSAGE = "References the removed logging/setLevel JSON-RPC method."
