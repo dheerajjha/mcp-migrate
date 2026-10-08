@@ -1958,7 +1958,7 @@ def test_a_config_that_disables_every_ported_rule_says_so_too(tmp_path, capsys):
         'const { SSEServerTransport } = require("@modelcontextprotocol/sdk/server/sse.js");\n'
     )
     (tmp_path / "pyproject.toml").write_text(
-        "[tool.mcp-migrate.rules]\nR001 = false\nR006 = false\nR012 = false\nR017 = false\nR019 = false\nR021 = false\n"
+        "[tool.mcp-migrate.rules]\nR001 = false\nR006 = false\nR012 = false\nR013 = false\nR017 = false\nR019 = false\nR021 = false\n"
     )
     assert main(["check", str(tmp_path)]) == 2
     out = _unwrapped(capsys.readouterr().out)
@@ -1974,7 +1974,7 @@ def test_a_language_that_was_read_is_still_described_by_its_coverage(tmp_path, c
     )
     assert main(["check", str(tmp_path)]) == 1
     out = _unwrapped(capsys.readouterr().out)
-    assert "JavaScript is read by 6 of 21 rules" in out
+    assert "JavaScript is read by 7 of 21 rules" in out
     assert "no rule that ran" not in out
 
 

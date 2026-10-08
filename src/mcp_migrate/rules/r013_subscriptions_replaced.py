@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule, server_call_keywords
+from .base import Finding, Project, Rule, server_call_keywords, wire_method
 
 # `SubscribeRequest`/`UnsubscribeRequest` are the MCP SDK's own model names
 # -- distinctive, no false-positive risk.
@@ -30,7 +30,7 @@ TS_SUBSCRIBE_CODE_RX = re.compile(
     r"\b(?:Subscribe|Unsubscribe)Request(?:Params|Schema)?\b"
 )
 
-WIRE_RX = r"resources/subscribe|resources/unsubscribe"
+WIRE_RX = wire_method("resources/subscribe", "resources/unsubscribe")
 MESSAGE_CODE = "References the removed SubscribeRequest/UnsubscribeRequest handler."
 MESSAGE_SDK = (
     "Registers the removed subscribe_resource/unsubscribe_resource handler "
@@ -51,11 +51,13 @@ class ResourceSubscriptionsReplaced(Rule):
         "resources/subscribe and resources/unsubscribe are gone. Move subscription "
         "management to the new subscriptions/listen call."
     )
-    languages = ("python", "typescript")
+    languages = ("python", "typescript", "javascript")
 
     def check(self, project: Project) -> list[Finding]:
         if project.language == "typescript":
             return self._check_ts(project)
+        if project.language == "javascript":
+            return self._check_js(project)
         return self._check_python(project)
 
     def _check_python(self, project: Project) -> list[Finding]:
@@ -94,3 +96,6 @@ class ResourceSubscriptionsReplaced(Rule):
                 seen.add((str(f.path), line))
                 out.append(self.finding(message, f, line, text))
         return sorted(out, key=lambda x: (str(x.path or ""), x.line or 0))
+
+    def _check_js(self, project: Project) -> list[Finding]:
+        return self._check_ts(project)
