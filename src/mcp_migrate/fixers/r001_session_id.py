@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ._textedit import string_lines
+from ._textedit import cross_line_bracket_lines, sole_function_body_lines, string_lines
 from .base import Fixer, FixResult, comment_prefix, is_commented
 
 SPEC_URL = "https://github.com/modelcontextprotocol/modelcontextprotocol/pull/2567"
@@ -31,7 +31,6 @@ HEADER_ACCESS_RX = re.compile(
     re.IGNORECASE,
 )
 
-
 class SessionIdHeaderFixer(Fixer):
     rule_id = "R001"
     title = "Comment out Mcp-Session-Id header reads/writes, leave a TODO"
@@ -42,6 +41,8 @@ class SessionIdHeaderFixer(Fixer):
         out: list[str] = []
         changes: list[str] = []
         str_lines = string_lines(source, path)
+        sole_body = sole_function_body_lines(lines, path)
+        crosses_line_bracket = cross_line_bracket_lines(source, path)
 
         prefix = comment_prefix(path)
         todo = f"{prefix}{TODO}"
@@ -63,10 +64,27 @@ class SessionIdHeaderFixer(Fixer):
                 body = stripped.rstrip("\n")
                 # Idempotency: if the line right above is already our TODO
                 # (e.g. a previous fixer run), don't insert a second one.
-                if not (out and out[-1].strip(" \t\n") == todo):
+                todo_added = not (out and out[-1].strip(" \t\n") == todo)
+                if todo_added:
                     out.append(f"{indent}{todo}{newline}")
-                out.append(f"{indent}{prefix}{body}{newline}")
-                changes.append(f"line {i}: commented out Mcp-Session-Id header access, added TODO")
+                if i in crosses_line_bracket:
+                    out.append(raw_line)
+                    if todo_added:
+                        changes.append(
+                            f"line {i}: added TODO for Mcp-Session-Id header access"
+                        )
+                elif i in sole_body:
+                    out.append(f"{indent}{prefix}{body}\n{indent}pass{newline}")
+                    changes.append(
+                        f"line {i}: commented out Mcp-Session-Id header access, "
+                        "added TODO and pass"
+                    )
+                else:
+                    out.append(f"{indent}{prefix}{body}{newline}")
+                    changes.append(
+                        f"line {i}: commented out Mcp-Session-Id header access, "
+                        "added TODO"
+                    )
             else:
                 out.append(raw_line)
 

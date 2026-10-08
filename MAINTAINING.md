@@ -4,7 +4,7 @@ Notes for whoever maintains this next. The architecture is readable from the
 code, so this file is deliberately not about architecture — it is about the
 things that cost someone a day to learn and are invisible in a diff.
 
-Accurate as of 0.9.0 (2026-09-18).
+Accurate as of 0.16.0 (2026-10-07).
 
 ## 1. What it is, in one sentence
 
@@ -18,7 +18,7 @@ package renames rather than the protocol changes.
 
 ```
 $ mcp-migrate check ./my-server
-mcp-migrate v0.9.0  ->  my-server
+mcp-migrate v0.16.0  ->  my-server
 17 Python files, 21 rules, spec 2026-07-28
 
             rule    where                        what
@@ -153,8 +153,18 @@ on 2026-09-17; applying "release when ahead" literally would have published a
 red tree over OIDC, which needs no human at the keyboard to stop it. Docs-only
 and test-only commits are not a reason to publish at all.
 
-The release is: changelog, version bump, PR, merge, tag, push tag. Then verify
-by installing from PyPI fresh — not by reading the green tick.
+The release is: changelog, version bump, PR, merge, tag, push tag, then the
+GitHub release from that version's changelog section (`gh release create
+vX.Y.Z --verify-tag --latest --notes-file …`). `release.yml` publishes to PyPI
+and nothing else. 0.8.0, 0.8.1 and 0.9.0 shipped without a release page, and
+for eleven days the Releases page called 0.7.1 the latest; they were
+backfilled on 2026-09-28. Then verify by installing from PyPI fresh — not by
+reading the green tick.
+
+Before tagging a release that changes a rule, run `uv run python
+scripts/regrade_board.py`. It re-scans every board entry at its pinned
+commit, takes about a minute, and prints the YAML to update when a
+published grade has moved.
 
 Bump **minor** when a published grade moves or a documented field changes
 shape; **patch** otherwise. Docs-only and test-only commits do not need a
@@ -179,22 +189,22 @@ release.
 
 ## 6. Open work, in priority order
 
-1. **#245** — still open for the `R001` import-member half. The
-   function-body half shipped in 0.7.1. Labelled `mentored`; a contributor is
-   already oriented on it.
-2. **#105** — fixers insert comments inside string literals. The PEP 701 half
+1. **#105** — fixers insert comments inside string literals. The PEP 701 half
    is fixed (§3); the general case is not.
-3. **#255** — a server written against the current Python SDK (`mcp` 2.x) is
-   not recognised as an MCP server **at all**, and grades A. A false clean
-   bill of health is the worst output this tool can produce.
-4. **#269 / #252** — R017 edits inside comments, and its regex matches at
-   column 0 regardless of indentation. Same rule, two defects; check whether
-   one fix covers both before filing work twice.
-5. **#89** — five rules decide "is this MCP?" too loosely and fire on
-   unrelated code. Upstream of a lot of false-positive reports.
-6. **#259** — nothing verifies that published board grades still reproduce, so
-   a rule change can move a grade silently. Pairs with the `checked_with` trap.
-7. **#172** — TypeScript is at 21 of 21 but the tool still says
+2. **#255** (SDK 2.x) is mostly done: detection shipped in 0.11.0, 0.11.1
+   made it see a black-formatted `Server(` call, and
+   `tests/fixtures/sdk2_server` pins both.
+   What's left is per-rule. Use `server_call_keywords` for constructor
+   arguments rather than a line regex. R010, R011, R013 and R016 all do; #310
+   (SDK-registered removed methods) closed with 0.13.0.
+3. **#89** — R003 and R011 decide "is this MCP?" too loosely and fire on
+   unrelated code. R005, R006 and R020 are fixed (#234, #296, #321). Upstream of a lot
+   of false-positive reports.
+4. **#259**: `scripts/regrade_board.py` (#327) re-checks the board when someone
+   runs it, as the release steps in §4 now do. Still open: the weekly scheduled
+   job that runs it and opens an issue on drift, so it doesn't depend on anyone
+   remembering.
+5. **#172** — TypeScript is at 21 of 21 but the tool still says
    "partial — 21 of 21". A one-line honesty bug with a stale premise behind it.
 
 **Rejected, do not re-investigate:** re-requiring fork-PR approval (§3) — the

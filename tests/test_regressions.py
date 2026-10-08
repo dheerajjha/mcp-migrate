@@ -19,14 +19,17 @@ import pytest
 
 from mcp_migrate.cli import run_check
 from mcp_migrate.grade import RULE_CAP, WEIGHT, score
-from mcp_migrate.rules.base import Finding, Rule
+from mcp_migrate.rules.base import Finding, Project, Rule, SourceFile, server_call_keywords
 from mcp_migrate.rules.r004_tool_ordering import NondeterministicToolOrder
 from mcp_migrate.rules.r005_extensions import NoExtensionsDeclared
 from mcp_migrate.rules.r007_deprecated_features import DeprecatedCoreFeatures
 from mcp_migrate.rules.r009_initialize_handshake_removed import (
     InitializeHandshakeStillImplemented,
 )
-from mcp_migrate.rules.r010_server_discover_missing import ServerDiscoverMissing
+from mcp_migrate.rules.r010_server_discover_missing import (
+    ServerDiscoverMissing,
+    _has_request_handlers,
+)
 from mcp_migrate.rules.r011_ping_removed import PingRemoved
 from mcp_migrate.rules.r017_resource_not_found_code_changed import (
     ResourceNotFoundCodeChanged,
@@ -315,6 +318,16 @@ def test_r017_fires_on_title_case_resource_not_found(tmp_path):
     assert hit_files == {"lower.py", "upper.py"}
 
 
+def test_r017_ignores_indented_python_comment_only_mentions(tmp_path):
+    (tmp_path / "server.py").write_text(
+        "def handle():\n"
+        "    # The old -32002 resource not found code was replaced\n"
+        "    return 1\n"
+    )
+    project = load_project(tmp_path)
+    assert ResourceNotFoundCodeChanged().check(project) == []
+
+
 def test_r020_does_not_fire_on_an_unrelated_register_method(tmp_path):
     # A generic "register a client" method in, say, a CRM or billing
     # system has nothing to do with OAuth Dynamic Client Registration --
@@ -477,6 +490,50 @@ def test_r010_is_not_suppressed_by_a_wire_name_merely_containing_discover(tmp_pa
     )
 
 
+SDK2_SERVER = FIXTURES / "sdk2_server"
+
+
+def test_a_python_sdk_2x_server_is_recognised_as_one():
+    # #255. Written the way SDK 2.x says to (MCPServer, and handlers passed to
+    # Server() as constructor arguments), this server used to grade A with
+    # nothing found, because every rule's evidence was 1.x-shaped. The fixture
+    # was checked against mcp 2.2.0 rather than written from the migration
+    # guide, so when the next SDK major moves these names, this test should
+    # be the thing that fails first.
+    by_rule = _findings_by_rule(SDK2_SERVER)
+
+    # cache_hints defaults to None on both entry points in 2.x.
+    assert sorted(f.path.name for f in by_rule.get("R016", [])) == ["lowlevel.py", "server.py"]
+    # The SDK registers what R010 looks for; the declared 2.x floor says so.
+    assert "R010" not in by_rule
+    # And R010 is silent because it sees the handlers and then reads the 2.x
+    # floor, not because it saw nothing. Silent-by-blindness passes the line
+    # above too, which is how this went unnoticed in the first place.
+    assert _has_request_handlers(load_project(SDK2_SERVER).for_language("python"))
+
+
+@pytest.mark.parametrize("source,expected", [
+    ('server = Server("demo", on_list_tools=handler)\n', [1]),
+    ('server = Server(\n    "demo",\n    on_list_tools=handler,\n)\n', [3]),
+    ('server = Server("demo", name="x",\n                on_list_tools=handler)\n', [2]),
+    ('server = mcp.server.Server(\n    "demo", on_list_tools=handler)\n', [2]),
+    # The keyword belongs to make(), not to Server().
+    ('server = Server("demo", handlers=make(on_list_tools=handler))\n', []),
+    ('"""Server(on_list_tools=...)"""\n# Server("d", on_list_tools=x)\n', []),
+    # Does not parse, so the one-line fallback answers.
+    ('server = Server("demo", on_list_tools=handler)\ndef broken(:\n', [1]),
+], ids=["one-line", "black", "later-line", "attribute", "nested", "prose", "unparseable"])
+def test_server_call_keywords_sees_the_call_however_it_is_wrapped(source, expected):
+    # #313: SDK 2.x handlers are constructor arguments, and a formatter puts
+    # `Server(` and `on_list_tools=` on different lines. The line-at-a-time
+    # regex in R010 and R016 missed that, the most common shape of all.
+    project = Project(
+        root=Path("."), files=[SourceFile(path=Path("s.py"), text=source, language="python")]
+    )
+    hits = server_call_keywords(project, ("on_list_tools",), r"\bServer\s*\([^)]*\bon_list_tools\s*=")
+    assert [line for _f, line, _text in hits] == expected
+
+
 # --- 7. R015/R016 must not demand fields the framework owns ----------------
 #
 # The official SDK (mcp 2.0.0) sets `resultType` on every result it
@@ -487,6 +544,7 @@ def test_r010_is_not_suppressed_by_a_wire_name_merely_containing_discover(tmp_pa
 from mcp_migrate.rules.r015_result_type_required import RequiredResultTypeMissing
 from mcp_migrate.rules.r016_cacheable_result_required import (
     CacheableResultMetadataMissing,
+    MESSAGE as R016_MESSAGE,
 )
 
 _LOWLEVEL_HANDLER = (
@@ -570,6 +628,52 @@ def test_r016_is_satisfied_by_cache_hints_configured_on_the_server(tmp_path):
         "a server that configures cache hints has handled this -- reporting it "
         "as still missing looks for the field in the wrong place"
     )
+
+
+def test_r016_is_satisfied_by_cache_hints_on_a_python_mcpserver(tmp_path):
+    # The 2.x high-level server forwards cache_hints to the low-level Server
+    # constructor, so this project-wide config should satisfy the rule too.
+    (tmp_path / "server.py").write_text(
+        "from mcp.server import CacheHint, MCPServer\n\n"
+        "mcp = MCPServer('demo', cache_hints={'tools/list': CacheHint(ttl_ms=5000)})\n\n"
+        "@mcp.tool()\n"
+        "def echo(text: str) -> str:\n"
+        "    return text\n"
+    )
+    project = load_project(tmp_path)
+    assert CacheableResultMetadataMissing().check(project) == [], (
+        "MCPServer forwards cache_hints to the same transport layer, so the "
+        "rule should not keep asking for ttlMs/cacheScope in handler code"
+    )
+
+
+def test_r016_flags_python_mcpserver_resource_without_cache_metadata(tmp_path):
+    (tmp_path / "server.py").write_text(
+        "from mcp.server import MCPServer\n\n"
+        "mcp = MCPServer('demo')\n\n"
+        "@mcp.resource('echo://static')\n"
+        "def echo_resource() -> str:\n"
+        "    return 'Echo!'\n"
+    )
+    project = load_project(tmp_path)
+    findings = CacheableResultMetadataMissing().check(project)
+    assert len(findings) == 1
+    assert findings[0].message == R016_MESSAGE
+    assert findings[0].line == 5
+
+
+def test_r016_flags_python_2x_lowlevel_constructor_resource_without_cache_metadata(tmp_path):
+    (tmp_path / "server.py").write_text(
+        "from mcp.server import Server\n\n"
+        "async def handle_read_resource(uri: str):\n"
+        "    return []\n\n"
+        "app = Server('demo', on_read_resource=handle_read_resource)\n"
+    )
+    project = load_project(tmp_path)
+    findings = CacheableResultMetadataMissing().check(project)
+    assert len(findings) == 1
+    assert findings[0].message == R016_MESSAGE
+    assert findings[0].line == 6
 
 
 def test_r016_still_fires_when_no_cache_metadata_exists_anywhere(tmp_path):
@@ -955,6 +1059,105 @@ def test_a_real_capabilities_declaration_still_fires(tmp_path):
         "from mcp.types import ServerCapabilities\n\ncaps = ServerCapabilities(tools={})\n"
     )
     assert "R005" in _findings_by_rule(tmp_path)
+
+def test_r005_ignores_local_capabilities_class_in_mcp_file(tmp_path):
+    (tmp_path / "srv.py").write_text(
+        "from mcp.server import Server\n"
+        'server = Server("demo")\n\n'
+        "class ServerCapabilities:\n"
+        "    max_connections: int = 4\n\n"
+        "caps = ServerCapabilities()\n"
+    )
+
+    assert "R005" not in _findings_by_rule(tmp_path)
+
+
+def test_r005_keeps_sdk_evidence_before_local_capabilities_class(tmp_path):
+    (tmp_path / "srv.py").write_text(
+        "from mcp.types import ServerCapabilities\n"
+        "caps = ServerCapabilities(tools={})\n\n"
+        "class ServerCapabilities:\n"
+        "    max_connections: int = 4\n"
+    )
+
+    by_rule = _findings_by_rule(tmp_path)
+
+    assert "R005" in by_rule
+    assert by_rule["R005"][0].line == 1
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        "export interface ServerCapabilities { flags: string[] }\n",
+        "export class ServerCapabilities { flags = [] }\n",
+    ],
+    ids=["interface", "class"],
+)
+def test_r005_typescript_capabilities_name_without_mcp_surface_is_silent(tmp_path, declaration):
+    (tmp_path / "server.ts").write_text(declaration)
+
+    assert "R005" not in _findings_by_rule(tmp_path)
+
+
+def test_r005_typescript_real_sdk_type_still_fires(tmp_path):
+    (tmp_path / "server.ts").write_text(
+        'import type { ServerCapabilities } from "@modelcontextprotocol/sdk/types.js";\n'
+        "const caps: ServerCapabilities = {};\n"
+    )
+
+    assert "R005" in _findings_by_rule(tmp_path)
+
+
+def test_r006_typescript_sse_asset_path_without_mcp_is_silent(tmp_path):
+    (tmp_path / "app.ts").write_text(
+        'const iconUrl = "/sse/icons/status.svg";\n'
+    )
+
+    assert "R006" not in _findings_by_rule(tmp_path)
+
+
+def test_r006_typescript_sse_route_without_mcp_is_silent(tmp_path):
+    (tmp_path / "app.ts").write_text(
+        'app.get("/sse", (req, res) => {\n'
+        '    res.write("data: hello\\n\\n");\n'
+        "});\n"
+    )
+
+    assert "R006" not in _findings_by_rule(tmp_path)
+
+
+def test_r006_typescript_sse_route_with_mcp_surface_still_fires(tmp_path):
+    (tmp_path / "server.ts").write_text(
+        'import { Server } from "@modelcontextprotocol/sdk/server/index.js";\n'
+        'app.get("/sse", handler);\n'
+    )
+
+    assert "R006" in _findings_by_rule(tmp_path)
+
+
+def test_r006_javascript_transport_class_still_fires_without_other_surface(tmp_path):
+    (tmp_path / "server.js").write_text(
+        'const transport = new SSEServerTransport("/messages", res);\n'
+    )
+
+    assert "R006" in _findings_by_rule(tmp_path)
+
+
+def test_r006_python_transport_class_still_fires(tmp_path):
+    (tmp_path / "server.py").write_text(
+        'transport = SseServerTransport("/messages/")\n'
+    )
+
+    assert "R006" in _findings_by_rule(tmp_path)
+
+
+def test_r006_typescript_transport_property_still_fires_without_other_surface(tmp_path):
+    (tmp_path / "server.ts").write_text(
+        'const config = { transport: "sse" };\n'
+    )
+
+    assert "R006" in _findings_by_rule(tmp_path)
 
 
 def test_the_surface_gate_is_not_fooled_by_a_longer_wire_name(tmp_path):

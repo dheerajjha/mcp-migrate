@@ -20,10 +20,12 @@ until each is checked and ported individually.
 """
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
+from mcp_migrate.cli import main
 from mcp_migrate.rules.base import Project, SourceFile
 from mcp_migrate.rules.r006_sse_transport_deprecated import DeprecatedSSETransport
 from mcp_migrate.rules.r013_subscriptions_replaced import (
@@ -32,6 +34,9 @@ from mcp_migrate.rules.r013_subscriptions_replaced import (
 from mcp_migrate.rules.r012_logging_set_level_removed import LoggingSetLevelRemoved
 from mcp_migrate.rules.r017_resource_not_found_code_changed import (
     ResourceNotFoundCodeChanged,
+)
+from mcp_migrate.rules.r019_tasks_polling_replaces_blocking_result import (
+    TasksPollingReplacesBlockingResult,
 )
 from mcp_migrate.rules.r021_json_schema_2020_12_required import OldJSONSchemaDialect
 from mcp_migrate.scan import load_project
@@ -170,6 +175,51 @@ def test_r013_ignores_comment_only_and_longer_identifier_mentions_in_javascript(
     assert ResourceSubscriptionsReplaced().check(project) == []
 
 
+def test_r019_finds_removed_task_methods_in_javascript():
+    project = _js_project(
+        'export function listTasks() {\n'
+        '  return { method: "tasks/list" };\n'
+        '}\n'
+        '\n'
+        'export function waitForTask() {\n'
+        '  return { method: "tasks/result" };\n'
+        '}\n'
+    )
+    findings = TasksPollingReplacesBlockingResult().check(project)
+    assert [finding.line for finding in findings] == [2, 6]
+
+
+def test_r019_finds_task_schema_names_in_javascript():
+    project = _js_project(
+        'const { ListTasksRequestSchema, GetTaskPayloadRequestSchema } = '
+        'require("@modelcontextprotocol/sdk/types.js");\n'
+        '\n'
+        'server.setRequestHandler(ListTasksRequestSchema, async () => ({ tasks: [] }));\n'
+    )
+    findings = TasksPollingReplacesBlockingResult().check(project)
+    assert [finding.line for finding in findings] == [1, 3]
+
+
+def test_r019_ignores_javascript_comment_only_mentions():
+    project = _js_project(
+        '// tasks/list and tasks/result were replaced by polling tasks/get.\n'
+        'export const protocolVersion = "2026-07-28";\n'
+    )
+    assert TasksPollingReplacesBlockingResult().check(project) == []
+
+
+def test_r019_reaches_javascript_files_through_the_cli(tmp_path, capsys):
+    # The three tests above call check() directly, which skips the language
+    # gate -- and that gate is the part of the port that changed. With
+    # "javascript" dropped from R019's `languages` they still pass; only the
+    # coverage-count tests notice. This one goes through `check` the way a
+    # user does, so losing the port fails here by name.
+    (tmp_path / "tasks.js").write_text('export const m = { method: "tasks/list" };\n')
+    main(["check", "--format", "json", "--rule", "R019", str(tmp_path)])
+    findings = json.loads(capsys.readouterr().out)["findings"]
+    assert [(f["rule"], f["line"]) for f in findings] == [("R019", 1)]
+
+
 def test_r017_finds_the_old_resource_not_found_code_in_javascript():
     code = (
         'function notFound() {\n'
@@ -184,6 +234,17 @@ def test_r017_finds_the_old_resource_not_found_code_in_javascript():
 
 def test_r017_stays_silent_without_the_resource_not_found_context():
     project = _js_project('const port = -32002;\n')
+    assert ResourceNotFoundCodeChanged().check(project) == []
+
+
+def test_r017_ignores_indented_javascript_comment_only_mentions():
+    code = (
+        'function handle() {\n'
+        '  // The old -32002 resource not found code was replaced\n'
+        '  return 1;\n'
+        '}\n'
+    )
+    project = _js_project(code)
     assert ResourceNotFoundCodeChanged().check(project) == []
 
 

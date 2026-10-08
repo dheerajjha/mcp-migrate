@@ -26,7 +26,7 @@ graded against the revision: **<https://dheerajjha.github.io/mcp-migrate/>**
 ```
 $ uvx mcp-migrate check tests/fixtures/fixer_roundtrip
 
-mcp-migrate v0.9.0  ->  fixer_roundtrip
+mcp-migrate v0.16.0  ->  fixer_roundtrip
 2 Python files, 21 rules, spec 2026-07-28
 
             rule    where         what
@@ -204,7 +204,7 @@ coverage is complete the reason it gives is a decision, not a fraction:
 ```
 $ mcp-migrate check ./my-ts-server
 
-mcp-migrate v0.9.0  ->  my-ts-server
+mcp-migrate v0.16.0  ->  my-ts-server
 
 No grade for this one. Found 1 TypeScript. TypeScript is read by every rule,
 but whether it gets graded is still an open decision, not a coverage gap --
@@ -236,8 +236,8 @@ coverage; what remains is the grading decision in #172.
 **JavaScript is scanned, and a handful of rules read it.** `.js`/`.jsx`/
 `.mjs`/`.cjs` load and route through the same comment/string scanner as
 TypeScript, but the rule port is a separate, ongoing effort tracked in
-[#149](https://github.com/dheerajjha/mcp-migrate/issues/149) — currently 6
-of 21 rules (R001, R006, R012, R013, R017, R021) read JavaScript. `check` reports findings
+[#149](https://github.com/dheerajjha/mcp-migrate/issues/149) — currently 7
+of 21 rules (R001, R006, R012, R013, R017, R019, R021) read JavaScript. `check` reports findings
 from those and withholds the grade, same as a `PARTIAL` TypeScript tree
 did before R002 landed; the summary line names how many rules cover it so
 the number is never a stale claim.
@@ -250,6 +250,66 @@ posts a literal `{"method": "tools/list"}` payload, is evidence your project
 is well tested -- not evidence the server itself is broken. Pass
 `--include-tests` to scan those paths too.
 
+### Adopting this incrementally: a baseline file
+
+Suppression (above) says *"this finding is wrong, or deliberate, forever."*
+A baseline says something different: *"this finding is real, I know about
+it, I'm not fixing it in this PR."* Without one, adopting `check` in CI on an
+existing server is all-or-nothing -- fix every `breaking` finding today, or
+don't gate on it at all.
+
+```bash
+mcp-migrate check . --write-baseline .mcp-migrate-baseline.json
+```
+
+```
+recorded 27 finding(s) to .mcp-migrate-baseline.json
+```
+
+Commit that file, then point CI at it:
+
+```bash
+mcp-migrate check . --baseline .mcp-migrate-baseline.json
+```
+
+A finding recorded in the baseline **still counts toward the grade** --
+exactly as if the baseline didn't exist. What changes is `--fail-on`: only
+findings *not* in the baseline can fail the build. A project that starts at
+Grade F stays Grade F until the code actually improves; it just stops
+blocking every unrelated PR on debt that predates the tool. Bulk-baselining
+your way to a passing CI run does not bulk-baseline your way to a better
+grade -- those are deliberately different claims.
+
+Matching survives reformatting: a baseline entry is keyed on the rule and
+the finding's source line content, not its line number, so inserting an
+unrelated line above a baselined finding doesn't make it look new. A finding
+whose actual content changes (a different header name, a different error
+code) *does* count as new -- the key is loose enough to survive
+reindentation, not so loose it stops meaning anything.
+
+`--write-baseline` fully regenerates the file from whatever `check` finds
+that run, which is also how a project prunes it: fix something, run
+`--write-baseline` again, and the resolved finding simply isn't written back.
+Running plain `--baseline` (without `--write-baseline`) against a file with
+stale entries reports them instead of silently carrying them forever:
+
+```
+2 baselined finding(s) no longer present. Re-run --write-baseline to prune them.
+```
+
+`baseline = ".mcp-migrate-baseline.json"` in `[tool.mcp-migrate]` (or a
+standalone `.mcp-migrate.toml`) sets a project-wide default the same way
+`skip`/`include-tests` do -- `--baseline` on the command line always wins. A
+missing baseline file is not an error: every finding is simply new, which is
+what lets a team add `--baseline` to CI before the file exists in the branch
+being checked.
+
+`--json` adds a `baseline` object (`path`, `new`, `known`, `stale`) and a
+`"new": true|false` key on each item in `findings`, both omitted entirely
+when no baseline was requested -- existing consumers see unchanged output.
+`--write-baseline` in `--json` mode adds a `baseline_write` object instead.
+Full shapes in [`schemas/check-json.schema.json`](schemas/check-json.schema.json).
+
 ### Project config
 
 Everything above is a flag, which means it has to be retyped on every
@@ -260,6 +320,7 @@ invocation and can't be shared with a team or with CI. Put it in
 [tool.mcp-migrate]
 skip = ["vendor/", "generated/"]
 include-tests = false
+baseline = ".mcp-migrate-baseline.json"
 
 [tool.mcp-migrate.rules]
 R008 = "off"                                          # no reason recorded
@@ -408,7 +469,7 @@ this most.
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/dheerajjha/mcp-migrate
-    rev: v0.9.0
+    rev: v0.16.0
     hooks:
       - id: mcp-migrate
 ```
@@ -438,7 +499,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dheerajjha/mcp-migrate@v0.9.0
+      - uses: dheerajjha/mcp-migrate@v0.16.0
 ```
 
 `v0.5.0` is the first tag that contains the action; until it is cut, `@main`
@@ -449,7 +510,7 @@ input picks the *tool* it installs from PyPI.
 A breaking finding fails the job. Nothing else does, until you say so:
 
 ```yaml
-      - uses: dheerajjha/mcp-migrate@v0.9.0
+      - uses: dheerajjha/mcp-migrate@v0.16.0
         with:
           path: src/my_server     # default: .
           fail-on: deprecated     # breaking | deprecated | advisory | never
@@ -470,7 +531,7 @@ your code scanning lives:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: dheerajjha/mcp-migrate@v0.9.0
+      - uses: dheerajjha/mcp-migrate@v0.16.0
         with:
           sarif-file: results.sarif
           fail-on: never          # let the Security tab hold them, not the build
@@ -626,7 +687,7 @@ color using the table above):
 
 <!-- BOARD:START -->
 
-**17 servers checked** (7x A, 8x B, 2x C)
+**20 servers checked** (9x A, 8x B, 2x C, 1x F)
 
 All of these were checked by this project, not submitted by the servers' maintainers -- so read it as a survey, not as adoption. If you maintain one of these, [submit your own entry](registry/README.md) and it becomes yours.
 
@@ -638,6 +699,8 @@ All of these were checked by this project, not submitted by the servers' maintai
 | [cloudwatch-mcp-server](https://github.com/awslabs/mcp) | **A** | ready | python | AWS Labs MCP server for CloudWatch that gives troubleshooting agents alarm, metric, and log data for root cause analysis. |
 | [duckduckgo-mcp-server](https://github.com/nickclyde/duckduckgo-mcp-server) | **A** | ready | python | MCP server that provides web search through DuckDuckGo, with additional content fetching and parsing features. |
 | [dynamodb-mcp-server](https://github.com/awslabs/mcp) | **A** | ready | python | Official AWS DynamoDB MCP server providing expert data modeling guidance, validation, and cost analysis tools. |
+| [financial-datasets-mcp-server](https://github.com/financial-datasets/mcp-server) | **A** | ready | python | MCP server for the Financial Datasets stock market API, exposing company financials, prices, and market news as tools. |
+| [invisible-playwright-mcp](https://github.com/feder-cr/invisible_playwright_mcp) | **A** | ready | python | MCP browser agent that lets assistants drive a real Firefox-based browser to navigate, click, type, read, and screenshot live web pages. |
 | [mcp-server-tree-sitter](https://github.com/wrale/mcp-server-tree-sitter) | **A** | ready | python | MCP server providing tree-sitter code analysis so AI assistants get structure-aware access to codebases in many languages. |
 | [mcp-neo4j-cypher](https://github.com/neo4j-contrib/mcp-neo4j) | **B** | ready | python | MCP server for Neo4j that runs Cypher graph queries and supports Text2Cypher workflows over graph data. |
 | [arxiv-mcp-server](https://github.com/blazickjp/arxiv-mcp-server) | **B** | ready | python | Search, download, and read arXiv papers, with semantic search and citation tools, over MCP. |
@@ -649,6 +712,7 @@ All of these were checked by this project, not submitted by the servers' maintai
 | [excel-mcp-server](https://github.com/haris-musa/excel-mcp-server) | **B** | ready | python | Read, write, and format Excel workbooks (formulas, charts, pivot tables) over MCP, via SSE or Streamable HTTP. |
 | [mcp-server-git](https://github.com/modelcontextprotocol/servers) | **C** | ready | python | Reference MCP server for Git repository interaction, giving LLMs tools to read, search, and manipulate repos. |
 | [mcp-atlassian](https://github.com/sooperset/mcp-atlassian) | **C** | migrating | python | MCP server for Atlassian products (Confluence and Jira), supporting both Cloud and Server/Data Center deployments. |
+| [mcp-proxy](https://github.com/sparfenyuk/mcp-proxy) | **F** | migrating | python | Proxy that bridges stdio MCP clients with remote SSE or Streamable HTTP servers, and exposes local stdio servers over SSE. |
 
 <!-- BOARD:END -->
 

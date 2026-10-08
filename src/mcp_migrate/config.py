@@ -55,8 +55,8 @@ _ON_RX = re.compile(r"^(?:on|enabled|true)$", re.IGNORECASE)
 # toggle are accepted (the reader takes either); the dash form is the one
 # the docstring and README use, so it is the only one a "did you mean"
 # hint ever suggests back.
-_KNOWN_KEYS = frozenset({"skip", "include-tests", "include_tests", "rules"})
-_HINT_KEYS = ("skip", "include-tests", "rules")
+_KNOWN_KEYS = frozenset({"skip", "include-tests", "include_tests", "rules", "baseline"})
+_HINT_KEYS = ("skip", "include-tests", "rules", "baseline")
 
 
 @dataclass
@@ -64,6 +64,13 @@ class Config:
     skip: frozenset[str] = frozenset()
     include_tests: bool = False
     disabled_rules: dict[str, str] = field(default_factory=dict)  # rule id -> reason ("" if none given)
+    # Path to a baseline file, relative to the config file's own directory --
+    # None means no project-wide default, same as every other setting here.
+    # `--baseline` on the command line always wins; see baseline.py and
+    # BASELINE_PLAN.md. No config equivalent for --write-baseline: writing is
+    # an explicit, occasional action, not something that should trigger
+    # silently from project config on every run.
+    baseline: str | None = None
     source: Path | None = None
     warnings: list[str] = field(default_factory=list)
 
@@ -117,6 +124,11 @@ def _parse_table(table: dict, *, source: Path) -> Config:
     elif rules_table:
         warnings.append(f"{source}: `[rules]` must be a table, ignoring")
 
+    baseline = table.get("baseline")
+    if baseline is not None and not (isinstance(baseline, str) and baseline.strip()):
+        warnings.append(f"{source}: `baseline` must be a non-empty string, ignoring {baseline!r}")
+        baseline = None
+
     # A key this parser doesn't consume used to fall off the end in silence
     # -- the one misconfiguration the module let pass without the scrutiny it
     # already applies one level down in `[rules]`. That silence is worse here
@@ -150,7 +162,7 @@ def _parse_table(table: dict, *, source: Path) -> Config:
 
     return Config(
         skip=frozenset(skip), include_tests=include_tests,
-        disabled_rules=disabled, source=source, warnings=warnings,
+        disabled_rules=disabled, baseline=baseline, source=source, warnings=warnings,
     )
 
 

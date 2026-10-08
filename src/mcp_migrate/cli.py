@@ -8,7 +8,7 @@ import json
 import subprocess
 import sys
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from rich.console import Console
@@ -16,6 +16,7 @@ from rich.markup import escape
 from rich.table import Table
 
 from . import __version__
+from . import baseline as baseline_mod
 from . import overlap as overlap_mod
 from . import sarif as sarif_mod
 from . import suppress as suppress_mod
@@ -72,6 +73,20 @@ class CheckResult:
     disabled_rules: dict  # rule id -> reason, for rules a project config switched off
     checked_languages: frozenset  # languages an active (selected, enabled) rule actually reads
 
+    # Baseline (#181). `findings` above is completely unaffected by any of
+    # this -- the grade is computed from it exactly as before a baseline
+    # ever existed. These fields are a side channel that only decides what
+    # `--fail-on` sees and what the report calls out as new. See
+    # BASELINE_PLAN.md's "one design decision everything else follows from."
+    baseline_active: bool = False
+    baseline_path: Path | None = None
+    baseline_warning: str | None = None
+    # `new_findings`/`baselined_findings` are subsets of `findings` (same
+    # Finding objects, not copies) -- never a replacement for it.
+    new_findings: list = field(default_factory=list)
+    baselined_findings: list = field(default_factory=list)
+    stale_baseline_entries: list = field(default_factory=list)
+
 
 def _validate_configured_rules(config: Config, known_rule_ids) -> dict[str, str]:
     """Return configured rule disables that name a registered rule."""
@@ -91,7 +106,8 @@ def _validate_configured_rules(config: Config, known_rule_ids) -> dict[str, str]
 
 
 def run_check_detailed(
-    root: Path, *, include_tests: bool = False, rule_ids: frozenset[str] | None = None, config: Config | None = None,
+    root: Path, *, include_tests: bool = False, rule_ids: frozenset[str] | None = None,
+    config: Config | None = None, baseline_path: Path | None = None,
 ) -> "CheckResult":
     if config is None:
         config = load_config(root)
@@ -135,6 +151,19 @@ def run_check_detailed(
     findings.sort(key=lambda f: (SEV_ORDER.get(rules[f.rule_id].severity, 9), f.rule_id))
 
     value = score(findings, rules)
+
+    # Baseline (#181), deliberately after `score()`: it reads the exact same
+    # `findings` list scoring just consumed and does not feed back into it,
+    # which is what keeps the grade unaffected by a baseline -- see
+    # BASELINE_PLAN.md. A missing file at `baseline_path` is not an error
+    # (see baseline.load): every finding is simply new on the first run.
+    new_findings, baselined_findings, stale_entries, baseline_warning = findings, [], [], None
+    if baseline_path is not None:
+        loaded = baseline_mod.load(baseline_path)
+        baseline_warning = loaded.warning
+        applied = baseline_mod.apply(findings, loaded.entries)
+        new_findings, baselined_findings, stale_entries = applied.new, applied.known, applied.stale
+
     return CheckResult(
         project=project, rules=rules, findings=findings, value=value,
         grade=letter(value), suppressed=suppressed,
@@ -146,6 +175,9 @@ def run_check_detailed(
         # rather than recomputing means this can never drift from what the
         # loop above actually ran.
         checked_languages=frozenset(views),
+        baseline_active=baseline_path is not None, baseline_path=baseline_path,
+        baseline_warning=baseline_warning, new_findings=new_findings,
+        baselined_findings=baselined_findings, stale_baseline_entries=stale_entries,
     )
 
 
@@ -393,6 +425,19 @@ def _finding_dict(f, rules) -> dict:
     return d
 
 
+def _finding_dicts(findings, rules, result: "CheckResult") -> list[dict]:
+    """`_finding_dict` for every finding, plus `"new"` when a baseline is
+    active -- omitted entirely otherwise, so JSON output is byte-identical
+    to before this feature existed for anyone not using it.
+    """
+    dicts = [_finding_dict(f, rules) for f in findings]
+    if result.baseline_active:
+        known_ids = {id(f) for f in result.baselined_findings}
+        for f, d in zip(findings, dicts):
+            d["new"] = id(f) not in known_ids
+    return dicts
+
+
 def _severity_counts(findings, rules) -> dict:
     counts = {"breaking": 0, "deprecated": 0, "advisory": 0}
     for f in findings:
@@ -418,6 +463,27 @@ def _exit_for(findings, rules, fail_on: str = "breaking") -> int:
     return EXIT_FINDINGS if any(
         SEV_ORDER.get(rules[f.rule_id].severity, 9) <= threshold for f in findings
     ) else EXIT_OK
+
+
+def _exit_findings(result: "CheckResult", all_findings, *, wrote_baseline: bool = False) -> list:
+    """Which findings `--fail-on` should actually see.
+
+    Without a baseline this is just `all_findings`, unchanged from before
+    this feature existed. With one active, only findings *not* in it can
+    fail the build -- a baselined finding still counts toward the grade
+    (`all_findings`/`result.findings` is untouched either way; see
+    `run_check_detailed`), it only stops being able to block a merge.
+
+    `wrote_baseline` is true right after `--write-baseline` ran: every
+    current finding was just recorded, so nothing is new by construction.
+    No extra bookkeeping needed for that -- it falls directly out of what
+    "the file now contains everything found this run" means.
+    """
+    if wrote_baseline:
+        return []
+    if result.baseline_active:
+        return result.new_findings
+    return all_findings
 
 
 def _checked_something(project, checked_languages) -> bool:
@@ -492,6 +558,99 @@ def _report_suppressions(console, result, *, show: bool) -> None:
         console.print("[dim]Run with --show-suppressions to see each one and its reason.[/dim]")
 
 
+def _stale_baseline_dict(e) -> dict:
+    return {"rule": e.rule_id, "path": e.path, "snippet": e.snippet}
+
+
+def _baseline_dict(result: "CheckResult") -> dict | None:
+    """The `"baseline"` JSON object, or None when no baseline was requested.
+
+    Omitted entirely (never a key with a null/empty value) when
+    `baseline_active` is false, so `--json` output for anyone not using
+    this feature stays byte-identical to before it existed.
+    """
+    if not result.baseline_active:
+        return None
+    return {
+        "path": str(result.baseline_path),
+        "new": len(result.new_findings),
+        "known": len(result.baselined_findings),
+        "stale": [_stale_baseline_dict(e) for e in result.stale_baseline_entries],
+    }
+
+
+def _add_baseline_json(payload: dict, result: "CheckResult", write_report: dict | None) -> None:
+    """Add `"baseline"`/`"baseline_write"` to `payload` in place, only when
+    relevant -- see `_baseline_dict` for why they're omitted otherwise.
+    """
+    baseline = _baseline_dict(result)
+    if baseline is not None:
+        payload["baseline"] = baseline
+    if write_report is not None:
+        payload["baseline_write"] = write_report
+
+
+def _report_baseline(console, result: "CheckResult") -> None:
+    """Say what the baseline changed -- always, not behind a flag, same
+    posture as `_report_suppressions` right above.
+
+    Never hides a finding from the table above it: a baselined finding
+    still prints there and still counts toward the grade printed later.
+    This only clarifies which of those findings are new since the baseline
+    was recorded, which is the one thing `--fail-on` now cares about.
+    """
+    if result.baseline_warning:
+        console.print(f"[yellow]baseline warning[/yellow]  {result.baseline_warning}")
+
+    if not result.baseline_active:
+        return
+
+    # Stale entries are worth surfacing on their own, independent of
+    # whether anything was found this run at all -- fixing every baselined
+    # finding leaves zero `findings` and the baseline entirely stale, which
+    # is exactly the case someone most wants to know about (prune time).
+    for e in result.stale_baseline_entries:
+        console.print(
+            f"[dim]baselined finding gone[/dim]  {e.rule_id}  {e.location()}  "
+            "no longer present -- fixed, or the code moved?"
+        )
+
+    known, new = len(result.baselined_findings), len(result.new_findings)
+    if not known and not new:
+        return
+
+    console.print()
+    console.print(
+        f"[dim]{known} finding(s) matched {result.baseline_path} and are not new -- "
+        "they still count toward the grade above, but will not fail this build.[/dim]"
+    )
+    if new:
+        console.print(
+            f"[yellow]{new} finding(s) new[/yellow] since the baseline was recorded "
+            "-- these are what --fail-on checks."
+        )
+    if result.stale_baseline_entries:
+        console.print(
+            f"[dim]{len(result.stale_baseline_entries)} baselined finding(s) no longer "
+            "present. Re-run --write-baseline to prune them.[/dim]"
+        )
+
+
+def _report_baseline_write(console, path: Path, *, recorded: int, prior_warning: str | None,
+                            new_since: int | None, resolved: int | None) -> None:
+    """Say what `--write-baseline` just did -- printed once, unconditionally."""
+    if prior_warning:
+        console.print(f"[yellow]baseline warning[/yellow]  {prior_warning}")
+    if new_since is None:
+        console.print(f"[bold]recorded {recorded} finding(s)[/bold] to {path}")
+    else:
+        console.print(
+            f"[bold]recorded {recorded} finding(s)[/bold] to {path} "
+            f"({new_since} new since the last write, {resolved} resolved and dropped)"
+        )
+    console.print()
+
+
 def _disabled_rule_dicts(result) -> list[dict]:
     return [
         {"rule": rid, "reason": reason}
@@ -539,11 +698,74 @@ def cmd_check(args) -> int:
     rule_ids = frozenset(args.rule) if args.rule else None
     severities = frozenset(args.severity) if args.severity else None
     fail_on = args.fail_on
+    # A flag beats config, same precedence rule as `include_tests` a few
+    # lines below in run_check_detailed -- see config.py. A relative
+    # `--baseline` is resolved against the CWD (the flag was typed there);
+    # a relative config `baseline` is resolved against the config file's
+    # own directory, so `mcp-migrate check src/` finds the same file
+    # regardless of where the command was run from -- same reasoning as
+    # config's `skip` matching by segment name rather than a CWD-relative path.
+    baseline_arg = getattr(args, "baseline", None)
+    if baseline_arg:
+        baseline_path = Path(baseline_arg)
+    elif cfg.baseline:
+        configured = Path(cfg.baseline)
+        baseline_path = (
+            configured if configured.is_absolute() or cfg.source is None
+            else cfg.source.parent / configured
+        )
+    else:
+        baseline_path = None
+    write_baseline_arg = getattr(args, "write_baseline", None)
+    write_baseline_path = Path(write_baseline_arg) if write_baseline_arg else None
 
-    result = run_check_detailed(root, include_tests=args.include_tests, rule_ids=rule_ids, config=cfg)
+    if write_baseline_path is not None and rule_ids is not None:
+        # A baseline written from a `--rule`-restricted run only records
+        # the selected rule(s)' findings. Every other rule's findings are
+        # then absent from the file, so the very next ordinary run (no
+        # `--rule`) sees all of them as "new" and fails the build the
+        # baseline was meant to stop failing -- adopting it breaks the
+        # build harder than having no baseline at all. Refused before
+        # anything runs, same as `fix`'s `--write`/`--dry-run` check above.
+        console.print(
+            "[bold red]--write-baseline with --rule is refused:[/bold red] it would "
+            "record only the selected rule(s)' findings, making every other rule's "
+            "findings look new the next time this runs without --rule."
+        )
+        return 2
+
+    result = run_check_detailed(
+        root, include_tests=args.include_tests, rule_ids=rule_ids, config=cfg,
+        baseline_path=baseline_path,
+    )
     project, rules, all_findings = result.project, result.rules, result.findings
     value, grade = result.value, result.grade
     checked_languages = result.checked_languages
+
+    # --write-baseline (#181): record every current finding, ignoring any
+    # existing baseline at the target path for matching purposes -- this is
+    # "accept the current state," full stop. Done here, once, before any of
+    # the output branches below, so every format (text/json/sarif) and every
+    # early-return path sees the same post-write world: `_exit_findings`
+    # treats `wrote_baseline=True` as "nothing is new," which falls directly
+    # out of having just written everything found this run to the file.
+    wrote_baseline = write_baseline_path is not None
+    write_report = None
+    if wrote_baseline:
+        # Diff against the file's OLD content, purely for the "N new since
+        # last write" report -- independent of `--baseline`, which (if also
+        # given, usually pointing at this same path) governs the grade-vs-
+        # exit-code split above via `result`, not this write.
+        prior = baseline_mod.load(write_baseline_path)
+        prior_diff = baseline_mod.apply(all_findings, prior.entries) if prior.entries or write_baseline_path.exists() else None
+        baseline_mod.write(write_baseline_path, all_findings, version=__version__, spec=SPEC)
+        write_report = {
+            "path": str(write_baseline_path),
+            "recorded": len(all_findings),
+            "new_since_last": len(prior_diff.new) if prior_diff else None,
+            "resolved": len(prior_diff.stale) if prior_diff else None,
+            "prior_warning": prior.warning,
+        }
     # A grade computed from a subset of the rule set isn't a grade -- #178.
     # `--rule` restricts which rules ran (not just what's printed), so
     # suppressing the grade here is more honest than reporting one that
@@ -582,13 +804,13 @@ def cmd_check(args) -> int:
         if sdk_info.is_sdk:
             return EXIT_OK
         if reason:
-            return _exit_for(all_findings, rules, fail_on) if _checked_something(project, checked_languages) \
+            return _exit_for(_exit_findings(result, all_findings, wrote_baseline=wrote_baseline), rules, fail_on) if _checked_something(project, checked_languages) \
                 else EXIT_UNSCANNABLE
-        return _exit_for(all_findings, rules, fail_on)
+        return _exit_for(_exit_findings(result, all_findings, wrote_baseline=wrote_baseline), rules, fail_on)
 
     if _output_format(args) == "json":
         if sdk_info.is_sdk:
-            print(json.dumps({
+            payload = {
                 "tool": "mcp-migrate",
                 "version": __version__,
                 "spec": SPEC,
@@ -604,15 +826,17 @@ def cmd_check(args) -> int:
                 "fail_on": fail_on,
                 "files_scanned": len(project.files),
                 "counts": _severity_counts(findings, rules),
-                "findings": [_finding_dict(f, rules) for f in findings],
+                "findings": _finding_dicts(findings, rules, result),
                 "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
                 "unused_suppressions": _unused_suppression_dicts(result),
                 "disabled_rules": _disabled_rule_dicts(result),
                 "config_warnings": list(result.config.warnings),
-            }, indent=2))
+            }
+            _add_baseline_json(payload, result, write_report)
+            print(json.dumps(payload, indent=2))
             return EXIT_OK
         if reason:
-            print(json.dumps({
+            payload = {
                 "tool": "mcp-migrate",
                 "version": __version__,
                 "spec": SPEC,
@@ -630,15 +854,17 @@ def cmd_check(args) -> int:
                 # language gets read by the rules that cover it. What it
                 # doesn't get is a grade.
                 "counts": _severity_counts(findings, rules),
-                "findings": [_finding_dict(f, rules) for f in findings],
+                "findings": _finding_dicts(findings, rules, result),
                 "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
                 "unused_suppressions": _unused_suppression_dicts(result),
                 "disabled_rules": _disabled_rule_dicts(result),
                 "config_warnings": list(result.config.warnings),
-            }, indent=2))
-            return _exit_for(all_findings, rules, fail_on) if _checked_something(project, checked_languages) \
+            }
+            _add_baseline_json(payload, result, write_report)
+            print(json.dumps(payload, indent=2))
+            return _exit_for(_exit_findings(result, all_findings, wrote_baseline=wrote_baseline), rules, fail_on) if _checked_something(project, checked_languages) \
                 else EXIT_UNSCANNABLE
-        print(json.dumps({
+        payload = {
             "tool": "mcp-migrate",
             "version": __version__,
             "spec": SPEC,
@@ -652,13 +878,22 @@ def cmd_check(args) -> int:
             "fail_on": fail_on,
             "files_scanned": len(project.files),
             "counts": _severity_counts(findings, rules),
-            "findings": [_finding_dict(f, rules) for f in findings],
+            "findings": _finding_dicts(findings, rules, result),
             "suppressed": [_suppressed_dict(f, rules, result) for f in result.suppressed],
             "unused_suppressions": _unused_suppression_dicts(result),
             "disabled_rules": _disabled_rule_dicts(result),
             "config_warnings": list(result.config.warnings),
-        }, indent=2))
-        return _exit_for(all_findings, rules, fail_on)
+        }
+        _add_baseline_json(payload, result, write_report)
+        print(json.dumps(payload, indent=2))
+        return _exit_for(_exit_findings(result, all_findings, wrote_baseline=wrote_baseline), rules, fail_on)
+
+    if write_report is not None:
+        _report_baseline_write(
+            console, write_report["path"], recorded=write_report["recorded"],
+            prior_warning=write_report["prior_warning"],
+            new_since=write_report["new_since_last"], resolved=write_report["resolved"],
+        )
 
     console.print()
     console.print(f"[bold]mcp-migrate[/bold] [dim]v{__version__}[/dim]  ->  {root.name}")
@@ -705,6 +940,7 @@ def cmd_check(args) -> int:
     if reason:
         console.print()
         _report_config(console, result)
+        _report_baseline(console, result)
         # Not .capitalize() -- that lowercases the rest, turning "24
         # TypeScript" into "24 typescript".
         # "Nothing scannable" is only true when we opened nothing. A clean
@@ -761,11 +997,12 @@ def cmd_check(args) -> int:
                 "rules that didn't run.[/dim]"
             )
         console.print()
-        return _exit_for(all_findings, rules, fail_on) if _checked_something(project, checked_languages) \
+        return _exit_for(_exit_findings(result, all_findings, wrote_baseline=wrote_baseline), rules, fail_on) if _checked_something(project, checked_languages) \
             else EXIT_UNSCANNABLE
 
     _report_config(console, result)
     _report_suppressions(console, result, show=args.show_suppressions)
+    _report_baseline(console, result)
 
     n_python = sum(1 for f in project.files if f.language == "python")
     console.print(f"[dim]{n_python} Python files, {len(rules)} rules, spec {SPEC}[/dim]")
@@ -807,7 +1044,7 @@ def cmd_check(args) -> int:
         else:
             console.print("[bold green]Grade A.[/bold green] Nothing to fix. Add your badge:")
             console.print(f"[dim]![MCP {SPEC}]({badge_url(grade)})[/dim]")
-        return _exit_for(all_findings, rules, fail_on)
+        return _exit_for(_exit_findings(result, all_findings, wrote_baseline=wrote_baseline), rules, fail_on)
 
     # The severity breakdown printed with the grade below is always the
     # true one, from `all_findings` -- it has to match the score, which
@@ -872,7 +1109,7 @@ def cmd_check(args) -> int:
             f"{sev_counts['deprecated']} deprecated, {sev_counts['advisory']} advisory.[/dim]"
         )
     console.print()
-    return _exit_for(all_findings, rules, fail_on)
+    return _exit_for(_exit_findings(result, all_findings, wrote_baseline=wrote_baseline), rules, fail_on)
 
 
 def cmd_rules(args) -> int:
@@ -1317,6 +1554,22 @@ def main(argv=None) -> int:
         "--include-tests", action="store_true",
         help="also scan tests/, fixtures/, examples/, docs/, and test_*.py files "
              "(skipped by default -- see README)",
+    )
+    p_check.add_argument(
+        "--baseline", metavar="PATH",
+        help="compare findings against PATH. A finding recorded there still "
+             "counts toward the grade, but only findings NOT in it can fail "
+             "the build via --fail-on -- see README. A missing file is not "
+             "an error: every finding is simply new. Falls back to a "
+             "`baseline` key in project config when omitted.",
+    )
+    p_check.add_argument(
+        "--write-baseline", metavar="PATH",
+        help="run the check, then (over)write PATH with every finding from "
+             "this run -- ignoring any existing baseline there for matching "
+             "purposes. This is how a project accepts its current findings "
+             "and resets to zero; re-running it later also prunes entries "
+             "for anything since fixed.",
     )
     p_check.set_defaults(func=cmd_check)
 

@@ -308,6 +308,61 @@ def string_lines(source: str, path_or_lang: str | Path = "python") -> set[int]:
     return _py_string_lines(source, total_lines, all_lines, io, tokenize)
 
 
+def comment_lines(source: str, path_or_lang: str | Path = "python") -> set[int]:
+    """Return 1-indexed line numbers that are comment-only prose.
+
+    Unlike `string_lines`, this answers the narrower question the fixers
+    need when deciding whether an entire line is safe to ignore: a comment
+    line should never be rewritten, but a real code line with a trailing
+    explanatory comment still belongs to the fixer. Parsing failures return
+    all lines as a fail-safe so line-based fixers decline to edit rather
+    than guessing.
+    """
+    import io
+    import tokenize
+
+    lines_list = source.splitlines()
+    total_lines = len(lines_list)
+    all_lines = set(range(1, total_lines + 1))
+    if total_lines == 0:
+        return set()
+
+    if isinstance(path_or_lang, Path):
+        lang = path_or_lang.suffix.lower()
+    else:
+        lang = str(path_or_lang).lower()
+
+    if lang in (".ts", ".tsx", ".js", ".jsx", "ts", "typescript", "js", "javascript"):
+        return _ts_comment_lines(source, total_lines, all_lines)
+    return _py_comment_lines(source, total_lines, all_lines, io, tokenize)
+
+
+def cross_line_bracket_lines(source: str, path_or_lang: str | Path) -> set[int]:
+    """Return 1-indexed lines at either end of a bracket pair that crosses lines.
+
+    Commenting out either endpoint can remove a delimiter needed by the other
+    line. Parsing failures return all lines as a fail-safe so fixers keep the
+    original code and add only a TODO when the structure is ambiguous.
+    """
+    lines_list = source.splitlines()
+    total_lines = len(lines_list)
+    all_lines = set(range(1, total_lines + 1))
+    if total_lines == 0:
+        return set()
+
+    if isinstance(path_or_lang, Path):
+        lang = path_or_lang.suffix.lower()
+    else:
+        lang = str(path_or_lang).lower()
+
+    if lang in (".py", ".pyi", "py", "python"):
+        return _py_cross_line_bracket_lines(source, all_lines)
+    if lang in (".ts", ".tsx", ".js", ".jsx", ".mts", ".cts", ".mjs", ".cjs",
+                "ts", "typescript", "js", "javascript"):
+        return _ts_cross_line_bracket_lines(source, all_lines)
+    return set()
+
+
 def _py_string_lines(
     source: str, total_lines: int, all_lines: set[int], io_mod: any, tok_mod: any
 ) -> set[int]:
@@ -362,6 +417,52 @@ def _py_string_lines(
     return lines
 
 
+def _py_comment_lines(
+    source: str, total_lines: int, all_lines: set[int], io_mod: any, tok_mod: any
+) -> set[int]:
+    lines: set[int] = set()
+    try:
+        g = tok_mod.generate_tokens(io_mod.StringIO(source).readline)
+        for tok in g:
+            if tok.type != tok_mod.COMMENT:
+                continue
+            # `tok.line` is the physical line the comment sits on. Splitting
+            # the whole source again for every comment made this quadratic.
+            if tok.line[: tok.start[1]].strip():
+                continue
+            lines.add(tok.start[0])
+    except Exception:
+        return all_lines
+    return lines
+
+
+def _py_cross_line_bracket_lines(source: str, all_lines: set[int]) -> set[int]:
+    import io
+    import tokenize
+
+    stack: list[tuple[str, int]] = []
+    crossed: set[int] = set()
+    open_to_close = {"(": ")", "[": "]", "{": "}"}
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(source).readline):
+            if tok.type != tokenize.OP:
+                continue
+            if tok.string in open_to_close:
+                stack.append((tok.string, tok.start[0]))
+                continue
+            if tok.string not in open_to_close.values():
+                continue
+            if not stack or open_to_close[stack[-1][0]] != tok.string:
+                return all_lines
+            _, open_line = stack.pop()
+            if open_line < tok.start[0]:
+                crossed.add(open_line)
+                crossed.add(tok.start[0])
+    except (tokenize.TokenError, SyntaxError, IndentationError, ValueError):
+        return all_lines
+    return crossed
+
+
 def _ts_string_lines(source: str, total_lines: int, all_lines: set[int]) -> set[int]:
     lines: set[int] = set()
     row = 1
@@ -392,3 +493,186 @@ def _ts_string_lines(source: str, total_lines: int, all_lines: set[int]) -> set[
     if in_template:
         return all_lines
     return lines
+
+
+def _ts_cross_line_bracket_lines(source: str, all_lines: set[int]) -> set[int]:
+    stack: list[tuple[str, int]] = []
+    crossed: set[int] = set()
+    open_to_close = {"(": ")", "[": "]", "{": "}"}
+    close_to_open = {value: key for key, value in open_to_close.items()}
+    i = 0
+    line = 1
+    col = 0
+    n = len(source)
+    while i < n:
+        ch = source[i]
+        nxt = source[i + 1] if i + 1 < n else ""
+
+        if ch == "/" and nxt == "/":
+            i += 2
+            col += 2
+            while i < n and source[i] != "\n":
+                i += 1
+                col += 1
+            continue
+        if ch == "/" and nxt == "*":
+            i += 2
+            col += 2
+            closed = False
+            while i < n:
+                if source[i] == "\n":
+                    i += 1
+                    line += 1
+                    col = 0
+                    continue
+                if source[i] == "*" and i + 1 < n and source[i + 1] == "/":
+                    i += 2
+                    col += 2
+                    closed = True
+                    break
+                i += 1
+                col += 1
+            if not closed:
+                return all_lines
+            continue
+        if ch in "\"'`":
+            quote = ch
+            i += 1
+            col += 1
+            while i < n:
+                c = source[i]
+                if c == "\n":
+                    if quote != "`":
+                        return all_lines
+                    i += 1
+                    line += 1
+                    col = 0
+                    continue
+                if c == "\\":
+                    if i + 1 >= n:
+                        return all_lines
+                    i += 2
+                    col += 2
+                    continue
+                if c == quote:
+                    i += 1
+                    col += 1
+                    break
+                i += 1
+                col += 1
+            else:
+                return all_lines
+            continue
+
+        if ch in open_to_close:
+            stack.append((ch, line))
+        elif ch in close_to_open:
+            if not stack or stack[-1][0] != close_to_open[ch]:
+                return all_lines
+            _, open_line = stack.pop()
+            if open_line < line:
+                crossed.add(open_line)
+                crossed.add(line)
+
+        if ch == "\n":
+            i += 1
+            line += 1
+            col = 0
+            continue
+        i += 1
+        col += 1
+    return crossed
+
+
+def _ts_comment_lines(source: str, total_lines: int, all_lines: set[int]) -> set[int]:
+    spans = _ts_comment_spans(source)
+    if spans is None:
+        return all_lines
+    out: set[int] = set()
+    source_lines = source.splitlines()
+    for (start_line, start_col), (end_line, end_col) in spans:
+        for line_no in range(start_line, end_line + 1):
+            line_text = source_lines[line_no - 1]
+            from_col = start_col if line_no == start_line else 0
+            to_col = end_col if line_no == end_line else len(line_text)
+            if line_text[:from_col].strip() or line_text[to_col:].strip():
+                continue
+            out.add(line_no)
+    return out
+
+
+def _ts_comment_spans(text: str) -> list[tuple[tuple[int, int], tuple[int, int]]] | None:
+    spans: list[tuple[tuple[int, int], tuple[int, int]]] = []
+    i = 0
+    line = 1
+    col = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "/" and i + 1 < n and text[i + 1] == "/":
+            start = (line, col)
+            i += 2
+            col += 2
+            while i < n and text[i] != "\n":
+                i += 1
+                col += 1
+            spans.append((start, (line, col)))
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "*":
+            start = (line, col)
+            i += 2
+            col += 2
+            closed = False
+            while i < n:
+                if text[i] == "\n":
+                    i += 1
+                    line += 1
+                    col = 0
+                    continue
+                if text[i] == "*" and i + 1 < n and text[i + 1] == "/":
+                    i += 2
+                    col += 2
+                    spans.append((start, (line, col)))
+                    closed = True
+                    break
+                i += 1
+                col += 1
+            if not closed:
+                return None
+            continue
+        if ch in "\"'`":
+            quote = ch
+            i += 1
+            col += 1
+            while i < n:
+                c = text[i]
+                if c == "\n":
+                    if quote != "`":
+                        return None
+                    i += 1
+                    line += 1
+                    col = 0
+                    continue
+                if c == "\\":
+                    if i + 1 >= n:
+                        return None
+                    i += 2
+                    col += 2
+                    continue
+                if c == quote:
+                    i += 1
+                    col += 1
+                    break
+                i += 1
+                col += 1
+            else:
+                return None
+            continue
+        if ch == "\n":
+            i += 1
+            line += 1
+            col = 0
+            continue
+        i += 1
+        col += 1
+    return spans

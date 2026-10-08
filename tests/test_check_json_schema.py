@@ -44,3 +44,23 @@ def test_schema_validates_sdk_output(capsys, tmp_path: Path):
     payload = _validate(capsys, tmp_path)
     assert payload["is_sdk"] is True
     assert payload["sdk_reason"]
+
+
+def test_schema_validates_baseline_output(capsys):
+    exit_code = main(["check", str(FIXTURES / "legacy_server"), "--json",
+                       "--baseline", str(FIXTURES / "legacy_server" / "nope.json")])
+    payload = json.loads(capsys.readouterr().out)
+    jsonschema.validate(payload, SCHEMA)
+    assert payload["baseline"]["new"] == len(payload["findings"])
+    assert payload["baseline"]["known"] == 0
+
+
+def test_schema_validates_write_baseline_output(capsys, tmp_path: Path):
+    baseline_path = tmp_path / "baseline.json"
+    exit_code = main(["check", str(FIXTURES / "legacy_server"), "--json",
+                       "--write-baseline", str(baseline_path)])
+    payload = json.loads(capsys.readouterr().out)
+    jsonschema.validate(payload, SCHEMA)
+    assert payload["baseline_write"]["recorded"] == len(payload["findings"])
+    assert payload["baseline_write"]["new_since_last"] is None
+    assert exit_code == 0
