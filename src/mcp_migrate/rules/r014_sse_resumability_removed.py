@@ -1,8 +1,9 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Project, Rule, mcp_surface_paths
 
-PY_RX = r"Last-Event-ID|last_event_id|LAST_EVENT_ID"
+PY_RX = r"last_event_id|LAST_EVENT_ID"
+PY_HEADER_RX = r"""["']last-event-id["']|["']Last-Event-ID["']"""
 
 # TypeScript identifier convention is camelCase, unlike Python's snake_case/
 # SCREAMING_SNAKE_CASE. `Last-Event-ID` itself (the header name) is not a
@@ -41,15 +42,28 @@ class SSEResumabilityRemoved(Rule):
         return self._check_python(project)
 
     def _check_python(self, project: Project) -> list[Finding]:
-        # search_code: a comment noting "we don't support Last-Event-ID"
-        # (like the comment_only_mentions fixture pattern for R001) isn't a
-        # real implementation of it. `Last-Event-ID` itself is a real HTTP
-        # header name, not a generic English phrase, so this is precise the
-        # same way R001 matching `Mcp-Session-Id` directly is precise.
-        return [
-            self.finding(MESSAGE, f, line, text)
-            for f, line, text in project.search_code(PY_RX)
-        ]
+        seen: set[tuple[str, int]] = set()
+        out: list[Finding] = []
+        surface = mcp_surface_paths(project)
+        # Header names live in strings, which search_code skips. Keep the
+        # quotes so prose like "Last-Event-ID resumability was removed"
+        # stays silent, and deduplicate lines that also name the identifier.
+        for pattern, search, gated in (
+            (PY_RX, project.search_code, False),
+            (PY_HEADER_RX, project.search_wire, True),
+        ):
+            for f, line, text in search(pattern):
+                # Ordinary browser EventSource streams use this header too.
+                # Require independent MCP surface in the same file for the
+                # header alone; existing identifier findings stay unchanged.
+                if gated and f.path not in surface:
+                    continue
+                key = (str(f.path), line)
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(self.finding(MESSAGE, f, line, text))
+        return sorted(out, key=lambda x: (str(x.path or ""), x.line or 0))
 
     def _check_ts(self, project: Project) -> list[Finding]:
         seen: set[tuple[str, int]] = set()
