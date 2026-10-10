@@ -1,6 +1,14 @@
 import re
 
-from .base import Finding, Project, Rule, server_call_keywords, wire_method
+from .base import (
+    Finding,
+    Fires,
+    Project,
+    Rule,
+    Silent,
+    server_call_keywords,
+    wire_method,
+)
 
 # `SubscribeRequest`/`UnsubscribeRequest` are the MCP SDK's own model names
 # -- distinctive, no false-positive risk.
@@ -52,6 +60,100 @@ class ResourceSubscriptionsReplaced(Rule):
         "management to the new subscriptions/listen call."
     )
     languages = ("python", "typescript", "javascript")
+    boundaries = (
+        Fires(
+            snippet="request: SubscribeRequest",
+            reason="The removed SDK request type is active Python code.",
+        ),
+        Fires(
+            snippet="@app.subscribe_resource()\nasync def subscribe(uri): pass",
+            reason="The Python SDK still registers the removed subscription handler.",
+        ),
+        Fires(
+            snippet='server = Server(\n    "demo",\n    on_unsubscribe_resource=unsubscribe,\n)',
+            reason=(
+                "mcp 2.x still registers the removed handler through the "
+                "constructor, black-formatted across lines."
+            ),
+        ),
+        Fires(
+            snippet='METHODS = {"resources/unsubscribe": handle_unsubscribe}',
+            reason="A Python dispatch table still exposes the removed wire method.",
+        ),
+        Silent(
+            snippet="# SubscribeRequest and resources/subscribe were removed",
+            reason="A comment that only describes the old API is not an implementation.",
+        ),
+        Silent(
+            snippet=(
+                'def handler():\n'
+                '    """Used to handle SubscribeRequest before '
+                'subscriptions/listen."""'
+            ),
+            reason=(
+                "A docstring that names the old request type is documentation, "
+                "not surface."
+            ),
+        ),
+        Silent(
+            snippet="class SubscribeRequester: pass",
+            reason="An unrelated identifier with a longer suffix is not an SDK request type.",
+        ),
+        Silent(
+            snippet='METRIC = "resources/subscriber"',
+            reason="A longer Python wire name is outside the method boundary.",
+        ),
+        Fires(
+            snippet="const schema: SubscribeRequestSchema = {};",
+            reason="The removed SDK request schema is active TypeScript code.",
+            language="typescript",
+        ),
+        Fires(
+            snippet='server.setRequestHandler("resources/subscribe", handler);',
+            reason="A TypeScript handler still registers the removed wire method.",
+            language="typescript",
+        ),
+        Silent(
+            snippet="// SubscribeRequestSchema and resources/subscribe were removed",
+            reason="A TypeScript comment is prose, not active MCP surface.",
+            language="typescript",
+        ),
+        Silent(
+            snippet="class SubscribeRequester {}",
+            reason="A longer TypeScript identifier is not an SDK request type.",
+            language="typescript",
+        ),
+        Silent(
+            snippet='const method = "resources/subscriber";',
+            reason="A longer TypeScript wire name is outside the method boundary.",
+            language="typescript",
+        ),
+        Fires(
+            snippet="const schema = SubscribeRequestSchema;",
+            reason="JavaScript references the removed SDK request schema.",
+            language="javascript",
+        ),
+        Fires(
+            snippet='if (method === "resources/unsubscribe") unsubscribe();',
+            reason="A JavaScript dispatcher still handles the removed wire method.",
+            language="javascript",
+        ),
+        Silent(
+            snippet="// SubscribeRequestSchema and resources/subscribe were removed",
+            reason="A JavaScript comment is prose, not active MCP surface.",
+            language="javascript",
+        ),
+        Silent(
+            snippet="const SubscribeRequester = makeHelper();",
+            reason="A longer JavaScript identifier is not an SDK request type.",
+            language="javascript",
+        ),
+        Silent(
+            snippet='const method = "resources/subscriber";',
+            reason="A longer JavaScript wire name is outside the method boundary.",
+            language="javascript",
+        ),
+    )
 
     def check(self, project: Project) -> list[Finding]:
         if project.language == "typescript":
