@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Fires, Project, Rule, Silent
 
 PY_RX = r"Last-Event-ID|last_event_id|LAST_EVENT_ID"
 
@@ -34,6 +34,44 @@ class SSEResumabilityRemoved(Rule):
         "now, the client issues a fresh request."
     )
     languages = ("python", "typescript")
+    boundaries = (
+        Fires(
+            snippet='last_event_id = request.headers.get("Last-Event-ID")',
+            reason="Python code reads the removed SSE resume cursor.",
+        ),
+        Fires(
+            snippet="return replay_events(last_event_id)",
+            reason="Python code still uses the removed resume cursor.",
+        ),
+        Silent(
+            snippet="# Last-Event-ID resumability was removed",
+            reason="A comment documenting the removal is not an implementation.",
+        ),
+        Silent(
+            snippet='NOTICE = "Last-Event-ID resumability was removed"',
+            reason="A user-facing notice about the removal is prose, not active code.",
+        ),
+        Fires(
+            snippet='const lastEventId = req.headers.get("last-event-id");',
+            reason="TypeScript code reads the removed SSE resume cursor.",
+            language="typescript",
+        ),
+        Fires(
+            snippet="return replayEventsAfter(lastEventID);",
+            reason="TypeScript code still uses the removed resume cursor.",
+            language="typescript",
+        ),
+        Silent(
+            snippet="// We dropped lastEventId / Last-Event-ID resumability support.",
+            reason="A TypeScript comment documenting the removal is not code.",
+            language="typescript",
+        ),
+        Silent(
+            snippet="const lastEventIdentifier = new Map();",
+            reason="A longer identifier is outside the bounded cursor name.",
+            language="typescript",
+        ),
+    )
 
     def check(self, project: Project) -> list[Finding]:
         if project.language == "typescript":
