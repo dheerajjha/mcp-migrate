@@ -70,12 +70,30 @@ class ResourceSubscriptionsReplaced(Rule):
             reason="The Python SDK still registers the removed subscription handler.",
         ),
         Fires(
+            snippet='server = Server(\n    "demo",\n    on_unsubscribe_resource=unsubscribe,\n)',
+            reason=(
+                "mcp 2.x still registers the removed handler through the "
+                "constructor, black-formatted across lines."
+            ),
+        ),
+        Fires(
             snippet='METHODS = {"resources/unsubscribe": handle_unsubscribe}',
             reason="A Python dispatch table still exposes the removed wire method.",
         ),
         Silent(
             snippet="# SubscribeRequest and resources/subscribe were removed",
             reason="A comment that only describes the old API is not an implementation.",
+        ),
+        Silent(
+            snippet=(
+                'def handler():\n'
+                '    """Used to handle SubscribeRequest before '
+                'subscriptions/listen."""'
+            ),
+            reason=(
+                "A docstring that names the old request type is documentation, "
+                "not surface."
+            ),
         ),
         Silent(
             snippet="class SubscribeRequester: pass",
