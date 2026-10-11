@@ -4,6 +4,30 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-10-11
+
+### Fixed
+
+- **R014 finds a Python `Last-Event-ID` header read, whatever the variable is
+  called.** ([#334](https://github.com/dheerajjha/mcp-migrate/issues/334),
+  [#335](https://github.com/dheerajjha/mcp-migrate/pull/335), from
+  @KingEmma7)
+  - Before, the Python half only matched identifiers. So
+    `cursor = request.headers.get("Last-Event-ID")` graded A, while `fix`
+    commented out the same line.
+  - It now also reads the quoted header, as the TypeScript half already did.
+  - The header on its own needs MCP surface in the same file, because ordinary
+    browser EventSource streams send it too. Without that gate,
+    invisible-playwright-mcp's `/chat/events` route would have taken its board
+    grade from A/97 to C/72.
+  - Expect lower grades for MCP servers that read the header under another
+    name.
+
+R013 now declares its detection boundaries in all three languages (#332).
+
+No published board grade moves: `scripts/regrade_board.py` reproduces all 20
+entries on this release.
+
 ## [0.17.0] - 2026-10-08
 
 ### Added
