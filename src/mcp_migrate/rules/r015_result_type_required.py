@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Fires, Project, Rule, Silent
 
 # Evidence a file implements a result-returning MCP handler at all -- if a
 # file doesn't do this, it has nothing to add `resultType` to, and firing
@@ -98,6 +98,70 @@ class RequiredResultTypeMissing(Rule):
         "stamps resultType on every result it serializes."
     )
     languages = ("python", "typescript")
+    boundaries = (
+        Fires(
+            snippet=(
+                "def handle(request):\n"
+                "    if request['method'] == 'tools/list':\n"
+                "        return {'jsonrpc': '2.0', 'id': request['id'], "
+                "'result': {'tools': []}}\n"
+            ),
+            reason=(
+                "A hand-rolled Python MCP response owns the result envelope "
+                "and must add resultType."
+            ),
+        ),
+        Silent(
+            snippet=(
+                "def request(request_id):\n"
+                "    return {'jsonrpc': '2.0', 'method': 'tools/list', "
+                "'id': request_id}\n"
+            ),
+            reason="A JSON-RPC request has no result envelope to annotate.",
+        ),
+        Silent(
+            snippet=(
+                "def handle(request):\n"
+                "    if request['method'] == 'tools/list':\n"
+                "        return {'jsonrpc': '2.0', 'id': request['id'], "
+                "'result': {'tools': []}, 'resultType': 'complete'}\n"
+            ),
+            reason="A hand-rolled response that declares resultType is complete.",
+        ),
+        Fires(
+            snippet=(
+                "function handle(request) {\n"
+                "  if (request.method === 'tools/list') {\n"
+                "    return { jsonrpc: '2.0', id: request.id, "
+                "result: { tools: [] } };\n"
+                "  }\n"
+                "}\n"
+            ),
+            reason=(
+                "A hand-rolled TypeScript MCP response owns the result envelope "
+                "and must add resultType."
+            ),
+            language="typescript",
+        ),
+        Silent(
+            snippet=(
+                "function request(id) {\n"
+                "  return { jsonrpc: '2.0', method: 'tools/list', id };\n"
+                "}\n"
+            ),
+            reason="A TypeScript JSON-RPC request is not a result envelope.",
+            language="typescript",
+        ),
+        Silent(
+            snippet=(
+                "import { Server } from '@modelcontextprotocol/sdk/server';\n"
+                "const response = { jsonrpc: '2.0', method: 'tools/list', "
+                "result: { tools: [] } };\n"
+            ),
+            reason="The official TypeScript SDK owns result serialization.",
+            language="typescript",
+        ),
+    )
 
     MESSAGE = (
         "This file builds JSON-RPC responses for MCP methods without the "
