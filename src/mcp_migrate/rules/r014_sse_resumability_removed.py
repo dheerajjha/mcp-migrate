@@ -38,7 +38,11 @@ class SSEResumabilityRemoved(Rule):
     boundaries = (
         Fires(
             snippet='last_event_id = request.headers.get("Last-Event-ID")',
-            reason="Python code reads the removed SSE resume cursor.",
+            reason="A variable named for the resume cursor is active Python code.",
+        ),
+        Fires(
+            snippet='LAST_EVENT_ID = "Last-Event-ID"',
+            reason="A Python constant carries the removed header name.",
         ),
         Fires(
             snippet="return replay_events(last_event_id)",
@@ -58,6 +62,11 @@ class SSEResumabilityRemoved(Rule):
             language="typescript",
         ),
         Fires(
+            snippet='const cursor = req.headers["last-event-id"];',
+            reason="TypeScript reads the removed header by name, whatever the variable is called.",
+            language="typescript",
+        ),
+        Fires(
             snippet="return replayEventsAfter(lastEventID);",
             reason="TypeScript code still uses the removed resume cursor.",
             language="typescript",
@@ -70,6 +79,11 @@ class SSEResumabilityRemoved(Rule):
         Silent(
             snippet="const lastEventIdentifier = new Map();",
             reason="A longer identifier is outside the bounded cursor name.",
+            language="typescript",
+        ),
+        Silent(
+            snippet='const notice = "Last-Event-ID resumability was removed";',
+            reason="A sentence that mentions the header is not the quoted header name.",
             language="typescript",
         ),
     )
