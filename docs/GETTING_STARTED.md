@@ -141,7 +141,7 @@ Pre-commit hook (a `breaking` finding fails the hook):
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/dheerajjha/mcp-migrate
-    rev: v0.18.0
+    rev: v0.19.0
     hooks:
       - id: mcp-migrate
 ```

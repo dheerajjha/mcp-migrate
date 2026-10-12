@@ -4,6 +4,32 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-10-12
+
+### Fixed
+
+- **R014's TypeScript half no longer flags a browser EventSource route
+  because an MCP server lives elsewhere in the project.**
+  ([#338](https://github.com/dheerajjha/mcp-migrate/pull/338), from
+  @KingEmma7)
+  - A quoted `last-event-id` header read now needs MCP surface in its own file,
+    as the Python half has since 0.18.0.
+  - A `/chat/events` route in `routes.ts` next to an MCP `server.ts` is no
+    longer a breaking finding.
+  - Identifier matches such as `lastEventId` are unchanged.
+- **MCP's own HTTP headers count as MCP surface.**
+  ([#338](https://github.com/dheerajjha/mcp-migrate/pull/338))
+  - `Mcp-Session-Id`, `MCP-Protocol-Version`, `Mcp-Method` and `Mcp-Name` now
+    mark a file as MCP code.
+  - So a hand-rolled transport that reads one of them before `Last-Event-ID`
+    keeps its R014 finding in both languages, with no SDK import in the file.
+  - R005, R006, R009 and R020 use the same gate. A file that mentions one of
+    these headers and nothing else MCP can now keep findings it used to lose,
+    so its grade can fall.
+
+No published board grade moves: `scripts/regrade_board.py` reproduces all 20
+entries on this release.
+
 ## [0.18.0] - 2026-10-11
 
 ### Fixed
