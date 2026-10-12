@@ -45,6 +45,13 @@ class SSEResumabilityRemoved(Rule):
             reason="A Python constant carries the removed header name.",
         ),
         Fires(
+            snippet=(
+                'from mcp.server import Server\n\n'
+                'cursor = request.headers.get("Last-Event-ID")'
+            ),
+            reason="A header read into any name fires once the file shows MCP surface.",
+        ),
+        Fires(
             snippet="return replay_events(last_event_id)",
             reason="Python code still uses the removed resume cursor.",
         ),
@@ -56,14 +63,25 @@ class SSEResumabilityRemoved(Rule):
             snippet='NOTICE = "Last-Event-ID resumability was removed"',
             reason="A user-facing notice about the removal is prose, not active code.",
         ),
+        Silent(
+            snippet='cursor = request.headers.get("last-event-id") or ""',
+            reason=(
+                "The same read with no MCP surface in its file is an ordinary EventSource "
+                "stream: without this gate, invisible-playwright-mcp's /chat/events route "
+                "goes from A/97 to C/72."
+            ),
+        ),
         Fires(
             snippet='const lastEventId = req.headers.get("last-event-id");',
             reason="TypeScript code reads the removed SSE resume cursor.",
             language="typescript",
         ),
         Fires(
-            snippet='const cursor = req.headers["last-event-id"];',
-            reason="TypeScript reads the removed header by name, whatever the variable is called.",
+            snippet=(
+                'import { Server } from "@modelcontextprotocol/sdk/server/index.js";\n'
+                'const cursor = req.headers["last-event-id"];'
+            ),
+            reason="A header read into any name fires once the file shows MCP surface.",
             language="typescript",
         ),
         Fires(
@@ -84,6 +102,11 @@ class SSEResumabilityRemoved(Rule):
         Silent(
             snippet='const notice = "Last-Event-ID resumability was removed";',
             reason="A sentence that mentions the header is not the quoted header name.",
+            language="typescript",
+        ),
+        Silent(
+            snippet='const cursor = req.headers["last-event-id"] ?? "";',
+            reason="The same read with no MCP surface in its file is an ordinary EventSource stream.",
             language="typescript",
         ),
     )
