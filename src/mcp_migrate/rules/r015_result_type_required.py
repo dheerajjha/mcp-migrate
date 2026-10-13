@@ -128,6 +128,24 @@ class RequiredResultTypeMissing(Rule):
             ),
             reason="A hand-rolled response that declares resultType is complete.",
         ),
+        Silent(
+            snippet=(
+                "from mcp.server import Server\n"
+                "server = Server('example')\n"
+                "response = {'jsonrpc': '2.0', 'method': 'tools/list', "
+                "'result': {'tools': []}}\n"
+            ),
+            reason="The official Python SDK owns result serialization.",
+        ),
+        Silent(
+            snippet=(
+                "def handle(request):\n"
+                "    if request['method'] == 'health/check':\n"
+                "        return {'jsonrpc': '2.0', 'id': request['id'], "
+                "'result': {'healthy': True}}\n"
+            ),
+            reason="A response for a method outside MCP is not an MCP result.",
+        ),
         Fires(
             snippet=(
                 "function handle(request) {\n"

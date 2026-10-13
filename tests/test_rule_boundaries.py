@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 import pytest
@@ -13,13 +14,17 @@ def _project(snippet: str, language: str) -> Project:
         "typescript": ".ts",
     }[language]
 
+    path = Path(f"server{extension}")
     return Project(
         root=Path("."),
         files=[
             SourceFile(
-                path=Path(f"server{extension}"),
+                path=path,
                 text=snippet,
                 language=language,
+                tree=ast.parse(snippet, filename=str(path))
+                if language == "python"
+                else None,
             )
         ],
     )
