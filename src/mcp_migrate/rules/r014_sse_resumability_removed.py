@@ -60,7 +60,10 @@ class SSEResumabilityRemoved(Rule):
             reason="A comment documenting the removal is not an implementation.",
         ),
         Silent(
-            snippet='NOTICE = "Last-Event-ID resumability was removed"',
+            snippet=(
+                'from mcp.server import Server\n\n'
+                'NOTICE = "Last-Event-ID resumability was removed"'
+            ),
             reason="A user-facing notice about the removal is prose, not active code.",
         ),
         Silent(
@@ -100,7 +103,10 @@ class SSEResumabilityRemoved(Rule):
             language="typescript",
         ),
         Silent(
-            snippet='const notice = "Last-Event-ID resumability was removed";',
+            snippet=(
+                'import { Server } from "@modelcontextprotocol/sdk/server/index.js";\n'
+                'const notice = "Last-Event-ID resumability was removed";'
+            ),
             reason="A sentence that mentions the header is not the quoted header name.",
             language="typescript",
         ),
