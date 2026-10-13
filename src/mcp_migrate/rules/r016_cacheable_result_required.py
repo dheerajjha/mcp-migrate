@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule, server_call_keywords
+from .base import Finding, Fires, Project, Rule, Silent, server_call_keywords
 
 # Only the five *list-shaped* results are cacheable per SEP-2549 --
 # call_tool/get_prompt are not in that list, so a file that only
@@ -114,6 +114,72 @@ class CacheableResultMetadataMissing(Rule):
         "the SDK emits no cache metadata at all."
     )
     languages = ("python", "typescript")
+    boundaries = (
+        Fires(
+            snippet=(
+                "@server.list_tools()\n"
+                "async def list_tools():\n"
+                "    return []\n"
+            ),
+            reason=(
+                "A Python list handler without cache hints emits no ttlMs or "
+                "cacheScope metadata."
+            ),
+        ),
+        Silent(
+            snippet=(
+                "server = Server(\n"
+                "    cache_hints={'tools/list': CacheHint(ttl_ms=5000)},\n"
+                ")\n"
+                "@server.list_tools()\n"
+                "async def list_tools():\n"
+                "    return []\n"
+            ),
+            reason=(
+                "Python cache hints are configured once on the server, not "
+                "inside each handler."
+            ),
+        ),
+        Silent(
+            snippet=(
+                "@server.call_tool()\n"
+                "async def call_tool(name, arguments):\n"
+                "    return []\n"
+            ),
+            reason="Tool-call results are not one of SEP-2549's cacheable list/read results.",
+        ),
+        Fires(
+            snippet=(
+                "server.setRequestHandler(ListToolsRequestSchema, async () => {\n"
+                "  return { tools: [] };\n"
+                "});\n"
+            ),
+            reason=(
+                "A TypeScript list handler without cache hints emits no ttlMs "
+                "or cacheScope metadata."
+            ),
+            language="typescript",
+        ),
+        Silent(
+            snippet=(
+                "const server = new McpServer(\n"
+                "  { name: 'demo', version: '1.0.0' },\n"
+                "  { cacheHints: { 'tools/list': { ttlMs: 5000 } } },\n"
+                ");\n"
+                "server.setRequestHandler(ListToolsRequestSchema, handler);\n"
+            ),
+            reason=(
+                "TypeScript cache hints are configured once on the server, "
+                "not inside each handler."
+            ),
+            language="typescript",
+        ),
+        Silent(
+            snippet="server.setRequestHandler(CallToolRequestSchema, handler);\n",
+            reason="Tool-call results are not one of SEP-2549's cacheable list/read results.",
+            language="typescript",
+        ),
+    )
 
     def check(self, project: Project) -> list[Finding]:
         if project.language == "typescript":
