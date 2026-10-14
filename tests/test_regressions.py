@@ -371,6 +371,29 @@ def test_r021_does_not_fire_on_an_unrelated_mention_of_draft_or_schema(tmp_path)
     assert OldJSONSchemaDialect().check(project) == []
 
 
+@pytest.mark.parametrize("filename", ["server.py", "server.ts", "server.js"])
+@pytest.mark.parametrize(
+    "literal",
+    [
+        '"2019-09-01"',
+        '"2019-09-30"',
+        '"2019-09-30T12:00:00Z"',
+    ],
+)
+def test_r021_does_not_treat_september_2019_dates_as_dialect_pins(
+    tmp_path, filename, literal
+):
+    (tmp_path / filename).write_text(f"START_DATE = {literal}\n")
+    project = load_project(tmp_path)
+    assert OldJSONSchemaDialect().check(project) == []
+
+
+def test_r021_still_finds_a_bare_2019_09_dialect_pin(tmp_path):
+    (tmp_path / "server.py").write_text('schema = {"$schema": "2019-09"}\n')
+    project = load_project(tmp_path)
+    assert len(OldJSONSchemaDialect().check(project)) == 1
+
+
 # --- 6. R010 detection blind spots (false *negatives*, found on real code) ---
 #
 # These three servers scored A with zero findings, not because they were
