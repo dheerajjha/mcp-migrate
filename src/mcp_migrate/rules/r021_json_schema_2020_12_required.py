@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Fires, Project, Rule, Silent
 
 # Deliberately positive-evidence, not absence-based: the overwhelming
 # majority of MCP servers (FastMCP included) generate inputSchema/
@@ -27,6 +27,60 @@ class OldJSONSchemaDialect(Rule):
         "drop the pin and let a modern validator pick the default)."
     )
     languages = ("python", "typescript", "javascript")
+    boundaries = (
+        Fires(
+            snippet=(
+                'input_schema = {\n'
+                '    "$schema": "http://json-schema.org/draft-07/schema#",\n'
+                '}\n'
+            ),
+            reason="An explicit draft-07 pin is older than the required 2020-12 dialect.",
+        ),
+        Silent(
+            snippet=(
+                'input_schema = {\n'
+                '    "$schema": "https://json-schema.org/draft/2020-12/schema",\n'
+                '}\n'
+            ),
+            reason="The required JSON Schema 2020-12 dialect is current.",
+        ),
+        Fires(
+            snippet=(
+                "const schema = {\n"
+                '  $schema: "https://json-schema.org/draft/2019-09/schema",\n'
+                "};\n"
+            ),
+            reason="An explicit 2019-09 pin is older than the required 2020-12 dialect.",
+            language="typescript",
+        ),
+        Silent(
+            snippet=(
+                "const schema = {\n"
+                '  $schema: "https://json-schema.org/draft/2020-12/schema",\n'
+                "};\n"
+            ),
+            reason="The required JSON Schema 2020-12 dialect is current.",
+            language="typescript",
+        ),
+        Fires(
+            snippet=(
+                "const schema = {\n"
+                '  $schema: "http://json-schema.org/draft-07/schema#",\n'
+                "};\n"
+            ),
+            reason="An explicit draft-07 pin is older than the required 2020-12 dialect.",
+            language="javascript",
+        ),
+        Silent(
+            snippet=(
+                "const schema = {\n"
+                '  $schema: "https://json-schema.org/draft/2020-12/schema",\n'
+                "};\n"
+            ),
+            reason="The required JSON Schema 2020-12 dialect is current.",
+            language="javascript",
+        ),
+    )
 
     def check(self, project: Project) -> list[Finding]:
         # No language branch needed: a `$schema` dialect pin is always a
