@@ -116,6 +116,19 @@ class CacheableResultMetadataMissing(Rule):
     languages = ("python", "typescript")
     boundaries = (
         Fires(
+            snippet='server = Server(\n    "demo",\n    on_list_tools=list_tools,\n)\n',
+            reason="A black-formatted mcp 2.x constructor still registers a list handler.",
+        ),
+        Fires(
+            snippet=(
+                'mcp = MCPServer("demo")\n\n'
+                "@mcp.tool()\n"
+                "def add(a: int, b: int) -> int:\n"
+                "    return a + b\n"
+            ),
+            reason="A tool registered on MCPServer means the server answers tools/list.",
+        ),
+        Fires(
             snippet=(
                 "@server.list_tools()\n"
                 "async def list_tools():\n"
@@ -125,6 +138,27 @@ class CacheableResultMetadataMissing(Rule):
                 "A Python list handler without cache hints emits no ttlMs or "
                 "cacheScope metadata."
             ),
+        ),
+        Silent(
+            snippet="@agent.tool()\ndef search(query: str) -> str:\n    return query\n",
+            reason="A .tool() decorator with no MCPServer in the project belongs to another framework.",
+        ),
+        Silent(
+            snippet=(
+                "@server.list_tools()\n"
+                "async def list_tools():\n"
+                '    return {"tools": [], "ttlMs": 60000, "cacheScope": "public"}\n'
+            ),
+            reason="A handler that writes ttlMs and cacheScope itself already has the metadata.",
+        ),
+        Fires(
+            snippet=(
+                "@server.list_tools()\n"
+                "async def list_tools():\n"
+                "    # ttlMs is added by our proxy\n"
+                "    return []\n"
+            ),
+            reason="A comment that mentions ttlMs puts nothing on the wire.",
         ),
         Silent(
             snippet=(
@@ -149,6 +183,11 @@ class CacheableResultMetadataMissing(Rule):
             reason="Tool-call results are not one of SEP-2549's cacheable list/read results.",
         ),
         Fires(
+            snippet='server.setRequestHandler("tools/list", async () => ({ tools: [] }));\n',
+            reason="A handler registered by wire method name is still a list handler.",
+            language="typescript",
+        ),
+        Fires(
             snippet=(
                 "server.setRequestHandler(ListToolsRequestSchema, async () => {\n"
                 "  return { tools: [] };\n"
@@ -157,6 +196,18 @@ class CacheableResultMetadataMissing(Rule):
             reason=(
                 "A TypeScript list handler without cache hints emits no ttlMs "
                 "or cacheScope metadata."
+            ),
+            language="typescript",
+        ),
+        Silent(
+            snippet=(
+                "server.registerResource('config', 'config://app', "
+                "{ cacheHint: hints.config }, readConfig);\n"
+                "server.setRequestHandler(ListResourcesRequestSchema, listResources);\n"
+            ),
+            reason=(
+                "A per-resource cacheHint configures the metadata as surely as "
+                "server-wide cacheHints."
             ),
             language="typescript",
         ),
