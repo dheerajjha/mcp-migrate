@@ -371,6 +371,20 @@ def test_r021_does_not_fire_on_an_unrelated_mention_of_draft_or_schema(tmp_path)
     assert OldJSONSchemaDialect().check(project) == []
 
 
+def test_r021_does_not_fire_on_september_2019_date_strings(tmp_path):
+    # #343: A quoted September 2019 date (e.g. "2019-09-01") must not trigger R021.
+    (tmp_path / "server.py").write_text(
+        'from mcp.server.fastmcp import FastMCP\n\n'
+        'mcp = FastMCP("weather")\n\n\n'
+        '@mcp.tool()\n'
+        'def history(start: str = "2019-09-01", end: str = "2019-09-30T12:00:00Z") -> str:\n'
+        '    """Daily readings from the start date onward."""\n'
+        '    return start\n'
+    )
+    project = load_project(tmp_path)
+    assert OldJSONSchemaDialect().check(project) == []
+
+
 # --- 6. R010 detection blind spots (false *negatives*, found on real code) ---
 #
 # These three servers scored A with zero findings, not because they were

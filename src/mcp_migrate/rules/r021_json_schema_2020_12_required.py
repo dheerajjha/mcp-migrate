@@ -12,7 +12,7 @@ from .base import Finding, Project, Rule
 # actionable evidence that this project pins a dialect the new spec no
 # longer guarantees support for.
 OLD_DIALECT_RX = re.compile(
-    r"json-schema\.org/draft-(?:0[1-7])/schema|\bdraft-0[1-7]\b|\b2019-09\b"
+    r"json-schema\.org/draft-(?:0[1-7])/schema|\bdraft-0[1-7]\b|\b2019-09\b(?!-\d)"
 )
 
 
