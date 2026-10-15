@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule, wire_method
+from .base import Finding, Fires, Project, Rule, Silent, wire_method
 
 TASKS_CODE_RX = re.compile(
     r"\bListTasksRequest(?:Params|Schema)?\b|\bListTasksResult(?:Schema)?\b|"
@@ -38,6 +38,86 @@ class TasksPollingReplacesBlockingResult(Rule):
         "io.modelcontextprotocol/tasks extension -- declare it there instead."
     )
     languages = ("python", "typescript", "javascript")
+    boundaries = (
+        Fires(
+            snippet=(
+                "from mcp.types import ListTasksRequestSchema\n"
+                "request = ListTasksRequestSchema()\n"
+            ),
+            reason="The removed Python SDK task-list request type is a direct dependency.",
+        ),
+        Fires(
+            snippet='METHODS = {"tasks/result": handle_blocking_result}\n',
+            reason="The removed blocking tasks/result wire method must migrate to polling.",
+        ),
+        Silent(
+            snippet=(
+                'METHODS = {"tasks/get": get_task, "tasks/update": update_task}\n'
+            ),
+            reason="The replacement polling methods are current and must stay silent.",
+        ),
+        Silent(
+            snippet=(
+                '# tasks/list and tasks/result were replaced by polling tasks/get.\n'
+                'PROTOCOL_VERSION = "2026-07-28"\n'
+            ),
+            reason="A migration comment is not an implementation of the removed methods.",
+        ),
+        Fires(
+            snippet=(
+                'import { ListTasksRequestSchema } from "@modelcontextprotocol/sdk/types.js";\n'
+                "server.setRequestHandler(ListTasksRequestSchema, listTasks);\n"
+            ),
+            reason="The removed TypeScript SDK task-list schema is a direct dependency.",
+            language="typescript",
+        ),
+        Fires(
+            snippet='const method = "tasks/result";\n',
+            reason="The removed blocking tasks/result wire method must migrate to polling.",
+            language="typescript",
+        ),
+        Silent(
+            snippet=(
+                'const methods = ["tasks/get", "tasks/update"];\n'
+            ),
+            reason="The replacement polling methods are current and must stay silent.",
+            language="typescript",
+        ),
+        Silent(
+            snippet=(
+                '// tasks/list and tasks/result were replaced by polling tasks/get.\n'
+                'export const protocolVersion = "2026-07-28";\n'
+            ),
+            reason="A migration comment is not an implementation of the removed methods.",
+            language="typescript",
+        ),
+        Fires(
+            snippet=(
+                'const { GetTaskPayloadRequestSchema } = require("@modelcontextprotocol/sdk/types.js");\n'
+                "server.setRequestHandler(GetTaskPayloadRequestSchema, getTaskResult);\n"
+            ),
+            reason="The removed JavaScript SDK blocking-result schema is a direct dependency.",
+            language="javascript",
+        ),
+        Fires(
+            snippet='const method = "tasks/list";\n',
+            reason="The removed tasks/list wire method is no longer part of core tasks.",
+            language="javascript",
+        ),
+        Silent(
+            snippet='const method = "tasks/get";\n',
+            reason="The replacement polling method is current and must stay silent.",
+            language="javascript",
+        ),
+        Silent(
+            snippet=(
+                '// tasks/list and tasks/result were replaced by polling tasks/get.\n'
+                'export const protocolVersion = "2026-07-28";\n'
+            ),
+            reason="A migration comment is not an implementation of the removed methods.",
+            language="javascript",
+        ),
+    )
 
     def check(self, project: Project) -> list[Finding]:
         if project.language in ("typescript", "javascript"):
