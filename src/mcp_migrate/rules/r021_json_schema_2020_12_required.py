@@ -44,6 +44,22 @@ class OldJSONSchemaDialect(Rule):
             ),
             reason="The required JSON Schema 2020-12 dialect is current.",
         ),
+        Silent(
+            snippet=(
+                'input_schema = {\n'
+                '    "type": "object",\n'
+                '    "properties": {"query": {"type": "string"}},\n'
+                '}\n'
+            ),
+            reason="Most servers never pin a dialect, and leaving it out is not a finding.",
+        ),
+        Silent(
+            snippet=(
+                '# We pinned draft-07 here before moving to 2020-12.\n'
+                'input_schema = {"type": "object"}\n'
+            ),
+            reason="A comment about an old draft is not a pin.",
+        ),
         Fires(
             snippet=(
                 "const schema = {\n"
@@ -60,6 +76,14 @@ class OldJSONSchemaDialect(Rule):
                 "};\n"
             ),
             reason="The required JSON Schema 2020-12 dialect is current.",
+            language="typescript",
+        ),
+        Silent(
+            snippet=(
+                '// We pinned draft-07 here before moving to 2020-12.\n'
+                'const schema = { type: "object" };\n'
+            ),
+            reason="A comment about an old draft is not a pin.",
             language="typescript",
         ),
         Fires(
