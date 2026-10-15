@@ -1139,6 +1139,25 @@ def _select_fixers(*, safe_only: bool = False, rule_ids: frozenset[str] | None =
     return fixers
 
 
+def _run_rules(project: Project, rules):
+    """Raw `(language, finding)` pairs from `rules` against `project`: no
+    suppression, no dedupe. The language is the view that produced the
+    finding, which is the only file scope a project-level finding has.
+
+    Same per-language view caching as `run_check_detailed`, for the same
+    reason -- building a view discards the span cache.
+    """
+    views: dict[str, Project] = {}
+    for rule in rules:
+        for language in rule.languages:
+            if language not in views:
+                views[language] = project.for_language(language)
+            view = views[language]
+            if view.files:
+                for finding in rule.check(view):
+                    yield language, finding
+
+
 def _findings_for(root: Path, files: list[SourceFile], *, disabled: dict | None = None):
     """Run every rule against an in-memory set of files (some possibly
     edited, not yet written to disk) instead of re-reading from disk.
@@ -1147,19 +1166,37 @@ def _findings_for(root: Path, files: list[SourceFile], *, disabled: dict | None 
     --dry-run`, where nothing has actually been written yet.
     """
     project = Project(root=root, files=files)
-    rules = {r.id: r for r in all_rules()}
-    findings = []
-    views: dict[str, Project] = {}
-    for rule in rules.values():
-        if disabled and rule.id in disabled:
-            continue
-        for language in rule.languages:
-            if language not in views:
-                views[language] = project.for_language(language)
-            view = views[language]
-            if view.files:
-                findings.extend(rule.check(view))
-    return findings
+    rules = [r for r in all_rules() if not (disabled and r.id in disabled)]
+    return [finding for _language, finding in _run_rules(project, rules)]
+
+
+def _flagged_files(project: Project, rule_ids) -> set[tuple[str, Path]]:
+    """`(rule_id, path)` for every file where that rule has a finding `check`
+    would not suppress -- the gate `run_fix` puts in front of each fixer (#336).
+
+    Suppressed findings don't count: `ignore[R0NN]` means "leave this line
+    alone". Taken before `overlap.dedupe()` on purpose: dedupe folds R007 and
+    R018 into one finding under the winner's id, and both rules have fixers,
+    so gating on the merged report would silently stop the loser's fixer.
+
+    A project-level finding (no path, e.g. R008's "OpenTelemetry is used but
+    nothing reads traceparent") names no file but can still have a fixer
+    that edits wherever the fix belongs, so it opens the gate for every file
+    in the language view that produced it -- and only that language, so a
+    Python-side R008 never lets the fixer annotate TypeScript spans.
+    """
+    rules = [r for r in all_rules() if r.id in rule_ids]
+    flagged: set[tuple[str, Path]] = set()
+    per_file = []
+    for language, finding in _run_rules(project, rules):
+        if finding.path is None:
+            flagged.update((finding.rule_id, f.path) for f in project.files if f.language == language)
+        else:
+            per_file.append(finding)
+    suppressions, _problems = suppress_mod.collect(project)
+    kept, _suppressed = suppress_mod.apply(per_file, suppressions)
+    flagged.update((finding.rule_id, finding.path) for finding in kept)
+    return flagged
 
 
 def _would_break_python(f: "SourceFile", new_text: str) -> bool:
@@ -1208,6 +1245,14 @@ def run_fix(
 ):
     """Compute fixes for every file under `root`, without touching disk.
 
+    Fixers only see files their rule flags (#336): each fixer runs on a file
+    only if `check` has a non-suppressed finding for that fixer's rule there,
+    so a precision gate in a rule (MCP context, exclusions) protects its fixer
+    too. The gate is decided once, on the original text; fixers still chain on
+    the files they do run on. It is per file, not per line: a file with one
+    suppressed and one unsuppressed finding for the same rule still gets the
+    whole-file fixer, which can touch the suppressed line.
+
     Returns (project, list of (SourceFile, new_text, [change descriptions])
     for files that actually changed, sorted fixers actually available).
     """
@@ -1216,11 +1261,14 @@ def run_fix(
     effective_include_tests = include_tests or config.include_tests
     project = load_project(root, include_tests=effective_include_tests, extra_skip=config.skip)
     fixers = _select_fixers(safe_only=safe_only, rule_ids=rule_ids, disabled=config.disabled_rules)
+    flagged = _flagged_files(project, {fx.rule_id for fx in fixers})
     results = []
     for f in project.files:
         text = f.text
         file_changes: list[tuple[str, str]] = []  # (rule_id/confidence, description)
         for fixer in fixers:
+            if (fixer.rule_id, f.path) not in flagged:
+                continue
             outcome = fixer.fix(text, f.path)
             if outcome.changed:
                 text = outcome.text

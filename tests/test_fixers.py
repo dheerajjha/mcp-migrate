@@ -1225,8 +1225,11 @@ def test_sole_body_pass_is_not_added_to_a_def_inside_an_fstring():
 def test_a_docstring_only_body_is_left_to_the_guard_rather_than_given_a_pass(tmp_path, capsys):
     """The body's one line is itself string data. Commenting the docstring out
     and dropping a `pass` under it writes an edit inside the user's string,
-    where the guard used to refuse the file -- so the sole-body repair declines
-    and the refusal stands."""
+    where the guard used to refuse the file -- so the sole-body repair declines.
+
+    Through the CLI the fixer never gets that far any more: R011 doesn't flag
+    a docstring, so the #336 gate keeps its fixer off the file entirely and
+    there is nothing left for the guard to refuse."""
     src = 'def handlers():\n    """PingRequest"""\n'
     target = tmp_path / "docstring.py"
     target.write_text(src)
@@ -1237,7 +1240,8 @@ def test_a_docstring_only_body_is_left_to_the_guard_rather_than_given_a_pass(tmp
     out = capsys.readouterr().out
 
     assert target.read_text() == src
-    assert "refused" in out
+    assert "refused" not in out
+    assert "Nothing to fix" in out
 
 
 def test_sole_body_fix_keeps_an_unterminated_last_line_unterminated():
