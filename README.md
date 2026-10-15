@@ -455,6 +455,10 @@ correct, it leaves the source untouched rather than guess. A wrong fix that
 silently corrupts your server is worse than reporting the finding and doing
 nothing.
 
+`fix` only touches a file when `check` has a finding there for that fixer's
+rule, so the two can't disagree. A suppressed finding
+(`# mcp-migrate: ignore[R0NN] -- reason`) counts as "leave this alone".
+
 That promise is also enforced rather than merely stated. Before a Python
 file is written, the result has to still parse: if applying a fix would turn
 a file that parsed into one that doesn't, that file is **refused** and left

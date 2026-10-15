@@ -4,6 +4,29 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`fix` no longer edits files `check` reports nothing in.**
+  ([#336](https://github.com/dheerajjha/mcp-migrate/issues/336))
+  - Each fixer now runs only on files where its rule has a finding. Before,
+    every fixer saw every file, so a rule's precision gates (MCP context,
+    exclusions) never reached its fixer. On invisible-playwright-mcp,
+    `check` was silent but `fix --rule R014` commented out the
+    `Last-Event-ID` read in a browser `/chat/events` route. The line after it
+    still used that variable, so `--write` broke the route.
+  - A suppressed finding doesn't count, so `ignore[R0NN]` keeps the fixer
+    off a file that has no other finding for that rule. The check is per
+    file, not per line: if the same file also has an unsuppressed finding
+    for that rule, the fixer still runs on the whole file.
+  - The check uses findings from before `overlap.dedupe()`. That way R007's
+    fixer still runs where its findings are folded into R018's in the report.
+  - A project-level finding (R008) lets its fixer run on every file in the
+    language it was found in.
+  - The same cause had fixers editing strings, docstrings and comments that
+    `check` skips (R005, R006, R007, R011, R020 and others). The R008 fixer
+    also annotated span starts in projects that already read `traceparent`.
+    No `tests/fixtures/` project's `fix` output changes.
+
 ## [0.19.0] - 2026-10-12
 
 ### Fixed
