@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule
+from .base import Finding, Fires, Project, Rule, Silent
 
 # --- Python ---------------------------------------------------------------
 #
@@ -68,6 +68,64 @@ class SessionIdRemoved(Rule):
         "and take it as an ordinary tool argument instead."
     )
     languages = ("python", "typescript", "javascript")
+    boundaries = (
+        Fires(
+            snippet='mcp_session_id = request.headers.get("Mcp-Session-Id")',
+            reason="Python reads the removed header into its legacy identifier.",
+        ),
+        Fires(
+            snippet='return headers.get(b"mcp-session-id")',
+            reason="A bytes-literal header read still depends on the removed session ID.",
+        ),
+        Silent(
+            snippet='# Some older clients still send an Mcp-Session-Id header',
+            reason="A comment that only names the removed header is not a dependency.",
+        ),
+        Silent(
+            snippet='logger.debug("Mcp-Session-Id, if sent, is ignored")',
+            reason="A log message that only names the header is not a read or write.",
+        ),
+        Fires(
+            snippet="const mcpSessionId = request.sessionId;",
+            reason="Active TypeScript code still uses the removed session identifier.",
+            language="typescript",
+        ),
+        Fires(
+            snippet='const sid = request.headers["mcp-session-id"];',
+            reason="TypeScript reads the removed HTTP header.",
+            language="typescript",
+        ),
+        Silent(
+            snippet='console.info("Ignoring obsolete mcpSessionId metadata");',
+            reason="A TypeScript log string is prose, not an identifier reference.",
+            language="typescript",
+        ),
+        Silent(
+            snippet='const label = "mcp-session-id";',
+            reason="A bare TypeScript label does not read or write an HTTP header.",
+            language="typescript",
+        ),
+        Fires(
+            snippet="const mcpSessionId = request.sessionId;",
+            reason="Active JavaScript code still uses the removed session identifier.",
+            language="javascript",
+        ),
+        Fires(
+            snippet='const sid = headers["mcp-session-id"];',
+            reason="JavaScript reads the removed HTTP header from a header map.",
+            language="javascript",
+        ),
+        Silent(
+            snippet='console.info("Ignoring obsolete mcpSessionId metadata");',
+            reason="A JavaScript log string is prose, not an identifier reference.",
+            language="javascript",
+        ),
+        Silent(
+            snippet='const sid = auditHeaders["mcp-session-id"];',
+            reason="An arbitrary map whose name ends in Headers is not an HTTP header access.",
+            language="javascript",
+        ),
+    )
 
     MESSAGE = "Mcp-Session-Id was removed from the Streamable HTTP transport."
 
