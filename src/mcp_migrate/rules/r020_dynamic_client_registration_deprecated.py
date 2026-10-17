@@ -1,4 +1,4 @@
-from .base import Finding, Project, Rule, mcp_surface_paths
+from .base import Finding, Fires, Project, Rule, Silent, mcp_surface_paths
 
 # Two of these are distinctive on their own: `RegisterClientRequest` is
 # MCP-SDK specific and `DynamicClientRegistration` is the RFC 7591 term of
@@ -36,6 +36,75 @@ class DynamicClientRegistrationDeprecated(Rule):
         "Metadata Documents. Plan a migration to CIMD for onboarding new OAuth clients."
     )
     languages = ("python", "typescript")
+    boundaries = (
+        Fires(
+            snippet="request: RegisterClientRequest",
+            reason="The MCP SDK request type is distinctive without another surface gate.",
+        ),
+        Fires(
+            snippet="provider: DynamicClientRegistration",
+            reason="The RFC 7591 type name is distinctive without another surface gate.",
+        ),
+        Fires(
+            snippet=(
+                "from mcp.server.auth.provider import OAuthClientInformationFull\n"
+                "class Provider:\n"
+                "    async def register_client(self, info: OAuthClientInformationFull): ...\n"
+            ),
+            reason="The Python auth-provider hook is deprecated when the file speaks MCP.",
+        ),
+        Silent(
+            snippet="class ConnectionPool:\n    def register_client(self, client): ...\n",
+            reason="A generic client-registration method outside MCP is unrelated to RFC 7591.",
+        ),
+        Silent(
+            snippet=(
+                'METRIC = "logging/setLevelLatency"\n'
+                "class ConnectionPool:\n"
+                "    def register_client(self, client): ...\n"
+            ),
+            reason="A longer metric name is not independent MCP surface for a generic hook.",
+        ),
+        Silent(
+            snippet="# RegisterClientRequest and DynamicClientRegistration are deprecated.\n",
+            reason="A comment that names the old API is not an active dependency.",
+        ),
+        Fires(
+            snippet="const request: RegisterClientRequest = metadata;\n",
+            reason="The MCP SDK request type is distinctive TypeScript code.",
+            language="typescript",
+        ),
+        Fires(
+            snippet="const provider: DynamicClientRegistration = registration;\n",
+            reason="The RFC 7591 type name is distinctive TypeScript code.",
+            language="typescript",
+        ),
+        Fires(
+            snippet=(
+                'import type { OAuthClientMetadata } from "@modelcontextprotocol/sdk/types.js";\n'
+                "async function registerClient(metadata: OAuthClientMetadata) { return metadata; }\n"
+            ),
+            reason="The TypeScript auth hook is deprecated when the file imports the MCP SDK.",
+            language="typescript",
+        ),
+        Silent(
+            snippet=(
+                "class ConnectionPool {\n"
+                "  registerClient(client: object) { return client; }\n"
+                "}\n"
+            ),
+            reason="A generic TypeScript registration method without MCP surface is unrelated.",
+            language="typescript",
+        ),
+        Silent(
+            snippet=(
+                "// RegisterClientRequest and DynamicClientRegistration are deprecated.\n"
+                "export const authMode = 'cimd';\n"
+            ),
+            reason="A TypeScript comment is migration prose, not active registration code.",
+            language="typescript",
+        ),
+    )
 
     MESSAGE = (
         "Uses RFC 7591 Dynamic Client Registration, deprecated in favour of "
