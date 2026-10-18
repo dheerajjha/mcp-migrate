@@ -1,4 +1,4 @@
-from .base import Finding, Project, Rule, wire_method
+from .base import Finding, Fires, Project, Rule, Silent, wire_method
 
 # Code-shaped identifiers -- SDK model/class names or plain Python names,
 # matched with search_code so a docstring/comment mention doesn't count.
@@ -70,6 +70,75 @@ class MultiRoundTripReplacesServerInitiated(Rule):
         "inputResponses."
     )
     languages = ("python", "typescript")
+    boundaries = (
+        Fires(
+            snippet=(
+                "async def handler(ctx):\n"
+                "    return await ctx.session.create_message(messages=[])"
+            ),
+            reason="Sampling through the MCP session is a removed server-initiated request.",
+        ),
+        Fires(
+            snippet="from mcp.types import ListRootsResult",
+            reason="The SDK result type belongs to the removed server-initiated roots flow.",
+        ),
+        Fires(
+            snippet='METHOD = "elicitation/create"',
+            reason="The exact removed elicitation wire method is still present.",
+        ),
+        Silent(
+            snippet=(
+                "def create_message(payload):\n"
+                "    return payload"
+            ),
+            reason="A generic message-building helper without the session receiver is not MCP sampling.",
+        ),
+        Silent(
+            snippet="# CreateMessageRequest and sampling/createMessage were replaced by MRTR",
+            reason="A migration comment is prose, not an active server-initiated request.",
+        ),
+        Silent(
+            snippet='METRIC = "roots/listeners"',
+            reason="A longer wire name is outside the exact roots/list method boundary.",
+        ),
+        Silent(
+            snippet="result = InputRequiredResult(inputResponses=[])",
+            reason="The replacement Multi Round-Trip result shape is already migrated.",
+        ),
+        Fires(
+            snippet=(
+                'import { CreateMessageRequestSchema } from "@modelcontextprotocol/sdk/types.js";\n'
+                "server.setRequestHandler(CreateMessageRequestSchema, handler);"
+            ),
+            reason="The removed sampling request schema is active TypeScript MCP code.",
+            language="typescript",
+        ),
+        Fires(
+            snippet='const legacyMethod = "sampling/createMessage";',
+            reason="The exact removed sampling wire method is still present in TypeScript.",
+            language="typescript",
+        ),
+        Fires(
+            snippet="function onReply(params: { elicitationId: string }) { return params.elicitationId; }",
+            reason="The removed elicitation correlation field is active TypeScript code.",
+            language="typescript",
+        ),
+        Silent(
+            snippet="// CreateMessageRequestSchema and sampling/createMessage were replaced by MRTR.",
+            reason="A TypeScript migration comment is prose, not active MCP surface.",
+            language="typescript",
+        ),
+        Silent(
+            snippet='const method = "sampling/createMessageLatency";',
+            reason="A longer TypeScript wire name is outside the exact method boundary.",
+            language="typescript",
+        ),
+        Silent(
+            snippet="const result = { inputResponses: [] };",
+            reason="The replacement Multi Round-Trip result shape is already migrated.",
+            language="typescript",
+        ),
+    )
 
     def check(self, project: Project) -> list[Finding]:
         if project.language == "typescript":
