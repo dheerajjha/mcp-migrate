@@ -19,7 +19,7 @@ jobs:
   clean-tree-passes:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: scan
         uses: ./
         with:
@@ -35,7 +35,7 @@ jobs:
   findings-fail-the-job:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: scan
         uses: ./
         continue-on-error: true
@@ -51,7 +51,7 @@ jobs:
   fail-on-never-does-not-fail:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: scan
         uses: ./
         with:
@@ -68,7 +68,7 @@ jobs:
     permissions:
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Scoped to a fixture whose findings all carry a location, because
       # this job runs the action, and the action installs the *published*
       # package. Until a release carries the #262 fix, pointing it at
@@ -99,7 +99,7 @@ jobs:
           assert not unlocated, f"GitHub will reject the file; unlocated: {unlocated}"
           print(f"SARIF 2.1.0, {len(results)} results, all located")
           PY
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: results.sarif
           category: mcp-migrate
@@ -107,7 +107,7 @@ jobs:
   unscannable-path-exits-2:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: scan
         uses: ./
         continue-on-error: true
@@ -121,7 +121,7 @@ jobs:
   pinned-version-is-honoured:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: scan
         uses: ./
         with:
@@ -144,8 +144,8 @@ jobs:
     permissions:
       security-events: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - run: python -m pip install --quiet -e .
@@ -169,7 +169,7 @@ jobs:
           assert anchors, "expected the project-level rules to fire on this fixture"
           print(f"{len(results)} results, all located; project-level anchors: {anchors}")
           PY
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: from-source.sarif
           category: mcp-migrate-from-source
