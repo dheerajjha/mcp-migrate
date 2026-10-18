@@ -1,0 +1,13 @@
+# Keeps the workflow actions current, one grouped pull request a month.
+# Security updates for dependencies are on separately, in the repository's
+# Dependabot settings, and arrive as they are published.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns:
+          - "*"
