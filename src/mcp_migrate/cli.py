@@ -1145,7 +1145,7 @@ def _run_rules(project: Project, rules):
     finding, which is the only file scope a project-level finding has.
 
     Same per-language view caching as `run_check_detailed`, for the same
-    reason -- building a view discards the span cache.
+    reason: building a view discards the span cache.
     """
     views: dict[str, Project] = {}
     for rule in rules:
@@ -1172,7 +1172,8 @@ def _findings_for(root: Path, files: list[SourceFile], *, disabled: dict | None 
 
 def _flagged_files(project: Project, rule_ids) -> set[tuple[str, Path]]:
     """`(rule_id, path)` for every file where that rule has a finding `check`
-    would not suppress -- the gate `run_fix` puts in front of each fixer (#336).
+    would not suppress. This is the gate `run_fix` puts in front of each
+    fixer (#336).
 
     Suppressed findings don't count: `ignore[R0NN]` means "leave this line
     alone". Taken before `overlap.dedupe()` on purpose: dedupe folds R007 and
@@ -1182,7 +1183,7 @@ def _flagged_files(project: Project, rule_ids) -> set[tuple[str, Path]]:
     A project-level finding (no path, e.g. R008's "OpenTelemetry is used but
     nothing reads traceparent") names no file but can still have a fixer
     that edits wherever the fix belongs, so it opens the gate for every file
-    in the language view that produced it -- and only that language, so a
+    in the language view that produced it. Only that language, though: a
     Python-side R008 never lets the fixer annotate TypeScript spans.
     """
     rules = [r for r in all_rules() if r.id in rule_ids]

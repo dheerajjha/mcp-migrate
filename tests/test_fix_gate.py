@@ -1,7 +1,7 @@
-"""`fix` only touches what `check` reports (#336).
+"""`fix` only touches files `check` flags (#336).
 
 A fixer used to see every file and decide for itself, so every precision gate
-its rule had -- MCP context, exclusions, suppressions -- was invisible to it.
+its rule had (MCP context, exclusions, suppressions) was invisible to it.
 The issue's case: R014's rule stays silent on an ordinary browser EventSource
 route beside an MCP server, but R014's fixer commented out the route's
 `Last-Event-ID` read anyway, leaving the next line using an undefined name.
@@ -112,7 +112,7 @@ def test_a_suppressed_finding_keeps_the_fixer_off_the_file(tmp_path, capsys):
     src = MCP_RESUME_HANDLER.replace(
         'cursor = request.headers.get("Last-Event-ID")',
         'cursor = request.headers.get("Last-Event-ID")  '
-        "# mcp-migrate: ignore[R014] -- proxied through to an upstream, not our resume cursor",
+        "# mcp-migrate: ignore[R014]: proxied through to an upstream, not our resume cursor",
     )
     _write(tmp_path, {"resume.py": src})
 
@@ -127,8 +127,8 @@ def test_a_suppressed_finding_keeps_the_fixer_off_the_file(tmp_path, capsys):
 
 
 # R007 (Roots deprecated) and R018 (server-initiated roots/list replaced)
-# both fire here, and `overlap.dedupe()` folds every R007 finding into R018's
-# -- the report shows R018 alone. Both rules have fixers.
+# both fire here, and `overlap.dedupe()` folds every R007 finding into R018's,
+# so the report shows R018 alone. Both rules have fixers.
 OVERLAP_SERVER = '''from mcp.server.lowlevel import Server
 from mcp.types import ListRootsResult, RootsCapability
 
@@ -176,8 +176,8 @@ TS_SPAN = '''export function handle(tracer: any) {
 
 
 def test_a_project_level_finding_opens_the_gate_for_its_language(tmp_path):
-    """R008 is project-level -- "OpenTelemetry is used, traceparent is read
-    nowhere" names no file -- but its fixer edits the span sites. Its finding
+    """R008 is project-level ("OpenTelemetry is used, traceparent is read
+    nowhere" names no file), but its fixer edits the span sites. Its finding
     opens the gate for the language that produced it, and only that one."""
     _write(tmp_path, {"server.py": OTEL_SERVER, "client.ts": TS_SPAN})
 
