@@ -4,10 +4,14 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-19
+
 ### Fixed
 
 - **`fix` no longer edits files `check` reports nothing in.**
-  ([#336](https://github.com/dheerajjha/mcp-migrate/issues/336))
+  ([#336](https://github.com/dheerajjha/mcp-migrate/issues/336),
+  [#347](https://github.com/dheerajjha/mcp-migrate/pull/347), from
+  @sstej44)
   - Each fixer now runs only on files where its rule has a finding. Before,
     every fixer saw every file, so a rule's precision gates (MCP context,
     exclusions) never reached its fixer. On invisible-playwright-mcp,
@@ -26,6 +30,21 @@ All notable changes to this project are documented here.
     `check` skips (R005, R006, R007, R011, R020 and others). The R008 fixer
     also annotated span starts in projects that already read `traceparent`.
     No `tests/fixtures/` project's `fix` output changes.
+- **R021 no longer reads a September 2019 date as the 2019-09 dialect.**
+  ([#343](https://github.com/dheerajjha/mcp-migrate/issues/343),
+  [#344](https://github.com/dheerajjha/mcp-migrate/pull/344), from @KeuqS)
+  `\b2019-09\b` also matched the start of a full date, so a quoted
+  `"2019-09-01"` was an advisory finding: a FastMCP tool with that default
+  went from A (100) to A (97). The 2019-09 schema URL and a bare `"2019-09"`
+  still fire, in Python, TypeScript and JavaScript.
+
+R014, R015 and R016 now declare their detection boundaries (#333, #340,
+#341), and the boundary runner parses Python the way a real scan does (#340),
+so a rule that reads imports or walks the AST sees a snippet as `check`
+would.
+
+No published board grade moves: `scripts/regrade_board.py` reproduces all 20
+entries on this release.
 
 ## [0.19.0] - 2026-10-12
 
