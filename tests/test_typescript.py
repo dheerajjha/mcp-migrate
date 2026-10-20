@@ -1896,6 +1896,27 @@ export const STACK = "mcp";
     project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
     assert PerConnectionState().check(project) == []
 
+
+@pytest.mark.parametrize(
+    "constructor",
+    ["Settings()", "MapboxClient(token)", "ObjectStore()"],
+)
+def test_r002_does_not_match_constructor_name_prefixes(tmp_path, constructor):
+    code = f"const sessions = new {constructor};\n"
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert PerConnectionState().check(project) == []
+
+
+@pytest.mark.parametrize(
+    "constructor",
+    ["WeakMap<object, string>()", "WeakSet<object>()"],
+)
+def test_r002_finds_weak_collection_connection_state(tmp_path, constructor):
+    code = f"const sessions = new {constructor};\n"
+    project = load_project(_write(tmp_path, "server.ts", code)).for_language("typescript")
+    assert len(PerConnectionState().check(project)) == 1
+
+
 def test_fix_preserves_typescript_language_for_remaining_findings(tmp_path, capsys):
     path = _write(tmp_path, "transport.ts", LEGACY_TS)
 
