@@ -70,16 +70,34 @@ class SessionIdRemoved(Rule):
     languages = ("python", "typescript", "javascript")
     boundaries = (
         Fires(
-            snippet='mcp_session_id = request.headers.get("Mcp-Session-Id")',
-            reason="Python reads the removed header into its legacy identifier.",
+            snippet="del sessions[mcp_session_id]",
+            reason="The legacy session identifier is active Python code, with no header in sight.",
+        ),
+        Fires(
+            snippet='sid = request.headers.get("Mcp-Session-Id")',
+            reason="The header is read case-insensitively, under any variable name.",
+        ),
+        Fires(
+            snippet='extra = {"Mcp-Session-Id": session_id}',
+            reason="A dict literal keyed by the header still sets it.",
         ),
         Fires(
             snippet='return headers.get(b"mcp-session-id")',
             reason="A bytes-literal header read still depends on the removed session ID.",
         ),
         Silent(
-            snippet='# Some older clients still send an Mcp-Session-Id header',
+            snippet=(
+                '# mcp_session_id used to come from the Mcp-Session-Id header\n'
+                'sid = None'
+            ),
             reason="A comment that only names the removed header is not a dependency.",
+        ),
+        Silent(
+            snippet=(
+                '@click.option("--session", help="Overrides mcp_session_id for local testing")\n'
+                'def main(session): ...'
+            ),
+            reason="A --help string that names mcp_session_id is documentation, not a use of it.",
         ),
         Silent(
             snippet='logger.debug("Mcp-Session-Id, if sent, is ignored")',
@@ -93,6 +111,11 @@ class SessionIdRemoved(Rule):
         Fires(
             snippet='const sid = request.headers["mcp-session-id"];',
             reason="TypeScript reads the removed HTTP header.",
+            language="typescript",
+        ),
+        Fires(
+            snippet='res.setHeader("Mcp-Session-Id", sessionId);',
+            reason="Setting the header on the response is a use of it.",
             language="typescript",
         ),
         Silent(
@@ -115,6 +138,11 @@ class SessionIdRemoved(Rule):
             reason="JavaScript reads the removed HTTP header from a header map.",
             language="javascript",
         ),
+        Fires(
+            snippet='res.setHeader("Mcp-Session-Id", sid);',
+            reason="Setting the header on the response is a use of it.",
+            language="javascript",
+        ),
         Silent(
             snippet='console.info("Ignoring obsolete mcpSessionId metadata");',
             reason="A JavaScript log string is prose, not an identifier reference.",
@@ -123,6 +151,11 @@ class SessionIdRemoved(Rule):
         Silent(
             snippet='const sid = auditHeaders["mcp-session-id"];',
             reason="An arbitrary map whose name ends in Headers is not an HTTP header access.",
+            language="javascript",
+        ),
+        Silent(
+            snippet='audit.recordSetHeader("mcp-session-id", sid);',
+            reason="A method that merely ends in setHeader is not a header write.",
             language="javascript",
         ),
     )
