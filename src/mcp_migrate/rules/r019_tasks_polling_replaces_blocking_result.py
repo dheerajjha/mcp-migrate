@@ -47,6 +47,14 @@ class TasksPollingReplacesBlockingResult(Rule):
             reason="The removed Python SDK task-list request type is a direct dependency.",
         ),
         Fires(
+            snippet="result = ListTasksResultSchema()\n",
+            reason="The removed task-list result type is active Python code.",
+        ),
+        Fires(
+            snippet="request = GetTaskPayloadRequest(params=params)\n",
+            reason="The blocking tasks/result request type is removed with the method.",
+        ),
+        Fires(
             snippet='METHODS = {"tasks/result": handle_blocking_result}\n',
             reason="The removed blocking tasks/result wire method must migrate to polling.",
         ),
@@ -55,6 +63,10 @@ class TasksPollingReplacesBlockingResult(Rule):
                 'METHODS = {"tasks/get": get_task, "tasks/update": update_task}\n'
             ),
             reason="The replacement polling methods are current and must stay silent.",
+        ),
+        Silent(
+            snippet='LISTENERS = {"tasks/listeners": []}\n',
+            reason="A longer wire name is outside the bounded tasks/list method.",
         ),
         Silent(
             snippet=(
@@ -81,6 +93,16 @@ class TasksPollingReplacesBlockingResult(Rule):
                 'const methods = ["tasks/get", "tasks/update"];\n'
             ),
             reason="The replacement polling methods are current and must stay silent.",
+            language="typescript",
+        ),
+        Silent(
+            snippet='const registry = { "tasks/listeners": [] };\n',
+            reason="A longer wire name is outside the bounded tasks/list method.",
+            language="typescript",
+        ),
+        Silent(
+            snippet="class ListTasksRequester {\n  send() {}\n}\n",
+            reason="An unrelated identifier with a longer suffix is not an SDK request type.",
             language="typescript",
         ),
         Silent(
@@ -131,7 +153,7 @@ class TasksPollingReplacesBlockingResult(Rule):
         # tasks/list and tasks/result are JSON-RPC method strings, not
         # valid bare identifiers -- they can only appear inside a STRING
         # token, so search_code would never find them (see the
-        # notifications/initialized note in r009). Raw scan instead.
+        # notifications/initialized note in r009). Wire scan instead.
         for f, line, text in project.search_wire(WIRE_RX):
             out.append(self.finding(MESSAGE_WIRE, f, line, text))
         return out
