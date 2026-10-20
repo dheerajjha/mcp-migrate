@@ -79,6 +79,13 @@ class MultiRoundTripReplacesServerInitiated(Rule):
             reason="Sampling through the MCP session is a removed server-initiated request.",
         ),
         Fires(
+            snippet=(
+                "async def gather(ctx):\n"
+                "    return await ctx.session.list_roots()\n"
+            ),
+            reason="Listing roots through the MCP session is a removed server-initiated request.",
+        ),
+        Fires(
             snippet="from mcp.types import ListRootsResult",
             reason="The SDK result type belongs to the removed server-initiated roots flow.",
         ),
@@ -86,12 +93,31 @@ class MultiRoundTripReplacesServerInitiated(Rule):
             snippet='METHOD = "elicitation/create"',
             reason="The exact removed elicitation wire method is still present.",
         ),
+        Fires(
+            snippet="def on_complete(params):\n    return params.elicitationId\n",
+            reason="The removed elicitation correlation field is active Python code.",
+        ),
         Silent(
             snippet=(
                 "def create_message(payload):\n"
                 "    return payload"
             ),
             reason="A generic message-building helper without the session receiver is not MCP sampling.",
+        ),
+        Silent(
+            snippet=(
+                "import os\n\n"
+                "def list_roots(base):\n"
+                "    return sorted(os.listdir(base))\n"
+            ),
+            reason="A directory-listing helper without the session receiver is not MCP roots.",
+        ),
+        Silent(
+            snippet=(
+                'def handler():\n'
+                '    """Sent CreateMessageRequest before Multi Round-Trip Requests replaced it."""\n'
+            ),
+            reason="A docstring that names the old request type is documentation, not surface.",
         ),
         Silent(
             snippet="# CreateMessageRequest and sampling/createMessage were replaced by MRTR",
@@ -108,7 +134,7 @@ class MultiRoundTripReplacesServerInitiated(Rule):
         Fires(
             snippet=(
                 'import { CreateMessageRequestSchema } from "@modelcontextprotocol/sdk/types.js";\n'
-                "server.setRequestHandler(CreateMessageRequestSchema, handler);"
+                "client.setRequestHandler(CreateMessageRequestSchema, handler);"
             ),
             reason="The removed sampling request schema is active TypeScript MCP code.",
             language="typescript",
@@ -136,6 +162,14 @@ class MultiRoundTripReplacesServerInitiated(Rule):
         Silent(
             snippet="const result = { inputResponses: [] };",
             reason="The replacement Multi Round-Trip result shape is already migrated.",
+            language="typescript",
+        ),
+        Silent(
+            snippet=(
+                'const createMessage = (text: string) => ({ role: "user", text });\n'
+                'const listRoots = () => fs.readdirSync("/");\n'
+            ),
+            reason="Generic createMessage/listRoots callbacks are not the SDK's request schemas.",
             language="typescript",
         ),
     )
