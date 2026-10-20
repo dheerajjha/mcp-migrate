@@ -30,6 +30,32 @@ TS_RX = (
 # variable happens to share a suspect name.
 SCOPE_BOUNDARY = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
 
+_DICT_CALL_NAMES = {"dict", "defaultdict", "OrderedDict"}
+
+
+def _is_dict_shape(node: ast.AST | None) -> bool:
+    """Return True if the node represents a dict-like store.
+
+    Recognises dict literals, dict comprehensions, and constructor calls
+    to dict / defaultdict / OrderedDict (including the collections.xxx form).
+    """
+    if node is None:
+        return False
+    if isinstance(node, (ast.Dict, ast.DictComp)):
+        return True
+    if isinstance(node, ast.Call):
+        func = node.func
+        if isinstance(func, ast.Name) and func.id in _DICT_CALL_NAMES:
+            return True
+        if (
+            isinstance(func, ast.Attribute)
+            and func.attr in _DICT_CALL_NAMES
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "collections"
+        ):
+            return True
+    return False
+
 
 def _module_and_class_level_assigns(node: ast.AST):
     """Yield Assign/AnnAssign nodes declared at module or class scope.
@@ -57,7 +83,7 @@ class PerConnectionState(Rule):
         "into a store keyed by an explicit handle you return to the client."
     )
     languages = ("python", "typescript")
-    boundaries = (
+    _DECLARED_BOUNDARIES = (
         Fires(
             snippet="sessions = {}",
             reason="A module-level dict with a connection-state name is shared process state.",
@@ -124,15 +150,11 @@ class PerConnectionState(Rule):
         ),
         Silent(
             snippet="sessions = SessionStore()",
-            reason="R002 only identifies in-memory dict shapes, not an arbitrary store implementation.",
+            reason="R002 recognizes dict-shaped stores; an application-specific store object is outside those shapes.",
         ),
         Silent(
-            snippet=(
-                "class Handler:\n"
-                "    def __init__(self):\n"
-                "        self.sessions = {}\n"
-            ),
-            reason="An instance attribute is not a module- or class-level named store.",
+            snippet="session_store: SessionStore = SessionStore()\n",
+            reason="An annotated store object, not a dict-shaped store, is outside R002's detected shapes.",
         ),
         Fires(
             snippet="const sessions = new Map<string, unknown>();",
@@ -223,6 +245,33 @@ class PerConnectionState(Rule):
 
     MESSAGE = "Looks like per-connection state held in process memory."
 
+    boundaries = _DECLARED_BOUNDARIES + (
+        Fires(
+            snippet="sessions = dict()",
+            reason="dict() constructor at module scope is a dict-shaped store.",
+        ),
+        Fires(
+            snippet="from collections import defaultdict\nsessions = defaultdict(dict)",
+            reason="defaultdict() constructor at module scope is a dict-shaped store.",
+        ),
+        Fires(
+            snippet="from collections import OrderedDict\nsessions = OrderedDict()",
+            reason="OrderedDict() constructor at module scope is a dict-shaped store.",
+        ),
+        Fires(
+            snippet="import collections\nsessions = collections.defaultdict(dict)",
+            reason="collections.defaultdict() at module scope is a dict-shaped store.",
+        ),
+        Silent(
+            snippet="def handler():\n    sessions = defaultdict(dict)",
+            reason="A dict-shaped store built inside a function is request-local, not process-wide state.",
+        ),
+        Silent(
+            snippet="sessions = []",
+            reason="A list is not a dict-shaped store.",
+        ),
+    )
+
     def check(self, project: Project) -> list[Finding]:
         if project.language == "typescript":
             return [
@@ -238,11 +287,11 @@ class PerConnectionState(Rule):
                 # `sessions: dict[str, State] = {}` (AnnAssign) has a single
                 # `target`, not a `targets` list like plain Assign.
                 if isinstance(node, ast.AnnAssign):
-                    if node.value is None or not isinstance(node.value, (ast.Dict, ast.DictComp)):
+                    if not _is_dict_shape(node.value):
                         continue
                     targets = [node.target]
                 else:
-                    if not isinstance(node.value, (ast.Dict, ast.DictComp)):
+                    if not _is_dict_shape(node.value):
                         continue
                     targets = node.targets
                 for target in targets:
