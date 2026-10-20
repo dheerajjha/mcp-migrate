@@ -69,6 +69,13 @@ class DynamicClientRegistrationDeprecated(Rule):
             snippet="# RegisterClientRequest and DynamicClientRegistration are deprecated.\n",
             reason="A comment that names the old API is not an active dependency.",
         ),
+        Silent(
+            snippet=(
+                'def onboard():\n'
+                '    """DynamicClientRegistration is replaced by CIMD."""\n'
+            ),
+            reason="A docstring that names the old API is documentation, not a dependency.",
+        ),
         Fires(
             snippet="const request: RegisterClientRequest = metadata;\n",
             reason="The MCP SDK request type is distinctive TypeScript code.",
