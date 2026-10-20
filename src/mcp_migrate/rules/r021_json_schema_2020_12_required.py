@@ -12,7 +12,7 @@ from .base import Finding, Fires, Project, Rule, Silent
 # actionable evidence that this project pins a dialect the new spec no
 # longer guarantees support for.
 OLD_DIALECT_RX = re.compile(
-    r"json-schema\.org/draft-(?:0[1-7])/schema|\bdraft-0[1-7]\b|\b2019-09\b"
+    r"json-schema\.org/draft-(?:0[1-7])/schema|\bdraft-0[1-7]\b|\b2019-09\b(?!-\d)"
 )
 
 
@@ -59,6 +59,10 @@ class OldJSONSchemaDialect(Rule):
                 'input_schema = {"type": "object"}\n'
             ),
             reason="A comment about an old draft is not a pin.",
+        ),
+        Silent(
+            snippet='START_DATE = "2019-09-01"\n',
+            reason="A September 2019 date is not the 2019-09 dialect (#343).",
         ),
         Fires(
             snippet=(
