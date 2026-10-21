@@ -4,6 +4,35 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-10-21
+
+### Fixed
+
+- **R002 counts `dict()`, `defaultdict()` and `OrderedDict()` stores.**
+  ([#359](https://github.com/dheerajjha/mcp-migrate/issues/359),
+  [#360](https://github.com/dheerajjha/mcp-migrate/pull/360), from
+  @HarshRajSinghania)
+  R002 read only dict literals and comprehensions. A module-level
+  `sessions = defaultdict(dict)` graded A, while `sessions = {}` was a
+  `breaking` finding. Calls to `dict`, `defaultdict` and `OrderedDict` now
+  count, bare or as `collections.<name>`, in plain and annotated assignments.
+  One built inside a function is still request-local and stays silent.
+- **R002 in TypeScript no longer matches a constructor by its prefix.**
+  ([#358](https://github.com/dheerajjha/mcp-migrate/issues/358),
+  [#361](https://github.com/dheerajjha/mcp-migrate/pull/361), from
+  @motodriver)
+  `new Settings()`, `new MapboxClient(token)` and `new ObjectStore()` each
+  read as a per-connection `Set`, `Map` or `Object`, a `breaking` finding.
+  Meanwhile `new WeakMap()` and `new WeakSet()`, the classic per-connection
+  stores, were missed. The constructor name is now bounded, `$` included, and
+  the weak collections count.
+
+R001, R018, R020 and R021 now declare their detection boundaries (#348, #350,
+#349, #342, from @motodriver). That makes eleven of the 21 rules.
+
+No published board grade moves: `scripts/regrade_board.py` reproduces all 20
+entries on this release.
+
 ## [0.20.0] - 2026-10-19
 
 ### Fixed
