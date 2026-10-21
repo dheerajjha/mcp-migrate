@@ -18,11 +18,12 @@ TS_SUSPECT_NAMES = (
     r"SESSIONS|clientState|client_state|perSession|per_session"
 )
 
-# TypeScript pattern: declarations of suspect connection state stores
-# (e.g. `const sessions = new Map()`, `const sessionStore = {}`, `let connections: Map<string, State> = new Map()`)
+# TypeScript pattern: declarations of suspect connection state stores. The
+# constructor name is bounded so `new Settings()`, `new MapboxClient()`, and
+# `new Map$Cache()` do not count as Set or Map constructors (#358).
 TS_RX = (
     rf"\b(?:const|let|var)\s+(?:{TS_SUSPECT_NAMES})\b"
-    r"\s*(?::\s*[^=]+)?\s*=\s*(?:new\s+(?:(?:Weak)?(?:Map|Set)|Object)\b|\{)"
+    r"\s*(?::\s*[^=]+)?\s*=\s*(?:new\s+(?:(?:Weak)?(?:Map|Set)|Object)(?![\w$])|\{)"
 )
 
 # Assignments inside these scopes are request-local, not shared process

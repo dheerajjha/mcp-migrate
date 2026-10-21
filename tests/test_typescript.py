@@ -1899,7 +1899,7 @@ export const STACK = "mcp";
 
 @pytest.mark.parametrize(
     "constructor",
-    ["Settings()", "MapboxClient(token)", "ObjectStore()"],
+    ["Settings()", "MapboxClient(token)", "Map$Cache()", "ObjectStore()"],
 )
 def test_r002_does_not_match_constructor_name_prefixes(tmp_path, constructor):
     code = f"const sessions = new {constructor};\n"
