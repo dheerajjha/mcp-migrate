@@ -6,6 +6,11 @@ All notable changes to this project are documented here.
 
 ### Fixed
 
+- **R018 detects quoted `elicitationId` payload keys** in Python and TypeScript
+  ([#351](https://github.com/dheerajjha/mcp-migrate/issues/351)). Identifier and
+  quoted-key matches on the same line produce one finding; prose and longer
+  keys stay silent, including concatenated prose and key fragments.
+
 - Read the UTF-8 registry and scan inputs and generate the landing page independently
   of the host's default encoding. Escape the absolute baseline path in its TOML
   test fixture on Windows.
