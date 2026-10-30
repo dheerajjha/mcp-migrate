@@ -4,21 +4,26 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-10-30
+
 ### Fixed
 
 - **R018 detects quoted `elicitationId` payload keys** in Python and TypeScript
-  ([#351](https://github.com/dheerajjha/mcp-migrate/issues/351)). Identifier and
+  ([#351](https://github.com/dheerajjha/mcp-migrate/issues/351),
+  [#364](https://github.com/dheerajjha/mcp-migrate/pull/364), from @CosmonautJones). Identifier and
   quoted-key matches on the same line produce one finding; prose and longer
   keys stay silent, including concatenated prose and key fragments.
 - **R001 keeps TypeScript CORS exposure lists silent regardless of order**
-  ([#352](https://github.com/dheerajjha/mcp-migrate/issues/352)). The subscript
+  ([#352](https://github.com/dheerajjha/mcp-migrate/issues/352),
+  [#365](https://github.com/dheerajjha/mcp-migrate/pull/365), from @CosmonautJones). The subscript
   alternative now requires a receiver before the opening bracket, while actual
   header reads and writes still fire, including reads inside template
   interpolations while literal template text stays silent.
-
 - Read the UTF-8 registry and scan inputs and generate the landing page independently
   of the host's default encoding. Escape the absolute baseline path in its TOML
-  test fixture on Windows.
+  test fixture on Windows ([#363](https://github.com/dheerajjha/mcp-migrate/pull/363), from @CosmonautJones).
+- `scripts/render_findings.py` reads the scan data and writes `docs/findings.html` as
+  UTF-8 as well ([#366](https://github.com/dheerajjha/mcp-migrate/issues/366), [#367](https://github.com/dheerajjha/mcp-migrate/pull/367), from @Aaqibhafeezkhan).
 
 ## [0.21.0] - 2026-10-21
 
