@@ -371,6 +371,53 @@ def test_neither_fires_on_a_migrated_typescript_server(tmp_path):
     assert DeprecatedSSETransport().check(project) == []
 
 
+def test_r003_ignores_unrelated_fetch_with_mcp_sdk_import(tmp_path):
+    code = """\
+import { Server } from "@modelcontextprotocol/sdk/server";
+await fetch("https://billing.example/invoices");
+"""
+    project = load_project(_write(tmp_path, "server.ts", code))
+    assert MissingRoutingHeaders().check(project.for_language("typescript")) == []
+
+
+def test_r003_finds_hand_rolled_sdk_typed_request(tmp_path):
+    code = """\
+import type { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
+export async function send(url: string, request: CallToolRequest) {
+  return fetch(url, { method: "POST", body: JSON.stringify(request) });
+}
+"""
+    project = load_project(_write(tmp_path, "client.ts", code))
+    findings = MissingRoutingHeaders().check(project.for_language("typescript"))
+    assert len(findings) == 1
+    assert findings[0].line == 3
+
+
+def test_r003_ignores_billing_fetch_beside_sdk_typed_request(tmp_path):
+    code = """\
+import type { CallToolRequest } from "@modelcontextprotocol/sdk/types.js";
+function logRequest(request: CallToolRequest) {
+  console.log(JSON.stringify(request));
+}
+await fetch("https://billing.example/invoices");
+"""
+    project = load_project(_write(tmp_path, "server.ts", code))
+    assert MissingRoutingHeaders().check(project.for_language("typescript")) == []
+
+
+def test_r003_finds_hand_rolled_jsonrpc_without_sdk_import(tmp_path):
+    code = """\
+await fetch("/mcp", {
+  method: "POST",
+  body: JSON.stringify({ jsonrpc: "2.0", method: "tools/list", id: 1 })
+});
+"""
+    project = load_project(_write(tmp_path, "client.ts", code))
+    findings = MissingRoutingHeaders().check(project.for_language("typescript"))
+    assert len(findings) == 1
+    assert findings[0].line == 1
+
+
 def test_r003_finds_missing_headers_in_typescript(tmp_path):
     code = """\
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";

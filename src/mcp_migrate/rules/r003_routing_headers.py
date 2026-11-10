@@ -26,12 +26,6 @@ MCP_METHOD_RX = re.compile(
 # "missing Mcp-Name" was the bug: it isn't missing, it was never required.
 NAME_REQUIRED_RX = re.compile(r"tools/call|resources/read|prompts/get")
 
-TS_HTTP_CALL = r"\b(?:fetch|axios|got)\s*\(|\.(?:post|request)\s*\("
-TS_MCP_SURFACE_RX = re.compile(
-    r"@modelcontextprotocol|tools/call|tools/list|resources/read|prompts/get|jsonrpc",
-    re.IGNORECASE,
-)
-
 # Submodules that are still "the SDK owns the transport entirely", the same
 # way `mcp.server.fastmcp` is -- importing them is configuration of the
 # SDK's own high-level transport, not evidence the file crafts JSON-RPC
@@ -125,8 +119,8 @@ class MissingRoutingHeaders(Rule):
         # without setting anything, and `check` then reported "Grade A.
         # Nothing to fix." on a file still missing the header entirely.
         #
-        # Hoisted out of the per-file loop for the same reason `_check_ts`
-        # hoists its own scan -- see #67 and tests/test_scan_complexity.py.
+        # Hoisted out of the per-file loop to avoid repeated project scans
+        # -- see #67 and tests/test_scan_complexity.py.
         sets_method = {f.path for f, _, _ in project.search_wire(r"Mcp-Method")}
         sets_name = {f.path for f, _, _ in project.search_wire(r"Mcp-Name")}
 
@@ -177,43 +171,28 @@ class MissingRoutingHeaders(Rule):
         return out
 
     def _check_ts(self, project: Project) -> list[Finding]:
-        # Hoisted out of the per-file loop below. `search_wire` walks every
-        # file in the project on each call, so issuing it once per file --
-        # and then discarding all but the current file's matches -- is
-        # O(files**2). That is the #67 shape; see tests/test_scan_complexity.py,
-        # which now fails if it comes back here or anywhere else.
-        calls_by_path: dict = {}
-        for file_obj, line, text in project.search_wire(TS_HTTP_CALL):
-            calls_by_path.setdefault(file_obj.path, []).append((line, text))
+        from ._r003_typescript import Syntax
 
         out: list[Finding] = []
         for f in project.files:
-            if not TS_MCP_SURFACE_RX.search(f.text):
+            syntax = Syntax(f.text, f.path.suffix in {".tsx", ".jsx"})
+            deficient = next(syntax.deficient_calls(), None)
+            if deficient is None:
                 continue
-
-            missing_method = "mcp-method" not in f.text.lower()
-            requires_name = bool(NAME_REQUIRED_RX.search(f.text))
-            missing_name = requires_name and "mcp-name" not in f.text.lower()
-            if not missing_method and not missing_name:
-                continue
-
-            calls = calls_by_path.get(f.path)
-            if not calls:
-                continue
-
-            line, text = calls[0]
+            call, missing_method, missing_name = deficient
             if missing_method and missing_name:
                 message = (
-                    "This project posts MCP traffic by hand but never sets Mcp-Method, "
+                    "This HTTP call posts MCP traffic by hand without Mcp-Method, "
                     "and this call site sends tools/call, resources/read, or prompts/get "
                     "without Mcp-Name either."
                 )
             elif missing_method:
-                message = "This project posts MCP traffic by hand but never sets Mcp-Method."
+                message = "This HTTP call posts MCP traffic by hand without Mcp-Method."
             else:
                 message = (
                     "This call site sends tools/call, resources/read, or prompts/get "
-                    "by hand but never sets Mcp-Name."
+                    "by hand without Mcp-Name."
                 )
-            out.append(self.finding(message, f, line, text))
+            line = call.start_point.row + 1
+            out.append(self.finding(message, f, line, f.lines[line - 1].strip()))
         return out

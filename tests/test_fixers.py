@@ -1977,6 +1977,7 @@ TS_SUFFIXES = (".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs")
 # TypeScript syntax, since that is the language whose comments differ.
 TS_TRIGGERS = {
     "R001": 'const sessionId = req.headers["Mcp-Session-Id"];\n',
+    "R003": '// mcp-method mcp-name\nconst httpx = client;\nhttpx.post("/mcp", {method: "tools/call"});\n',
     "R006": 'const transport = "sse";\n',
     "R007": 'const roots = await session.create_message(params);\n',
     "R013": 'const METHODS = { "resources/subscribe": subscribeHandler };\n',
@@ -1984,6 +1985,14 @@ TS_TRIGGERS = {
     "R019": 'const m = "tasks/list";\n',
     "R020": 'export async function registerClient(url, metadata) { return fetch(url); }\n',
 }
+
+
+@pytest.mark.parametrize("suffix", TS_SUFFIXES)
+def test_r003_python_fixer_leaves_other_languages_unchanged(suffix):
+    source = TS_TRIGGERS["R003"]
+    result = fix("RoutingHeadersFixer", source, "server" + suffix)
+    assert result.changed is False
+    assert result.text == source
 
 
 def test_no_fixer_writes_a_python_comment_into_typescript():
