@@ -247,7 +247,9 @@ def test_the_committed_endpoints_are_what_the_renderer_produces_today(tmp_path):
     assert not unexpected and not missing, (
         "docs/badge/ endpoint paths drift from the renderer: "
         f"unexpected={unexpected or 'none'}; missing={missing or 'none'} -- "
-        "run `python scripts/render_badges.py` and commit the result"
+        "run `python scripts/render_badges.py` and commit the result "
+        "(a change to registry/servers/ alone needn't: CI renders it, and the "
+        "Board workflow commits it after merge)"
     )
 
     stale = [
@@ -258,5 +260,7 @@ def test_the_committed_endpoints_are_what_the_renderer_produces_today(tmp_path):
     assert not stale, (
         f"{len(stale)} committed badge endpoint(s) disagree with the renderer: "
         f"{', '.join(stale[:5])}{' ...' if len(stale) > 5 else ''} -- run "
-        "`python scripts/render_badges.py` and commit the result"
+        "`python scripts/render_badges.py` and commit the result (a change to "
+        "registry/servers/ alone needn't: CI renders it, and the Board workflow "
+        "commits it after merge)"
     )
