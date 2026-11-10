@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented here.
 
+## [0.22.1] - 2026-11-10
+
+### Fixed
+
+- **R011 counts a TypeScript `ping` dispatch only beside another MCP method**
+  ([#89](https://github.com/dheerajjha/mcp-migrate/issues/89),
+  [#377](https://github.com/dheerajjha/mcp-migrate/pull/377), from @dbdefault). The
+  `"ping"` dispatch signal no longer depends on the file showing MCP surface. It
+  fires when the same `switch`, the same run of consecutive `if`/`else if`
+  branches on one receiver, or the same object literal also names another MCP
+  method (`initialize`, `tools/list`, `tools/call`, ...). An SDK import beside
+  `if (method === "ping") runHealthCheck();` was a `breaking` finding and is now
+  silent; a hand-written `initialize`/`ping` dispatcher fires with or without an
+  SDK import, and identifier, computed and static template-literal keys count.
+  On seven real TypeScript MCP projects, compared with 0.22.0, this drops one
+  false positive (the inspector CLI daemon's own `ping` op) and two `ping`
+  checks that sit outside any dispatch construct (a ternary and an `||` guard in
+  supergateway), and newly reports four `ping` entries in method tables
+  (mcp-remote's locally answered methods, the TypeScript SDK's 2025-11-25
+  registry). Boundary cases for the TypeScript gate are declared in code.
+
 ## [0.22.0] - 2026-11-10
 
 ### Changed
