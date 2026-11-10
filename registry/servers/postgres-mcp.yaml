@@ -1,0 +1,13 @@
+# registry/servers/postgres-mcp.yaml
+name: postgres-mcp
+repo: crystaldba/postgres-mcp
+language: python
+grade: A
+score: 97
+checked_with: mcp-migrate 0.21.1
+spec: "2026-07-28"
+sha: 15c8e33353546148acc2d8bd784551cf3905d1e2
+status: ready
+notes: >-
+  Postgres MCP Pro gives AI agents safe, configurable read/write access to
+  PostgreSQL plus index tuning, health checks and EXPLAIN plan analysis.
