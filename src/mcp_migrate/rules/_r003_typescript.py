@@ -193,6 +193,17 @@ class Syntax:
                 return None
             if declaration.type == "variable_declarator" and declaration.start_byte > node.start_byte:
                 return None
+            if (declaration.type == "variable_declarator"
+                    and self.scopes.get(declaration.id) == self.scopes.get(node.id)
+                    and declaration.parent is not None
+                    and any(c.type == "const" for c in declaration.parent.children)):
+                init_val = declaration.child_by_field_name("value")
+                if init_val is not None and init_val.type == "object":
+                    resolved = self.payload(init_val)
+                    # A literal that doesn't prove MCP on its own may still be
+                    # typed as an SDK request below, so fall through.
+                    if resolved is not None:
+                        return resolved
             annotation = children(declaration.child_by_field_name("type"))
             if len(annotation) != 1 or annotation[0].type != "type_identifier":
                 return None
