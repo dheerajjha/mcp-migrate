@@ -409,7 +409,9 @@ gh pr create --title "registry: add name" --fill
 CI runs `scripts/validate_registry.py` against your file. If it passes and
 `repo` points at a real GitHub repository, the PR gets merged -- nobody
 reviews the server itself, and nobody is going to argue about your grade.
-`scripts/render_board.py` regenerates the table in `README.md` on merge.
+The YAML file is the whole PR: CI renders the board, badges and landing page
+from it before running the tests, and the Board workflow commits them after
+merge, so don't add the generated files yourself.
 
 Two ways this can legitimately refuse you, both deliberate:
 

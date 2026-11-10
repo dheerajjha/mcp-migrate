@@ -13,6 +13,9 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v7
+        with:
+          # One parent back, to see what this commit changed (below).
+          fetch-depth: 2
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -21,6 +24,25 @@ jobs:
 
       - name: Sync project
         run: uv sync --extra dev
+
+      # A board PR carries its registry YAML and nothing else (#186,
+      # CONTRIBUTING): the Board workflow renders the README table, badges
+      # and pages after merge, and committing them in PRs made every open
+      # board PR conflict with the others. The drift tests compare those
+      # committed files with a fresh render, so a YAML-only PR failed them
+      # by construction. For a change to registry/servers/ alone, render
+      # them here first, as Board will. Any other change still has to
+      # commit them fresh: that is the drift the tests exist for (#226).
+      - name: Render generated files for a registry-only change
+        run: |
+          changed=$(git diff --name-only HEAD^1 HEAD)
+          if [ -n "$changed" ] && ! printf '%s\n' "$changed" | grep -qv '^registry/servers/'; then
+            echo "Registry-only change; rendering what the Board workflow renders on merge."
+            uv run python scripts/render_board.py
+            uv run python scripts/render_badges.py
+            uv run python scripts/render_site.py
+            uv run python scripts/render_findings.py
+          fi
 
       - name: Run tests
         run: uv run pytest
