@@ -199,7 +199,11 @@ class Syntax:
                     and any(c.type == "const" for c in declaration.parent.children)):
                 init_val = declaration.child_by_field_name("value")
                 if init_val is not None and init_val.type == "object":
-                    return self.payload(init_val)
+                    resolved = self.payload(init_val)
+                    # A literal that doesn't prove MCP on its own may still be
+                    # typed as an SDK request below, so fall through.
+                    if resolved is not None:
+                        return resolved
             annotation = children(declaration.child_by_field_name("type"))
             if len(annotation) != 1 or annotation[0].type != "type_identifier":
                 return None

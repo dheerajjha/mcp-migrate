@@ -53,6 +53,9 @@ def test_unrelated_or_unknown_payload_is_not_mcp(tmp_path, source):
     (SDK + 'function send(r: Call) { fetch("/", {body: JSON.stringify(r)}); }', True),
     (SDK + 'function send(r: List) { fetch("/", {body: JSON.stringify(r)}); }', False),
     (SDK + 'function send() { const r: Call = build(); fetch("/", {body: JSON.stringify(r)}); }', True),
+    # An object literal that can't prove MCP on its own is still typed as one.
+    (SDK + 'function send() { const r: Call = {...base, method: "tools/call"}; fetch("/", {body: JSON.stringify(r)}); }', True),
+    (SDK + 'function send(m: string) { const r: Call = {method: m, params: {name: "x"}}; fetch("/", {body: JSON.stringify(r)}); }', True),
     (SDK + 'function send(r: Call) { fetch("/", {headers: {"Mcp-Method": "tools/call"}, body: JSON.stringify(r)}); }', True),
     ('fetch("/", {body: JSON.stringify(' + CALL + ')});', True),
     ('fetch("/", {body: JSON.stringify(' + LIST + ')});', False),
