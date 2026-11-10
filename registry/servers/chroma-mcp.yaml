@@ -1,0 +1,12 @@
+name: chroma-mcp
+repo: chroma-core/chroma-mcp
+language: python
+grade: A
+score: 97
+checked_with: mcp-migrate 0.21.1
+spec: "2026-07-28"
+sha: 98ff67589bdcc31b730a5415ff9529433f949077
+status: ready
+submitted_by: project
+notes: >-
+  Provides Chroma collection and document management and retrieval for AI applications.
