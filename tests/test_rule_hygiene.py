@@ -145,3 +145,27 @@ def test_every_declared_rule_id_survives_into_all_rules():
         f"declared but not live: {sorted(declared - live)}; "
         f"live but not declared: {sorted(live - declared)}"
     )
+
+
+def test_a_python_only_scan_never_loads_the_typescript_parser():
+    """R003 imports its Tree-sitter walker only inside its TypeScript check,
+    so a Python project should never load the parser. Rule discovery used to
+    import every module under `rules/`, that helper included, which loaded it
+    on every run (#372). The scan runs in a fresh interpreter because this one
+    may already have imported it."""
+    import subprocess
+    import sys
+
+    fixture = Path(__file__).parent / "fixtures" / "legacy_server"
+    probe = (
+        "import sys\n"
+        "from mcp_migrate import cli\n"
+        f"code = cli.main(['check', {str(fixture)!r}, '--format', 'json'])\n"
+        "print('exit=%s tree_sitter=%s' % (code, 'tree_sitter' in sys.modules))\n"
+    )
+    out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    # exit=1 shows the scan really ran: the fixture's legacy patterns fire.
+    assert out.stdout.splitlines()[-1] == "exit=1 tree_sitter=False", (
+        out.stdout[-400:] + out.stderr
+    )

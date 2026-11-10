@@ -26,7 +26,7 @@ graded against the revision: **<https://dheerajjha.github.io/mcp-migrate/>**
 ```
 $ uvx mcp-migrate check tests/fixtures/fixer_roundtrip
 
-mcp-migrate v0.21.1  ->  fixer_roundtrip
+mcp-migrate v0.22.0  ->  fixer_roundtrip
 2 Python files, 21 rules, spec 2026-07-28
 
             rule    where         what
@@ -204,7 +204,7 @@ coverage is complete the reason it gives is a decision, not a fraction:
 ```
 $ mcp-migrate check ./my-ts-server
 
-mcp-migrate v0.21.1  ->  my-ts-server
+mcp-migrate v0.22.0  ->  my-ts-server
 
 No grade for this one. Found 1 TypeScript. TypeScript is read by every rule,
 but whether it gets graded is still an open decision, not a coverage gap --
@@ -474,7 +474,7 @@ this most.
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/dheerajjha/mcp-migrate
-    rev: v0.21.1
+    rev: v0.22.0
     hooks:
       - id: mcp-migrate
 ```
@@ -504,7 +504,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dheerajjha/mcp-migrate@v0.21.1
+      - uses: dheerajjha/mcp-migrate@v0.22.0
 ```
 
 `v0.5.0` is the first tag that contains the action; until it is cut, `@main`
@@ -515,7 +515,7 @@ input picks the *tool* it installs from PyPI.
 A breaking finding fails the job. Nothing else does, until you say so:
 
 ```yaml
-      - uses: dheerajjha/mcp-migrate@v0.21.1
+      - uses: dheerajjha/mcp-migrate@v0.22.0
         with:
           path: src/my_server     # default: .
           fail-on: deprecated     # breaking | deprecated | advisory | never
@@ -536,7 +536,7 @@ your code scanning lives:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: dheerajjha/mcp-migrate@v0.21.1
+      - uses: dheerajjha/mcp-migrate@v0.22.0
         with:
           sarif-file: results.sarif
           fail-on: never          # let the Security tab hold them, not the build
@@ -692,7 +692,7 @@ color using the table above):
 
 <!-- BOARD:START -->
 
-**22 servers checked** (11x A, 8x B, 2x C, 1x F)
+**23 servers checked** (11x A, 9x B, 2x C, 1x F)
 
 All of these were checked by this project, not submitted by the servers' maintainers -- so read it as a survey, not as adoption. If you maintain one of these, [submit your own entry](registry/README.md) and it becomes yours.
 
@@ -717,6 +717,7 @@ All of these were checked by this project, not submitted by the servers' maintai
 | [mcp-server-sqlite](https://github.com/modelcontextprotocol/servers-archived) | **B** | ready | python | Archived reference MCP server for SQLite that runs SQL queries and auto-generates business insight memos. |
 | [mcp-server-time](https://github.com/modelcontextprotocol/servers) | **B** | ready | python | Reference MCP server giving LLMs current time and timezone conversion using IANA timezone names. |
 | [excel-mcp-server](https://github.com/haris-musa/excel-mcp-server) | **B** | ready | python | Read, write, and format Excel workbooks (formulas, charts, pivot tables) over MCP, via SSE or Streamable HTTP. |
+| [mysql-mcp-server](https://github.com/designcomputer/mysql_mcp_server) | **B** | ready | python | Provides MySQL database access for AI assistants through controlled tools to list tables, inspect schema, and execute SQL queries. |
 | [mcp-server-git](https://github.com/modelcontextprotocol/servers) | **C** | ready | python | Reference MCP server for Git repository interaction, giving LLMs tools to read, search, and manipulate repos. |
 | [mcp-atlassian](https://github.com/sooperset/mcp-atlassian) | **C** | migrating | python | MCP server for Atlassian products (Confluence and Jira), supporting both Cloud and Server/Data Center deployments. |
 | [mcp-proxy](https://github.com/sparfenyuk/mcp-proxy) | **F** | migrating | python | Proxy that bridges stdio MCP clients with remote SSE or Streamable HTTP servers, and exposes local stdio servers over SSE. |
