@@ -1,0 +1,12 @@
+name: mysql-mcp-server
+repo: designcomputer/mysql_mcp_server
+language: python
+grade: B
+score: 83
+checked_with: mcp-migrate 0.21.1
+spec: "2026-07-28"
+sha: 943ce83816372a03e5872be5424ebfcf252aa5ac
+status: ready
+submitted_by: project
+notes: >-
+  Provides MySQL database access for AI assistants through controlled tools to list tables, inspect schema, and execute SQL queries.
