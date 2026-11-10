@@ -2,12 +2,33 @@
 
 All notable changes to this project are documented here.
 
-## [Unreleased]
+## [0.22.0] - 2026-11-10
+
+### Changed
+
+- **R003 reads each TypeScript HTTP call instead of the whole file**
+  ([#89](https://github.com/dheerajjha/mcp-migrate/issues/89),
+  [#372](https://github.com/dheerajjha/mcp-migrate/pull/372), from @dbdefault). The
+  check parses TypeScript with Tree-sitter and has to prove an MCP payload and
+  missing routing headers at the same `fetch`, `axios`, `got`, `.post` or
+  `.request` call. A payload it can't resolve stays silent. On seven real
+  TypeScript MCP projects (servers, inspector, typescript-sdk, mcp-remote,
+  supergateway, fastmcp and workers-mcp), 0.21.1 reported 33 R003 findings and
+  every one was false on inspection, among them Express route definitions,
+  OAuth requests, the SDK's own `request(...)` calls, and headers set by a
+  helper in another file. 0.22.0 reports none of them.
+- **R003 resolves a `const` object payload declared in the same scope**
+  ([#375](https://github.com/dheerajjha/mcp-migrate/issues/375),
+  [#376](https://github.com/dheerajjha/mcp-migrate/pull/376), from @granbellllc-png), so
+  `const payload = {...}; fetch(url, {body: JSON.stringify(payload)})` and
+  `axios.post(url, payload)` are reported again, as they were before #372. A
+  `let`, a parameter, or a constant from an outer scope stays silent.
 
 ### Fixed
 
 - **R011 gates its Python `ping` dispatch signal on MCP surface, the same way the
-  TypeScript path already did** ([#89](https://github.com/dheerajjha/mcp-migrate/issues/89)).
+  TypeScript path already did** ([#89](https://github.com/dheerajjha/mcp-migrate/issues/89),
+  [#373](https://github.com/dheerajjha/mcp-migrate/pull/373), from @draarivpatel-ui).
   Being *shaped* like a JSON-RPC dispatch is the ordinary Python spelling of any
   dispatcher, so an isolated `if method == "ping":`, `case "ping":` or
   `{"ping": handler}` dict key produced a `breaking` finding on code with no
@@ -15,6 +36,16 @@ All notable changes to this project are documented here.
   `mcp_surface_paths()` gate; a dispatcher in a file that also speaks MCP's
   wire protocol still fires, and the ungated distinctive `PingRequest` name
   is unchanged. Boundary cases for both languages declare the line in code.
+
+### Dependencies
+
+- **Two new runtime dependencies for R003's TypeScript check:**
+  `tree-sitter>=0.25.2,<0.26` and `tree-sitter-typescript>=0.23.2,<0.24`. Both
+  ship prebuilt wheels for CPython 3.10 to 3.14 on Linux (x86_64 and aarch64,
+  plus musl on x86_64), macOS and Windows, under 1 MB together on Linux x86_64.
+  Alpine on aarch64 has no wheel and builds them from source. They are imported
+  only when a scan reads TypeScript, so a Python-only project never loads them
+  ([#379](https://github.com/dheerajjha/mcp-migrate/pull/379)).
 
 ## [0.21.1] - 2026-10-30
 
