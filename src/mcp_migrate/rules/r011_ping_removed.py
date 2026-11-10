@@ -111,6 +111,23 @@ def _ts_dispatches(source, jsx):
             return None
         return (name, value) if value is not None else None
 
+    def if_dispatches(statements):
+        comparisons = []
+        for statement in statements:
+            current = statement
+            while current is not None and current.type == "if_statement":
+                item = comparison(current)
+                if item:
+                    comparisons.append((current, *item))
+                alternatives = children(current.child_by_field_name("alternative"))
+                current = alternatives[0] if len(alternatives) == 1 else None
+        for branch, name, value in comparisons:
+            if value == "ping" and any(
+                other_name == name and other_value in MCP_METHODS
+                for _, other_name, other_value in comparisons
+            ):
+                yield branch
+
     def walk(node):
         if node.type == "switch_statement":
             body = node.child_by_field_name("body")
@@ -123,22 +140,18 @@ def _ts_dispatches(source, jsx):
             values = [object_key(c.child_by_field_name("key")) for c in pairs]
             if MCP_METHODS.intersection(values):
                 yield from (c for c, value in zip(pairs, values) if value == "ping")
-        elif node.type == "if_statement" and node.parent.type != "else_clause":
-            comparisons = []
-            current = node
-            while current is not None and current.type == "if_statement":
-                item = comparison(current)
-                if item:
-                    comparisons.append((current, *item))
-                alternative = current.child_by_field_name("alternative")
-                alternatives = children(alternative)
-                current = alternatives[0] if len(alternatives) == 1 else None
-            for branch, name, value in comparisons:
-                if value == "ping" and any(
-                    other_name == name and other_value in MCP_METHODS
-                    for _, other_name, other_value in comparisons
-                ):
-                    yield branch
+        elif node.type in {"statement_block", "program", "switch_case"}:
+            consecutive = []
+            for statement in [*children(node), None]:
+                if statement is not None and statement.type == "if_statement":
+                    consecutive.append(statement)
+                else:
+                    yield from if_dispatches(consecutive)
+                    consecutive = []
+        elif node.type == "if_statement" and node.parent.type not in {
+            "else_clause", "statement_block", "program", "switch_case"
+        }:
+            yield from if_dispatches([node])
         for child in children(node):
             yield from walk(child)
 
@@ -174,6 +187,11 @@ class PingRemoved(Rule):
             snippet="server = Server('demo', on_ping=ping)",
             reason="The 2.x SDK takes the removed handler as a constructor keyword.",
         ),
+        Fires(
+            snippet='switch (method) { case "initialize": break; case "ping": break; }',
+            reason="A TypeScript MCP dispatch needs no SDK import.",
+            language="typescript",
+        ),
         Silent(
             snippet=(
                 "def handle(method, payload):\n"
@@ -189,6 +207,14 @@ class PingRemoved(Rule):
         Silent(
             snippet="helper = PingRequester()",
             reason="A different identifier that merely ends in the SDK's name.",
+        ),
+        Silent(
+            snippet=(
+                'import { Client } from "@modelcontextprotocol/sdk/client/index.js";\n'
+                'if (method === "ping") runHealthCheck();\n'
+            ),
+            reason="An SDK import does not turn a standalone health check into an MCP dispatcher.",
+            language="typescript",
         ),
         Silent(
             snippet="// PingRequestSchema is gone, liveness rides on the transport now\nexport const NOTE = 1\n",

@@ -16,7 +16,9 @@ from mcp_migrate.scan import load_project
         ('if (a?.method === "tools/list") list(); else if (a.method === "ping") ping();', False),
         ('switch (method) { case "ping": switch (other) { case "initialize": break; } }', False),
         ('const a = { "tools/call": call }; const b = { "ping": ping };', False),
-        ('if (method === "ping") ping(); if (method === "tools/list") list();', False),
+        ('if (method === "ping") ping(); if (method === "tools/list") list();', True),
+        ('if (a.method === "ping") ping(); if (b.method === "tools/list") list();', False),
+        ('if (method === "ping") ping(); unrelated(); if (method === "tools/list") list();', False),
         ('if (status === "tools/list") list(); else if (status === "ping") ping();', False),
         ('const message = \'case "ping": case "initialize":\';', False),
     ],
@@ -29,6 +31,16 @@ def test_ts_dispatch_requires_sibling_mcp_method(tmp_path, dispatch, fires):
     )
     findings = PingRemoved().check(load_project(tmp_path).for_language("typescript"))
     assert bool(findings) is fires
+
+
+def test_ts_consecutive_if_else_chains_report_each_ping_once(tmp_path):
+    (tmp_path / "server.ts").write_text(
+        'if (method === "other") other(); else if (method === "ping") ping();\n'
+        'if (method === "initialize") init(); else if (method === "ping") ping();\n',
+        encoding="utf-8",
+    )
+    findings = PingRemoved().check(load_project(tmp_path).for_language("typescript"))
+    assert [finding.line for finding in findings] == [1, 2]
 
 
 @pytest.mark.parametrize(
