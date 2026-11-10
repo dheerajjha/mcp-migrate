@@ -193,6 +193,13 @@ class Syntax:
                 return None
             if declaration.type == "variable_declarator" and declaration.start_byte > node.start_byte:
                 return None
+            if (declaration.type == "variable_declarator"
+                    and self.scopes.get(declaration.id) == self.scopes.get(node.id)
+                    and declaration.parent is not None
+                    and any(c.type == "const" for c in declaration.parent.children)):
+                init_val = declaration.child_by_field_name("value")
+                if init_val is not None and init_val.type == "object":
+                    return self.payload(init_val)
             annotation = children(declaration.child_by_field_name("type"))
             if len(annotation) != 1 or annotation[0].type != "type_identifier":
                 return None

@@ -123,3 +123,55 @@ def test_fix_cli_leaves_flagged_typescript_unchanged(tmp_path):
     assert len(MissingRoutingHeaders().check(
         load_project(tmp_path).for_language("typescript")
     )) == 1
+
+
+def test_r003_local_const_object_payload(tmp_path):
+    # Fires: local const payload via JSON.stringify
+    snippet = """
+export async function listTools(url: string) {
+  const payload = { jsonrpc: "2.0", id: 1, method: "tools/list" };
+  return fetch(url, { method: "POST", body: JSON.stringify(payload) });
+}
+"""
+    findings = check(tmp_path, snippet)
+    assert len(findings) == 1
+    assert "Mcp-Method" in findings[0].message
+    assert "Mcp-Name" not in findings[0].message
+
+    # Fires: local const payload via axios.post
+    axios_snippet = """
+export async function listTools(url: string) {
+  const payload = { jsonrpc: "2.0", id: 1, method: "tools/list" };
+  return axios.post(url, payload);
+}
+"""
+    findings_axios = check(tmp_path, axios_snippet)
+    assert len(findings_axios) == 1
+    assert "Mcp-Method" in findings_axios[0].message
+
+    # Silent: const payload whose method is not MCP
+    non_mcp = """
+export async function listInvoices(url: string) {
+  const payload = { method: "invoices.list" };
+  return fetch(url, { method: "POST", body: JSON.stringify(payload) });
+}
+"""
+    assert check(tmp_path, non_mcp) == []
+
+    # Silent: let (not const)
+    let_snippet = """
+export async function listTools(url: string) {
+  let payload = { method: "tools/list" };
+  return fetch(url, { method: "POST", body: JSON.stringify(payload) });
+}
+"""
+    assert check(tmp_path, let_snippet) == []
+
+    # Silent: const from an outer scope
+    outer_const = """
+const payload = { method: "tools/list" };
+export async function listTools(url: string) {
+  return fetch(url, { method: "POST", body: JSON.stringify(payload) });
+}
+"""
+    assert check(tmp_path, outer_const) == []
