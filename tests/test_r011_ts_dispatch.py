@@ -29,3 +29,27 @@ def test_ts_dispatch_requires_sibling_mcp_method(tmp_path, dispatch, fires):
     )
     findings = PingRemoved().check(load_project(tmp_path).for_language("typescript"))
     assert bool(findings) is fires
+
+
+@pytest.mark.parametrize(
+    ("dispatch", "fires"),
+    [
+        ('switch (method) { case "initialize": break; case "ping": break; }', True),
+        ('switch (method) { case `initialize`: break; case `ping`: break; }', True),
+        ('if (method === `tools/list`) list(); else if (`ping` === method) ping();', True),
+        ('const handlers = { initialize: init, ping: pong };', True),
+        ('const handlers = { ["tools/call"]: call, ["ping"]: pong };', True),
+        ('const handlers = { [`initialize`]: init, [`ping`]: pong };', True),
+        ('switch (method) { case `initialize`: break; case `${name}ping`: break; }', False),
+        ('if (method === `tools/${name}`) list(); else if (method === `ping`) ping();', False),
+        ('const handlers = { initialize: init, [`${name}ping`]: pong };', False),
+        ('const handlers = { ping: pong };', False),
+        ('const handlers = { [name]: init, ping: pong };', False),
+        ('const alias = "initialize"; switch (method) { case alias: break; case "ping": break; }', False),
+        ('switch (method) { case "initialize": break; case "ping":', False),
+    ],
+)
+def test_ts_dispatch_resolves_static_methods_without_file_gate(tmp_path, dispatch, fires):
+    (tmp_path / "server.ts").write_text(dispatch, encoding="utf-8")
+    findings = PingRemoved().check(load_project(tmp_path).for_language("typescript"))
+    assert bool(findings) is fires
