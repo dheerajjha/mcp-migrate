@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **R011 gates its Python `ping` dispatch signal on MCP surface, the same way the
+  TypeScript path already did** ([#89](https://github.com/dheerajjha/mcp-migrate/issues/89)).
+  Being *shaped* like a JSON-RPC dispatch is the ordinary Python spelling of any
+  dispatcher, so an isolated `if method == "ping":`, `case "ping":` or
+  `{"ping": handler}` dict key produced a `breaking` finding on code with no
+  MCP in it at all. The signal now goes through the shared
+  `mcp_surface_paths()` gate; a dispatcher in a file that also speaks MCP's
+  wire protocol still fires, and the ungated distinctive `PingRequest` name
+  is unchanged. Boundary cases for both languages declare the line in code.
+
 ## [0.21.1] - 2026-10-30
 
 ### Fixed
