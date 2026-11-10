@@ -18,10 +18,9 @@ PING_CODE_RX = re.compile(r"\bPingRequest(?:Params|Schema|Result|ResultSchema)?\
 #
 # Being *shaped* like a dispatch is not enough, though: the shape is the
 # ordinary Python spelling of any dispatcher, and R011 is `breaking`. The
-# TypeScript half therefore gates the signal on the file independently
-# showing MCP surface, and this half now does too (#89) -- an isolated
-# `if method == "ping"` is a game or a health endpoint, not an
-# implementation of the removed MCP method.
+# Python gates the signal on the file independently showing MCP surface
+# (#89). TypeScript additionally requires a sibling MCP method at the
+# dispatch site.
 #
 # Note on the third alternative: a match's *start* position is what
 # `search_code` checks against string/comment spans, so a pattern that
@@ -44,16 +43,8 @@ SDK_CONSTRUCTOR_KW_RX = r"\b(?:Server|MCPServer)\s*\([^)]*\bon_ping\s*="
 
 # --- TypeScript -----------------------------------------------------------
 #
-# Same two signals, adapted for TS syntax. `===` is the idiomatic equality
-# operator in TypeScript, and template literals (backticks) are valid
-# string delimiters. The dispatch-object alternative keeps the same
-# `{`/`,` anchor trick so search_code doesn't drop the match.
+# Same distinctive identifier signal, adapted for TS syntax.
 TS_PING_CODE_RX = r"\bPingRequest(?:Params|Schema|Result|ResultSchema)?\b"
-TS_PING_DISPATCH_RX = (
-    r"method\s*===?\s*[\"'`]ping[\"'`]"
-    r"|case\s+[\"'`]ping[\"'`]\s*:"
-    r"|[{,]\s*[\"'`]ping[\"'`]\s*:"
-)
 
 # `ping` appears in health-check endpoints constantly. Gate signal 2 on
 # the file having some MCP context: an SDK import or a reference to MCP's
@@ -67,6 +58,84 @@ TS_MCP_SURFACE_RX = re.compile(
 MESSAGE_CODE = "References the removed PingRequest handler."
 MESSAGE_DISPATCH = "Dispatches the removed `ping` JSON-RPC method."
 MESSAGE_SDK = "Registers the removed ping handler through the SDK."
+
+MCP_METHODS = {
+    "initialize", "tools/list", "tools/call", "resources/list", "resources/read",
+    "resources/templates/list", "resources/subscribe", "resources/unsubscribe",
+    "prompts/list", "prompts/get", "completion/complete", "logging/setLevel",
+    "sampling/createMessage", "elicitation/create", "roots/list",
+}
+
+
+def _ts_dispatches(source, jsx):
+    from ._r003_typescript import Syntax, children, literal, text
+
+    root = Syntax(source, jsx).root
+    if root.has_error:
+        return
+
+    def comparison(node):
+        condition = node.child_by_field_name("condition")
+        parts = children(condition)
+        if len(parts) != 1 or parts[0].type != "binary_expression":
+            return None
+        expr = parts[0]
+        operator = expr.child_by_field_name("operator")
+        left = expr.child_by_field_name("left")
+        right = expr.child_by_field_name("right")
+        if text(operator) not in {"==", "==="}:
+            return None
+        if literal(left) is not None:
+            left, right = right, left
+        value = literal(right)
+        if left.type == "identifier":
+            name = text(left)
+        elif left.type == "member_expression":
+            obj = left.child_by_field_name("object")
+            prop = left.child_by_field_name("property")
+            if obj.type != "identifier" or prop.type != "property_identifier":
+                return None
+            name = text(obj) + "." + text(prop)
+            if text(left) != name:
+                return None
+        else:
+            return None
+        if name.split(".")[-1] != "method":
+            return None
+        return (name, value) if value is not None else None
+
+    def walk(node):
+        if node.type == "switch_statement":
+            body = node.child_by_field_name("body")
+            cases = [c for c in children(body) if c.type == "switch_case"]
+            values = [literal(c.child_by_field_name("value")) for c in cases]
+            if MCP_METHODS.intersection(values):
+                yield from (c for c, value in zip(cases, values) if value == "ping")
+        elif node.type == "object":
+            pairs = [c for c in children(node) if c.type == "pair"]
+            values = [literal(c.child_by_field_name("key")) for c in pairs]
+            if MCP_METHODS.intersection(values):
+                yield from (c for c, value in zip(pairs, values) if value == "ping")
+        elif node.type == "if_statement" and node.parent.type != "else_clause":
+            comparisons = []
+            current = node
+            while current is not None and current.type == "if_statement":
+                item = comparison(current)
+                if item:
+                    comparisons.append((current, *item))
+                alternative = current.child_by_field_name("alternative")
+                alternatives = children(alternative)
+                current = alternatives[0] if len(alternatives) == 1 else None
+            for branch, name, value in comparisons:
+                if value == "ping" and any(
+                    other_name == name and other_value in MCP_METHODS
+                    for _, other_name, other_value in comparisons
+                ):
+                    yield branch
+        for child in children(node):
+            yield from walk(child)
+
+    yield from walk(root)
 
 
 class PingRemoved(Rule):
@@ -161,21 +230,19 @@ class PingRemoved(Rule):
             seen.add(key)
             out.append(self.finding(MESSAGE_CODE, f, line, text))
 
-        # Signal 2: "ping" as a JSON-RPC method dispatch. Gated on MCP
-        # context because `ping` is one of the most common tokens in
-        # non-MCP server code (health checks, keepalives) -- the Python half
-        # uses the same gate through `mcp_surface_paths`. The dispatch
-        # patterns start on code tokens (method, case, {, ,) so
-        # search_code finds them despite the "ping" part being a string
-        # literal.
+        # A file-level gate alone cannot distinguish a health check from an
+        # MCP dispatcher; require another MCP method in the same construct.
         mcp_paths = {f.path for f in project.files if TS_MCP_SURFACE_RX.search(f.text)}
-        for f, line, text in project.search_code(TS_PING_DISPATCH_RX):
+        for f in project.files:
             if f.path not in mcp_paths:
                 continue
-            key = (str(f.path), line)
-            if key in seen:
-                continue
-            seen.add(key)
-            out.append(self.finding(MESSAGE_DISPATCH, f, line, text))
+            lines = f.text.splitlines()
+            for node in _ts_dispatches(f.text, f.path.suffix in {".tsx", ".jsx"}):
+                line = node.start_point.row + 1
+                key = (str(f.path), line)
+                if key in seen:
+                    continue
+                seen.add(key)
+                out.append(self.finding(MESSAGE_DISPATCH, f, line, lines[line - 1].strip()))
 
         return sorted(out, key=lambda x: (str(x.path or ""), x.line or 0))
