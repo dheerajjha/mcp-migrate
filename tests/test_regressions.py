@@ -309,6 +309,73 @@ def test_r011_ping_does_not_fire_on_an_ordinary_health_check_route(tmp_path):
     assert PingRemoved().check(project) == []
 
 
+def test_r011_python_ping_dispatch_is_silent_without_mcp_context(tmp_path):
+    # #89, second run: R011's dispatch signal is an `if method == "ping"`
+    # comparison, and on the TypeScript path that is gated on the file
+    # showing MCP surface. The Python path shipped with no gate at all, so
+    # an ordinary dispatcher that happens to have a "ping" case took a
+    # `breaking` finding. Same signal, same overload risk, same gate.
+    (tmp_path / "health.py").write_text(
+        "STATES = {'ok': 1, 'degraded': 2}\n"
+        "\n"
+        "\n"
+        "def handle(method: str, payload: dict) -> str:\n"
+        "    if method == 'ping':\n"
+        "        return 'pong'\n"
+        "    return STATES.get(payload.get('state'), 'unknown')\n"
+        "\n"
+        "\n"
+        "def route(message: str) -> str:\n"
+        "    match message:\n"
+        "        case 'ping':\n"
+        "            return 'pong'\n"
+        "        case 'stats':\n"
+        "            return 'stats'\n"
+        "    return ''\n"
+        "\n"
+        "\n"
+        "ROUTES = {'ping': handle, 'stats': handle}\n"
+    )
+    project = load_project(tmp_path)
+    assert PingRemoved().check(project) == []
+
+
+def test_r011_python_ping_dispatch_still_fires_on_a_real_mcp_server(tmp_path):
+    # The other half: gating must not cost the finding it exists to report.
+    # An SDK-based server that dispatches the removed method by hand still
+    # fires, and the ungated distinctive PingRequest name still fires in a
+    # file with no other surface at all.
+    (tmp_path / "server.py").write_text(
+        "from mcp.types import PingRequest\n"
+        "\n"
+        "\n"
+        "async def handle_ping(request: PingRequest) -> dict:\n"
+        "    return {}\n"
+        "\n"
+        "\n"
+        "async def dispatch(method: str) -> dict:\n"
+        "    if method == 'ping':\n"
+        "        return {}\n"
+        "    raise LookupError(method)\n"
+    )
+    (tmp_path / "types_only.py").write_text(
+        "async def handle(request: PingRequest) -> dict:\n"
+        "    return {}\n"
+    )
+    (tmp_path / "handwritten.py").write_text(
+        "async def dispatch(method: str) -> dict:\n"
+        "    if method == 'ping':\n"
+        "        return {}\n"
+        "    raise LookupError(method)\n"
+        "\n"
+        "\n"
+        "REQUEST = 'tools/call'\n"
+    )
+    project = load_project(tmp_path)
+    findings = {f.path.name for f in PingRemoved().check(project)}
+    assert findings == {"server.py", "types_only.py", "handwritten.py"}
+
+
 def test_r017_does_not_fire_on_an_unrelated_negative_number(tmp_path):
     # -32002 on its own is just a number (a port, an offset, a sentinel);
     # only paired with resource-not-found language on the same line is it

@@ -1,6 +1,6 @@
 import re
 
-from .base import Finding, Project, Rule, server_call_keywords
+from .base import Finding, Fires, Project, Rule, Silent, mcp_surface_paths, server_call_keywords
 
 # `PingRequest` is the MCP SDK's own model name -- distinctive, essentially
 # never appears outside MCP code. In TypeScript the SDK exports
@@ -15,6 +15,13 @@ PING_CODE_RX = re.compile(r"\bPingRequest(?:Params|Schema|Result|ResultSchema)?\
 # it's shaped like an actual JSON-RPC method dispatch: compared against a
 # `method` variable, or used as a `case`/dict-key clause the way a
 # dispatcher for `tools/call`, `resources/subscribe`, etc. would use it.
+#
+# Being *shaped* like a dispatch is not enough, though: the shape is the
+# ordinary Python spelling of any dispatcher, and R011 is `breaking`. The
+# TypeScript half therefore gates the signal on the file independently
+# showing MCP surface, and this half now does too (#89) -- an isolated
+# `if method == "ping"` is a game or a health endpoint, not an
+# implementation of the removed MCP method.
 #
 # Note on the third alternative: a match's *start* position is what
 # `search_code` checks against string/comment spans, so a pattern that
@@ -72,6 +79,47 @@ class PingRemoved(Rule):
         "Remove the handler and rely on your HTTP stack's own keepalive/health checks."
     )
     languages = ("python", "typescript")
+    boundaries = (
+        Fires(
+            snippet="async def handle_ping(request: PingRequest): ...",
+            reason="The SDK's own request type is distinctive without another surface gate.",
+        ),
+        Fires(
+            snippet=(
+                "async def dispatch(method):\n"
+                "    if method == 'ping':\n"
+                "        return {}\n"
+                "\n"
+                "REQUEST = 'tools/call'\n"
+            ),
+            reason="A hand-written dispatcher in a file that also speaks MCP's wire protocol.",
+        ),
+        Fires(
+            snippet="server = Server('demo', on_ping=ping)",
+            reason="The 2.x SDK takes the removed handler as a constructor keyword.",
+        ),
+        Silent(
+            snippet=(
+                "def handle(method, payload):\n"
+                "    if method == 'ping':\n"
+                "        return 'pong'\n"
+                "    return 'unknown'\n"
+                "\n"
+                "\n"
+                "ROUTES = {'ping': handle, 'stats': handle}\n"
+            ),
+            reason="An ordinary dispatcher with no MCP surface anywhere in the file.",
+        ),
+        Silent(
+            snippet="helper = PingRequester()",
+            reason="A different identifier that merely ends in the SDK's name.",
+        ),
+        Silent(
+            snippet="// PingRequestSchema is gone, liveness rides on the transport now\nexport const NOTE = 1\n",
+            reason="A comment naming the old API is migration prose, not a dependency.",
+            language="typescript",
+        ),
+    )
 
     def check(self, project: Project) -> list[Finding]:
         if project.language == "typescript":
@@ -82,7 +130,14 @@ class PingRemoved(Rule):
         out: list[Finding] = []
         for f, line, text in project.search_code(PING_CODE_RX.pattern):
             out.append(self.finding(MESSAGE_CODE, f, line, text))
+        # The dispatch signal is gated the same way the TypeScript half gates
+        # it (`mcp_paths` below), via the shared `mcp_surface_paths` helper --
+        # `ping` is an ordinary word in dispatcher code, so a file that
+        # speaks MCP on no other evidence is not dispatching MCP's ping.
+        surface = mcp_surface_paths(project)
         for f, line, text in project.search_code(PING_DISPATCH_RX.pattern):
+            if f.path not in surface:
+                continue
             out.append(self.finding(MESSAGE_DISPATCH, f, line, text))
         for f, line, text in server_call_keywords(
             project,
@@ -108,7 +163,8 @@ class PingRemoved(Rule):
 
         # Signal 2: "ping" as a JSON-RPC method dispatch. Gated on MCP
         # context because `ping` is one of the most common tokens in
-        # non-MCP server code (health checks, keepalives). The dispatch
+        # non-MCP server code (health checks, keepalives) -- the Python half
+        # uses the same gate through `mcp_surface_paths`. The dispatch
         # patterns start on code tokens (method, case, {, ,) so
         # search_code finds them despite the "ping" part being a string
         # literal.
