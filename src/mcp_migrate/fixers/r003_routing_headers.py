@@ -172,6 +172,8 @@ class RoutingHeadersFixer(Fixer):
     confidence = "review"
 
     def fix(self, source: str, path: Path) -> FixResult:
+        if path.suffix.lower() != ".py":
+            return self.unchanged(source)
         has_http, mcp_surface, requires_name, missing_method, missing_name = _file_context(source)
         if not has_http or not mcp_surface:
             return self.unchanged(source)
