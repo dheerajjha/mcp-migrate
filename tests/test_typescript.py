@@ -701,7 +701,9 @@ def test_r011_finds_method_dispatch_in_typescript(tmp_path):
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 
 export async function handle(method: string) {
-  if (method === "ping") {
+  if (method === "tools/list") {
+    return listTools();
+  } else if (method === "ping") {
     return {};
   }
 }
