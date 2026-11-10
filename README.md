@@ -692,7 +692,7 @@ color using the table above):
 
 <!-- BOARD:START -->
 
-**20 servers checked** (9x A, 8x B, 2x C, 1x F)
+**21 servers checked** (10x A, 8x B, 2x C, 1x F)
 
 All of these were checked by this project, not submitted by the servers' maintainers -- so read it as a survey, not as adoption. If you maintain one of these, [submit your own entry](registry/README.md) and it becomes yours.
 
@@ -701,6 +701,7 @@ All of these were checked by this project, not submitted by the servers' maintai
 | [mcp-server-motherduck](https://github.com/motherduckdb/mcp-server-motherduck) | **A** | ready | python | Local MCP server connecting AI assistants to DuckDB and MotherDuck for SQL analytics and data engineering. |
 | [mcp-server-qdrant](https://github.com/qdrant/mcp-server-qdrant) | **A** | ready | python | Official MCP server for Qdrant that acts as a semantic memory layer for keeping and retrieving memories in the vector search engine. |
 | [aws-documentation-mcp-server](https://github.com/awslabs/mcp) | **A** | ready | python | AWS Labs MCP server that fetches, searches, and recommends AWS documentation pages, converted to markdown. |
+| [chroma-mcp](https://github.com/chroma-core/chroma-mcp) | **A** | ready | python | Provides Chroma collection and document management and retrieval for AI applications. |
 | [cloudwatch-mcp-server](https://github.com/awslabs/mcp) | **A** | ready | python | AWS Labs MCP server for CloudWatch that gives troubleshooting agents alarm, metric, and log data for root cause analysis. |
 | [duckduckgo-mcp-server](https://github.com/nickclyde/duckduckgo-mcp-server) | **A** | ready | python | MCP server that provides web search through DuckDuckGo, with additional content fetching and parsing features. |
 | [dynamodb-mcp-server](https://github.com/awslabs/mcp) | **A** | ready | python | Official AWS DynamoDB MCP server providing expert data modeling guidance, validation, and cost analysis tools. |
