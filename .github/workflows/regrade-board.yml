@@ -1,0 +1,45 @@
+name: Regrade board
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: regrade-board
+  cancel-in-progress: false
+
+jobs:
+  regrade:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+
+      - name: Sync project
+        run: uv sync
+
+      - name: Regrade pinned entries
+        id: regrade
+        shell: bash
+        run: |
+          set +e
+          uv run python scripts/regrade_board.py --json > "$RUNNER_TEMP/regrade.json"
+          status=$?
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Report result
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGRADE_STATUS: ${{ steps.regrade.outputs.status }}
+        run: uv run python scripts/report_board_drift.py "$RUNNER_TEMP/regrade.json" "$REGRADE_STATUS"
