@@ -8,8 +8,10 @@ looks exactly like a fresh one.
 
 So the committed docs/index.html is checked the way the badges are: it
 must be byte-identical to what the generator produces from the current
-registry and the current rule set. If you changed a rule or an entry,
-run `python scripts/render_site.py` and commit the result.
+registry and the current rule set. If you changed a rule, run
+`python scripts/render_site.py` and commit the result. A change to
+registry/servers/ alone is the exception: CI renders the page for it, and
+the Board workflow commits it after merge (#186).
 """
 from __future__ import annotations
 
@@ -44,7 +46,9 @@ def test_committed_page_is_what_the_generator_produces(page):
     if before != after:
         OUT.write_text(before, encoding="utf-8")  # leave the tree as we found it on failure
         pytest.fail(
-            "docs/index.html is stale. Run `python scripts/render_site.py` and commit."
+            "docs/index.html is stale. Run `python scripts/render_site.py` and commit "
+            "(a change to registry/servers/ alone needn't: CI renders it, and the "
+            "Board workflow commits it after merge)."
         )
 
 
